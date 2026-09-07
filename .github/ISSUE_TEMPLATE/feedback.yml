@@ -1,0 +1,70 @@
+name: Обратная связь
+
+description: Задать вопрос, предложить идею, сообщить об ошибке или сказать, что в документации непонятно.
+
+title: "[Обратная связь] "
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо. Не нужно знать внутренние термины KAT9I_OS. Опишите ситуацию обычными словами.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Что вы хотите сообщить?
+      options:
+        - Задать вопрос
+        - Предложить идею
+        - Сообщить об ошибке
+        - Сказать, что документация непонятна
+        - Другое
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Что вы пытались сделать?
+      description: Одного-двух предложений достаточно.
+      placeholder: Например: я хотел понять, как взять задачу в работу.
+    validations:
+      required: true
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: Что произошло?
+      description: Если это идея или вопрос, просто опишите её здесь.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что вы ожидали?
+      description: Можно оставить пустым, если вопрос не связан с ошибкой.
+
+  - type: textarea
+    id: links
+    attributes:
+      label: Ссылка, скриншот или дополнительная информация
+      description: Добавьте только то, что действительно помогает понять ситуацию. Не публикуйте пароли, ключи и другие секреты.
+
+  - type: dropdown
+    id: help
+    attributes:
+      label: Хотите помочь с исправлением или улучшением?
+      options:
+        - Да
+        - Возможно, если объяснят что делать
+        - Нет, только сообщаю
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Перед отправкой
+      options:
+        - label: Я не добавил в обращение пароль, API-ключ, токен доступа или другой секрет.
+          required: true
