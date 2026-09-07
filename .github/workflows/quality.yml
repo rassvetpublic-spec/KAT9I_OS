@@ -1,0 +1,80 @@
+name: Контроль качества репозитория
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Базовые проверки
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить репозиторий
+        uses: actions/checkout@v4
+
+      - name: Проверить обязательную структуру
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -d docs
+          test -f docs/spec/00_LANGUAGE_AND_TERMINOLOGY_POLICY.md
+          test -f docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md
+          test -f docs/guides/GITHUB_FOR_COWORKERS.md
+          test -f docs/GLOSSARY.md
+          test -f .github/ISSUE_TEMPLATE/feedback.yml
+          test -f .github/PULL_REQUEST_TEMPLATE.md
+          test -f .github/CODEOWNERS
+          test -f index.html
+
+      - name: Проверить UTF-8 и русские входные документы
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          required_russian = [
+              Path('docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md'),
+              Path('docs/guides/GITHUB_FOR_COWORKERS.md'),
+              Path('docs/GLOSSARY.md'),
+              Path('.github/PULL_REQUEST_TEMPLATE.md'),
+              Path('.github/ISSUE_TEMPLATE/feedback.yml'),
+          ]
+
+          for path in required_russian:
+              text = path.read_text(encoding='utf-8')
+              if not text.strip():
+                  raise SystemExit(f'Пустой обязательный файл: {path}')
+              if not any(('А' <= c <= 'я') or c in 'Ёё' for c in text):
+                  raise SystemExit(f'Нет русского пояснения: {path}')
+
+          for path in Path('docs').rglob('*.md'):
+              path.read_text(encoding='utf-8')
+
+          print('Базовые проверки документации пройдены.')
+          PY
+
+      - name: Проверить форму обратной связи
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^name: Обратная связь' .github/ISSUE_TEMPLATE/feedback.yml
+          grep -q 'Что вы пытались сделать' .github/ISSUE_TEMPLATE/feedback.yml
+          grep -q 'не добавил.*секрет' .github/ISSUE_TEMPLATE/feedback.yml
+
+      - name: Зафиксировать известное ограничение HTML
+        shell: bash
+        run: |
+          echo 'index.html пока является временным ручным представлением.'
+          echo 'Канонический источник истины: Markdown в docs/.'
+          echo 'Переход на генерацию отслеживается в Issue #2 и #6.'
