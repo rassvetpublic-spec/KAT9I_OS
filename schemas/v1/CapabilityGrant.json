@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/CapabilityGrant.json",
+  "title": "CapabilityGrant",
+  "description": "Выданный мандат прав и возможностей для Worker или задачи.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "grant_id",
+    "grantee_id",
+    "capabilities",
+    "expires_at",
+    "issued_at"
+  ],
+  "properties": {
+    "grant_id": {
+      "type": "string",
+      "pattern": "^cap-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор мандата прав."
+    },
+    "grantee_id": {
+      "type": "string",
+      "description": "Идентификатор получателя прав (Worker ID или Task ID)."
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "FS_READ",
+          "FS_WRITE_SCOPED",
+          "FS_WRITE_WORKSPACE",
+          "CMD_EXECUTE_SAFE",
+          "CMD_EXECUTE_BUILD",
+          "NETWORK_GITHUB_API",
+          "SECRET_READ_SCOPED"
+        ]
+      },
+      "minItems": 1,
+      "description": "Перечень предоставленных прав."
+    },
+    "isolation_level": {
+      "type": "string",
+      "enum": [
+        "PROCESS_ISOLATED",
+        "JOB_OBJECT",
+        "CONTAINER",
+        "IN_PROCESS"
+      ],
+      "default": "PROCESS_ISOLATED",
+      "description": "Требуемый уровень изоляции исполнения."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка истечения срока действия мандата в ISO 8601."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка выдачи мандата в ISO 8601."
+    }
+  }
+}

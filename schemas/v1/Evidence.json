@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/Evidence.json",
+  "title": "Evidence",
+  "description": "Запись аудита и проверяемые доказательства корректности работы KAT9I_OS.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "evidence_id",
+    "task_id",
+    "source_revision",
+    "test_results",
+    "qa_verdict",
+    "qa_worker",
+    "created_at"
+  ],
+  "properties": {
+    "evidence_id": {
+      "type": "string",
+      "pattern": "^ev-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор доказательства."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор связанной задачи."
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{7,40}$",
+      "description": "Хэш коммита git, на котором проводилась верификация."
+    },
+    "test_results": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "passed",
+        "failed",
+        "exit_code"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "summary": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "qa_verdict": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NEEDS_REVISION"
+      ],
+      "description": "Вердикт независимой проверки качества."
+    },
+    "qa_worker": {
+      "type": "string",
+      "description": "Идентификатор независимого исполнителя QA (отличного от автора реализации)."
+    },
+    "notes": {
+      "type": "string",
+      "default": "",
+      "description": "Заметки и замечания QA."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка фиксации доказательства в ISO 8601."
+    }
+  }
+}

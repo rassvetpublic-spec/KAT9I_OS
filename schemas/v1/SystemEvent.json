@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/SystemEvent.json",
+  "title": "SystemEvent",
+  "description": "Универсальный конверт события Event Journal для аудита, стриминга и Replay Recovery.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "source_module",
+    "payload",
+    "timestamp"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный монотонный идентификатор события."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "TASK_CREATED",
+        "TASK_STATUS_CHANGED",
+        "TASK_COMPLETED",
+        "SECURITY_VIOLATION_DETECTED",
+        "CAPABILITY_GRANTED",
+        "CHECKPOINT_CREATED",
+        "WORKER_REGISTERED",
+        "WORKER_HEARTBEAT"
+      ],
+      "description": "Тип системного события."
+    },
+    "source_module": {
+      "type": "string",
+      "description": "Идентификатор модуля-источника события (Core, Security, Worker, UI)."
+    },
+    "task_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Связанный идентификатор задачи, если применимо."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Полезная нагрузка события, соответствующая контракту типа события."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка генерации события в ISO 8601."
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/TaskRuntimeState.json",
+  "title": "TaskRuntimeState",
+  "description": "Текущее состояние выполнения задачи в среде исполнения KAT9I_OS.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "status",
+    "worker_id",
+    "progress_percent",
+    "updated_at"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор отслеживаемой задачи."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "ACQUIRING_RESOURCES",
+        "ACTIVE",
+        "PAUSED",
+        "BLOCKED_ON_INPUT",
+        "AWAITING_QA",
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED"
+      ],
+      "description": "Текущий статус жизненного цикла задачи."
+    },
+    "worker_id": {
+      "type": "string",
+      "description": "Идентификатор назначенного исполнителя (Worker)."
+    },
+    "progress_percent": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Процент завершения выполнения (0..100)."
+    },
+    "current_step": {
+      "type": "string",
+      "default": "",
+      "description": "Краткое описание выполняемого шага."
+    },
+    "checkpoint_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Идентификатор последнего созданного снимка состояния (контрольной точки)."
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Сообщение об ошибке в случае сбоя или блокировки."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка последнего обновления состояния в ISO 8601."
+    }
+  }
+}

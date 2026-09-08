@@ -198,5 +198,29 @@ class TestDocumentationSSoT(unittest.TestCase):
         self.assertIn("levelRank", content)
         self.assertIn("nav.quick-nav", content)
 
+    def test_canonical_schemas_ssot_exists(self):
+        """
+        Проверяет наличие канонического каталога схем и минимального набора первой вертикали v0.1 (Issue #40, Gate G2):
+        - schemas/README.md
+        - schemas/v1/{TaskContract, TaskRuntimeState, TaskResult, Evidence, SecurityDecision, CapabilityGrant, SystemEvent}.json
+        """
+        schemas_dir = REPO_ROOT / "schemas" / "v1"
+        self.assertTrue(schemas_dir.exists() and schemas_dir.is_dir(), "Каталог schemas/v1 отсутствует")
+        readme = REPO_ROOT / "schemas" / "README.md"
+        self.assertTrue(readme.exists(), "Файл schemas/README.md отсутствует")
+
+        expected_schemas = [
+            "TaskContract.json",
+            "TaskRuntimeState.json",
+            "TaskResult.json",
+            "Evidence.json",
+            "SecurityDecision.json",
+            "CapabilityGrant.json",
+            "SystemEvent.json"
+        ]
+        for s in expected_schemas:
+            p = schemas_dir / s
+            self.assertTrue(p.exists(), f"Каноническая схема {s} отсутствует в {schemas_dir}")
+
 if __name__ == "__main__":
     unittest.main()
