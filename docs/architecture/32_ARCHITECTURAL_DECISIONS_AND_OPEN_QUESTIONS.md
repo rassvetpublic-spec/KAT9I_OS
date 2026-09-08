@@ -606,13 +606,13 @@ Discovery не должен автоматически выдавать Trust.
 ### Этап G2 — Machine Contracts (Машинные контракты)
 - **OQ-003** — единый машинный формат системных контрактов (JSON Schema / Protobuf) и правила версий (Issue #40).
 - **OQ-005** — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47).
-- **OQ-006** — каталог физических канонических схем (Issue #40, #57).
+- **OQ-006** — каталог физических канонических схем (Issue #40).
 - **OQ-007** — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44).
 - **OQ-009** — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).
 
 ### Этап G3 — Runtime Foundation (Фундамент исполняемой системы)
 - **OQ-002** — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41).
-- **OQ-004** — реализация и гарантии изоляции локальных Workers (Windows Job Objects / cgroups) (Issue #49, #58).
+- **OQ-004** — реализация и гарантии изоляции локальных Workers (Windows Job Objects / cgroups) (Issue #49).
 - **OQ-008** — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45).
 - **OQ-010** — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).
 
