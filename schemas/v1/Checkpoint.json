@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/Checkpoint.json",
+  "title": "Checkpoint",
+  "description": "Снимок согласованного состояния выполнения задачи или подсистемы для ускорения и изоляции Replay Recovery.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "checkpoint_id",
+    "task_id",
+    "last_sequence_number",
+    "runtime_state",
+    "completed_operations",
+    "active_lease_generation",
+    "created_at"
+  ],
+  "properties": {
+    "checkpoint_id": {
+      "type": "string",
+      "pattern": "^chk-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор контрольной точки."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор задачи, снимок которой зафиксирован."
+    },
+    "last_sequence_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Номер последнего учтенного события в Event Journal (Sequence Number), вошедшего в снимок."
+    },
+    "runtime_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "progress_percent",
+        "worker_id"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "QUEUED",
+            "ACQUIRING_RESOURCES",
+            "ACTIVE",
+            "PAUSED",
+            "BLOCKED_ON_INPUT",
+            "AWAITING_QA",
+            "COMPLETED",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "progress_percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "worker_id": {
+          "type": "string"
+        },
+        "current_step": {
+          "type": "string"
+        }
+      },
+      "description": "Согласованное состояние выполнения задачи на момент фиксации контрольной точки."
+    },
+    "completed_operations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^op-[a-zA-Z0-9_-]{8,64}$"
+      },
+      "uniqueItems": true,
+      "description": "Список уникальных operation_id выполненных изменяющих действий, повтор которых при Replay запрещен (идемпотентность)."
+    },
+    "active_lease_generation": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Действовавшее на момент создания чекпоинта поколение владения (Fencing Token)."
+    },
+    "persisted_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Список путей или хэшей подтверждённых файлов/артефактов, сохраненных на момент чекпоинта."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка создания контрольной точки в ISO 8601."
+    }
+  }
+}

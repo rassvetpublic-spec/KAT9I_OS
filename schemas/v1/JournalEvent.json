@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/JournalEvent.json",
+  "title": "JournalEvent",
+  "description": "Машинный контракт элемента append-only Event Journal для аудита, стриминга и детерминированного Replay Recovery.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "sequence_number",
+    "event_type",
+    "source_module",
+    "timestamp",
+    "correlation_id",
+    "payload"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор события журнала."
+    },
+    "sequence_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Строго монотонно возрастающий номер события в append-only потоке (Sequence Number)."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "TASK_CREATED",
+        "TASK_STATUS_CHANGED",
+        "TASK_COMPLETED",
+        "TASK_FAILED",
+        "TASK_CANCELLED",
+        "LEASE_ACQUIRED",
+        "LEASE_EXPIRED",
+        "LEASE_REVOKED",
+        "SIDE_EFFECT_PLANNED",
+        "SIDE_EFFECT_EXECUTED",
+        "SECURITY_VIOLATION_DETECTED",
+        "CAPABILITY_GRANTED",
+        "CAPABILITY_REVOKED",
+        "APPROVAL_RECORDED",
+        "CHECKPOINT_COMMITTED"
+      ],
+      "description": "Тип критического системного события, обязательного для Replay Recovery."
+    },
+    "source_module": {
+      "type": "string",
+      "description": "Модуль-источник события (Core, Execution, Storage, Security, Context, DesktopShell)."
+    },
+    "task_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор связанной задачи, если применимо."
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^corr-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Сквозной корреляционный идентификатор цепочки вызовов/операции."
+    },
+    "actor_identity_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^id-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Идентификатор субъекта (Identity), инициировавшего или выполнившего действие."
+    },
+    "operation_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^op-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный ключ идемпотентности изменяющей операции для предотвращения двойных побочных эффектов при Replay."
+    },
+    "lease_generation": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "description": "Поколение Lease (Fencing Token). События от устаревшего поколения отклоняются."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Структурированные данные события в соответствии с event_type."
+    },
+    "evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Ссылка на артефакт доказательства корректности (Evidence), подтверждающий переход."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка генерации события в ISO 8601."
+    }
+  }
+}

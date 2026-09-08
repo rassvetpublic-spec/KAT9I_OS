@@ -32,7 +32,9 @@ schemas/
     ├── SystemEvent.json        # Универсальный конверт системных событий
     ├── ModuleRegistry.json     # Машинный реестр модулей и граф зависимостей
     ├── Identity.json           # Идентичность субъекта и привязка к Windows
-    └── ApprovalRecord.json     # Структурированное одобрение человеком с защитой от replay
+    ├── ApprovalRecord.json     # Структурированное одобрение человеком с защитой от replay
+    ├── JournalEvent.json       # Элемент append-only журнала событий Event Journal
+    └── Checkpoint.json         # Снимок состояния задачи для Replay Recovery
 ```
 
 ## 4. Политика версионирования и эволюции схем

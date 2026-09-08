@@ -511,6 +511,23 @@ Obsidian может быть:
    - Запись обязана содержать `approval_id`, `approver_identity_id`, `approver_role`, `task_id`, `action_hash`, криптографический `nonce` (длиной не менее 16 символов), метки `issued_at` и `expires_at`;
    - Воркеры (`WORKER`) или внешние сервисы не могут генерировать или подписывать Human Approval.
 
+## 32.40d. ADR-037 — Event Journal, Checkpoint и правила Replay Recovery
+
+**Статус:** ACCEPTED (канонический источник: `schemas/v1/JournalEvent.json`, `schemas/v1/Checkpoint.json`, `docs/architecture/21_RELIABILITY_AND_RECOVERY.md`, `tests/test_journal_recovery.py`, Issue #46).
+
+1. **Машинный контракт append-only Event Journal**:
+   - Журнал критических событий является строго append-only и описывается схемой `schemas/v1/JournalEvent.json`;
+   - Каждое событие имеет строго монотонный `sequence_number` (начиная с 1);
+   - Обязательный перечень событий v0.1: переходы жизненного цикла задач (`TASK_CREATED`, `TASK_STATUS_CHANGED`, `TASK_COMPLETED`, `TASK_FAILED`, `TASK_CANCELLED`), управление Lease (`LEASE_ACQUIRED`, `LEASE_EXPIRED`, `LEASE_REVOKED`), внешние действия (`SIDE_EFFECT_PLANNED`, `SIDE_EFFECT_EXECUTED`), события безопасности (`SECURITY_VIOLATION_DETECTED`, `CAPABILITY_GRANTED`, `CAPABILITY_REVOKED`, `APPROVAL_RECORDED`) и фиксация контрольных точек (`CHECKPOINT_COMMITTED`).
+2. **Контрольные точки (Checkpoint)**:
+   - Контрольная точка описывается схемой `schemas/v1/Checkpoint.json` и связывается с `last_sequence_number`;
+   - Включает моментальный снимок согласованного `runtime_state`, перечень выполненных `operation_id`, активное поколение владения `active_lease_generation` и ссылки на подтвержденные артефакты.
+3. **Replay Recovery и защита от дублирующих побочных действий**:
+   - Восстановление после сбоя или перезапуска всегда стартует с последней подтвержденной контрольной точки Checkpoint с доигрыванием последующих событий журнала;
+   - Защита от повтора внешних изменяющих действий (идемпотентность): если `operation_id` уже зафиксирован в чекпоинте или журнале с подтвержденным Evidence, повторная отправка блокируется (`SKIP_ALREADY_EXECUTED`);
+   - Защита от зомби-воркеров (Fencing Token): события от устаревшего поколения владения (`lease_generation < current_lease_generation`) безусловно отклоняются;
+   - Срок хранения (Retention): события активных задач хранятся непрерывно, завершенных — минимум 30 суток для аудита.
+
 ## 32.41. Технологические решения, которые пока не должны становиться архитектурными догмами
 
 Следующие вещи могут быть заменены без изменения архитектурных принципов.
@@ -646,7 +663,7 @@ Discovery не должен автоматически выдавать Trust.
 - **OQ-005** — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47) — **ACCEPTED** (ADR-035, `modules_registry.json`).
 - **OQ-006** — каталог физических канонических схем (Issue #40) — **ACCEPTED** (ADR-034, `schemas/v1/`).
 - **OQ-007** — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44) — **ACCEPTED** (ADR-036, `schemas/v1/Identity.json`, `schemas/v1/ApprovalRecord.json`).
-- **OQ-009** — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).
+- **OQ-009** — формат Event Journal, Checkpoint и Replay Recovery (Issue #46) — **ACCEPTED** (ADR-037, `schemas/v1/JournalEvent.json`, `schemas/v1/Checkpoint.json`).
 
 ### Этап G3 — Runtime Foundation (Фундамент исполняемой системы)
 - **OQ-002** — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41).
@@ -789,16 +806,21 @@ Core является отдельным локальным процессом/s
 
 ## 32.61. OQ-009 — формат Event Journal и Checkpoint
 
-Нужно определить:
+> **Статус:** `ACCEPTED` (ADR-037, канонический источник: [docs/architecture/21_RELIABILITY_AND_RECOVERY.md](21_RELIABILITY_AND_RECOVERY.md), `schemas/v1/JournalEvent.json`, `schemas/v1/Checkpoint.json`, Issue #46).
 
-- какие события обязательно append-only;
-- какие данные входят в Checkpoint;
-- как выполняется Replay Recovery;
-- Retention.
-
-Статус:
-
-`OPEN BEFORE v0.1`.
+Решение формализовано:
+1. **Append-only Event Journal (`schemas/v1/JournalEvent.json`)**:
+   - Строгая монотонность `sequence_number` (от 1);
+   - Обязательный перечень событий v0.1: жизненный цикл задач (`TASK_*`), управление Lease (`LEASE_*`), внешние действия (`SIDE_EFFECT_*`), события безопасности (`SECURITY_*`, `CAPABILITY_*`, `APPROVAL_RECORDED`) и чекпоинты (`CHECKPOINT_COMMITTED`);
+   - Идемпотентность побочных эффектов через уникальный `operation_id` (`op-...`);
+   - Защита от устаревших воркеров через `lease_generation` (Fencing Token).
+2. **Контрольные точки (`schemas/v1/Checkpoint.json`)**:
+   - Фиксация согласованного снимка `runtime_state`, перечня выполненных `operation_id` и ссылок на артефакты;
+   - Связка с `last_sequence_number`.
+3. **Replay Recovery**:
+   - Старт с последнего Checkpoint с доигрыванием последующих событий;
+   - Защита от дублирующих побочных действий (`SKIP_ALREADY_EXECUTED`);
+   - Retention: минимум 30 суток для аудита.
 
 ## 32.62. OQ-010 — правила завершения Core при закрытии Electron
 
