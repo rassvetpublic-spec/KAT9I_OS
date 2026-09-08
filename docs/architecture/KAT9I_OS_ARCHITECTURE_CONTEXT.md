@@ -225,7 +225,7 @@ A worker receives only:
 ### Distributed layout example
 
 ```text
-                   KAT Coordinator
+                   KAT9I Coordinator
                          │
           ┌──────────────┼───────────────┐
           ▼              ▼               ▼
