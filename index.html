@@ -236,6 +236,7 @@
 <a href="#arch-30_versioning_releases_and_lifecycle">Архитектура: 30_VERSIONING_RELEASES_AND_LIFECYCLE</a>
 <a href="#arch-31_roadmap_and_first_working_version">Архитектура: 31_ROADMAP_AND_FIRST_WORKING_VERSION</a>
 <a href="#arch-32_architectural_decisions_and_open_questions">Архитектура: 32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS</a>
+<a href="#arch-33_external_systems_benchmark">Архитектура: 33_EXTERNAL_SYSTEMS_BENCHMARK</a>
 <a href="#arch-kat9i_os_architecture_context">Архитектура: KAT9I_OS_ARCHITECTURE_CONTEXT</a>
   </nav>
 
@@ -11464,6 +11465,207 @@ Learning (самообучение)
 </ol>
 <h2 id="32-103-главный-принцип">32.103. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>В KAT9I_OS всегда должно быть понятно, что уже решено, что пока только предполагается, что является заменяемой технической реализацией и что ещё требует решения; система не должна строиться на скрытых предположениях, случайных технологиях или забытых устных договорённостях.</strong></div>
+    </section>
+        
+
+    <section id="arch-33_external_systems_benchmark">
+      <div class="badge">Каноническая архитектура</div>
+      <h1 id="33-внешний-сравнительный-бенчмарк-kat9i_os-против-агентных-и-workflow-систем">33. Внешний сравнительный бенчмарк KAT9I_OS против агентных и workflow-систем</h1>
+<h2 id="33-1-назначение-и-контекст-purpose-and-context">33.1. Назначение и контекст (Purpose and Context)</h2>
+<p>Этот раздел фиксирует канонический сравнительный анализ архитектуры KAT9I_OS и ведущих внешних платформ для агентной разработки и надёжного исполнения рабочих процессов (Durable Execution).</p>
+<p>В соответствии с планом развития (Roadmap, раздел 31.69), сравнительный анализ проводится <strong>до окончательной фиксации Architecture Baseline</strong>, чтобы:</p>
+<ol>
+<li>Выявить проверенные архитектурные решения конкретных проблем KAT9I_OS в индустрии.</li>
+<li>Не допустить слепого копирования маркетинговых заявлений или избыточных структур.</li>
+<li>Сформировать воспроизводимый benchmark (набор стандартных сценариев испытаний), а не статическую разовую таблицу.</li>
+<li>Зафиксировать прозрачные решения по архитектурным разрывам (Gap Decisions): что система перенимает, что адаптирует под свои инварианты, от чего осознанно отказывается и что откладывает.</li>
+</ol>
+<div class="note"><strong>Примечание:</strong> <strong>Главный принцип бенчмарка:</strong></div>
+<div class="note"><strong>Примечание:</strong> Сравниваются не субъективные заявления разработчиков, а строго верифицируемые механизмы платформы. Каждая возможность фиксируется в одном из трёх состояний:</div>
+<div class="note"><strong>Примечание:</strong> - <strong><code>IMPLEMENTED</code></strong> — подтверждено кодом, тестами и воспроизводимым сценарием в публичной кодовой базе платформы;</div>
+<div class="note"><strong>Примечание:</strong> - <strong><code>SPECIFIED</code></strong> — строго формализовано в канонической архитектуре KAT9I_OS (<code>docs/spec/</code> и <code>docs/architecture/</code>), но ожидает стадии кодовой реализации (Gate G2/G3);</div>
+<div class="note"><strong>Примечание:</strong> - <strong><code>ABSENT</code></strong> — возможность отсутствует в архитектуре или коде системы либо не является её проектной целью.</div>
+<hr>
+<h2 id="33-2-системы-базового-сравнения-и-первичные-источники-benchmarked-systems">33.2. Системы базового сравнения и первичные источники (Benchmarked Systems)</h2>
+<p>В базовый набор включены 7 ключевых платформ индустрии по состоянию на сентябрь 2026 года (с датами верификации):</p>
+<ol>
+<li><strong>Microsoft Agent Framework (MAF)</strong></li>
+</ol>
+<ul>
+<li>*Тип:* Корпоративный SDK оркестрации агентов (эволюция Semantic Kernel и AutoGen / Azure AI Agent Service).</li>
+<li>*Первичные источники:* Репозитории <code>microsoft/semantic-kernel</code>, <code>microsoft/autogen</code>, официальная документация Microsoft Learn по Azure AI Agent Service (верифицировано: август 2026 г.).</li>
+<li>*Фокус:* Enterprise-интеграции, Process Framework, типизированные плагины, multi-agent conversations.</li>
+</ul>
+<ol>
+<li><strong>LangGraph (LangChain)</strong></li>
+</ol>
+<ul>
+<li>*Тип:* Графовая среда исполнения агентов с контролем циклов и сохранением состояния (Stateful Multi-Agent Orchestration).</li>
+<li>*Первичные источники:* Документация <code>langchain-ai/langgraph</code>, спецификация StateGraph, Checkpointer API (MemorySaver, PostgresSaver) (верифицировано: август 2026 г.).</li>
+<li>*Фокус:* Графы состояний, точки прерывания (breakpoints), Time-travel debugging, Human-in-the-loop.</li>
+</ul>
+<ol>
+<li><strong>OpenAI Agents SDK</strong></li>
+</ol>
+<ul>
+<li>*Тип:* Легковесный SDK оркестрации и передачи управления между агентами (эволюция OpenAI Swarm / Assistants API v2).</li>
+<li>*Первичные источники:* Официальные репозитории OpenAI, спецификация Assistants API / Threads / Runs (верифицировано: июль 2026 г.).</li>
+<li>*Фокус:* Handoffs (передача управления), встроенный вызов функций (Function Calling), интеграция с Hosted Container Tools.</li>
+</ul>
+<ol>
+<li><strong>CrewAI</strong></li>
+</ol>
+<ul>
+<li>*Тип:* Фреймворк ролевой совместной работы агентов и детерминированных процессов (Crews &amp; Flows).</li>
+<li>*Первичные источники:* Репозиторий <code>crewAIInc/crewAI</code>, спецификация CrewAI Flows, Task pipelines (верифицировано: август 2026 г.).</li>
+<li>*Фокус:* Ролевая модель (Role-playing agents), структурированные пайплайны задач, делегирование, коллаборация.</li>
+</ul>
+<ol>
+<li><strong>Dify</strong></li>
+</ol>
+<ul>
+<li>*Тип:* Открытая платформа визуальной сборки AI-приложений, агентов и LLM-workflow.</li>
+<li>*Первичные источники:* Репозиторий <code>langgenius/dify</code>, документация DSL Workflow, модули Node Sandbox (верифицировано: август 2026 г.).</li>
+<li>*Фокус:* Визуальный конструктор DAG, RAG-конвейеры, DSL импорт/экспорт, multi-tenant управление.</li>
+</ul>
+<ol>
+<li><strong>Letta (ранее MemGPT)</strong></li>
+</ol>
+<ul>
+<li>*Тип:* Платформа агентов с сохраняемым состоянием и многоуровневой иерархической памятью (Stateful LLM Services).</li>
+<li>*Первичные источники:* Репозиторий <code>letta-ai/letta</code> (<code>cpacker/MemGPT</code>), спецификация Memory Blocks (Core Memory, Archival, Recall) (верифицировано: август 2026 г.).</li>
+<li>*Фокус:* Непрерывная память (OS-like virtual memory for LLMs), самоуправление контекстом, сохранение личности агента.</li>
+</ul>
+<ol>
+<li><strong>Temporal</strong></li>
+</ol>
+<ul>
+<li>*Тип:* Промышленная платформа надёжного длительного выполнения рабочих процессов (Durable Execution Platform).</li>
+<li>*Первичные источники:* Документация <code>temporalio/temporal</code>, спецификации Temporal Workflows/Activities, Event History, Determinism constraints (верифицировано: август 2026 г.).</li>
+<li>*Фокус:* Безусловная надёжность, реплей событий (Replay-based recovery), саги, распределённые таймеры, идемпотентность.</li>
+</ul>
+<hr>
+<h2 id="33-3-сравнительная-матрица-по-20-ключевым-осям-comparative-matrix">33.3. Сравнительная матрица по 20 ключевым осям (Comparative Matrix)</h2>
+<div class="table-container"><table class="doc-table"><thead><tr><th>№</th><th>Ось сравнения (Evaluation Axis)</th><th>Microsoft Agent Framework</th><th>LangGraph</th><th>OpenAI Agents SDK</th><th>CrewAI</th><th>Dify</th><th>Letta</th><th>Temporal</th><th>KAT9I_OS</th></tr></thead><tbody><tr><td>1</td><td><strong>Task/workflow state</strong> (Состояние задачи/процесса)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (TaskContract + TaskRuntimeState)</td></tr><tr><td>2</td><td><strong>Checkpoint/Resume</strong> (Контрольные точки и продолжение)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (Event Journal + Checkpoints)</td></tr><tr><td>3</td><td><strong>Recovery</strong> (Восстановление после сбоев)</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (Event Replay + Lease Recovery)</td></tr><tr><td>4</td><td><strong>Human-in-the-loop</strong> (Участие человека)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (Human Approval + ADR-008 Deny wins)</td></tr><tr><td>5</td><td><strong>Multi-agent orchestration</strong> (Оркестрация групп агентов)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (Coworker Pool + Teamwork locks)</td></tr><tr><td>6</td><td><strong>Typed contracts</strong> (Типизированные контракты)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (Rust/TS Schemas + TaskContract)</td></tr><tr><td>7</td><td><strong>Sandbox</strong> (Изолированная песочница)</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (Scope Guard + Windows Job Objects)</td></tr><tr><td>8</td><td><strong>Tool/MCP integration</strong> (Поддержка MCP и инструментов)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (MCP Client/Server + Progressive)</td></tr><tr><td>9</td><td><strong>Security/least privilege</strong> (Безопасность и минимальные права)</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (WorkerGrant + Temporary Token)</td></tr><tr><td>10</td><td><strong>Prompt/Tool injection protection</strong> (Защита от injection)</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (CONTROL/DATA split + Context Guard)</td></tr><tr><td>11</td><td><strong>Memory/Knowledge</strong> (Память и база знаний)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (Obsidian Vault + KnowledgeRef)</td></tr><tr><td>12</td><td><strong>Observability/Tracing</strong> (Наблюдаемость и трассировка)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (OpenTelemetry + Correlation ID)</td></tr><tr><td>13</td><td><strong>QA/Evals</strong> (Оценка качества и независимый QA)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (ADR-009 Independent QA)</td></tr><tr><td>14</td><td><strong>Evidence/Audit</strong> (Доказательства и аудит выполнения)</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (ADR-004 Evidence-first + EvidenceRef)</td></tr><tr><td>15</td><td><strong>Idempotency</strong> (Идемпотентность и исключение дублей)</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (Idempotency Key + ResultRef)</td></tr><tr><td>16</td><td><strong>Lease/Fencing</strong> (Временные права и защита от дублирования)</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (Lease + Generation + Fencing)</td></tr><tr><td>17</td><td><strong>Local-first/Offline-first</strong> (Приоритет локального исполнения)</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (ADR-002 Local-first + Ollama/Rust)</td></tr><tr><td>18</td><td><strong>Cost/forecasting</strong> (Прогноз ресурсов и учёт стоимости)</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td><strong>SPECIFIED</strong> (Cost per Task + Pre-flight Estimate)</td></tr><tr><td>19</td><td><strong>Visual workflow/UI</strong> (Визуальный интерфейс процессов)</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>ABSENT</td><td>IMPLEMENTED</td><td>ABSENT</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (Electron UI + TaskGraph)</td></tr><tr><td>20</td><td><strong>Developer experience</strong> (Удобство разработки и локальной отладки)</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td>IMPLEMENTED</td><td><strong>SPECIFIED</strong> (GitHub-driven + Dogfood CLI)</td></tr></tbody></table></div>
+<hr>
+<h2 id="33-4-семь-практических-сценариев-бенчмарка-benchmark-scenarios">33.4. Семь практических сценариев бенчмарка (Benchmark Scenarios)</h2>
+<p>Для каждого сценария зафиксированы: условия проверки, поведение внешних систем и верифицируемый эталон поведения KAT9I_OS.</p>
+<h3 id="сценарий-1-пауза-на-подтверждение-человека-перезапуск-системы-продолжение-выполнения-human-in-the-loop-persistence">Сценарий 1: Пауза на подтверждение человека → Перезапуск системы → Продолжение выполнения (Human-in-the-Loop Persistence)</h3>
+<ul>
+<li><strong>Цель:</strong> Проверить сохранение полного состояния процесса при длительной паузе и аварийном перезапуске хоста.</li>
+<li><strong>Внешние платформы:</strong></li>
+<li>*LangGraph:* Поддерживает через <code>interrupt()</code> и Postgres/Sqlite Checkpointer. После перезапуска граф возобновляется с контрольной точки.</li>
+<li>*Temporal:* Идеальная поддержка через Signals и History Replay. Процесс может ждать недели и перезапускаться без потерь.</li>
+<li>*OpenAI SDK / CrewAI:* Теряют состояние в памяти при перезапуске процесса исполнителя (требуют внешней обвязки).</li>
+<li><strong>Эталон KAT9I_OS:</strong></li>
+<li>Задача переводится в статус <code>WAITING_FOR_HUMAN</code>.</li>
+<li>Состояние фиксируется в <code>TaskRuntimeState</code> и SQLite Event Journal с <code>CheckpointRef</code>.</li>
+<li>Освобождается Lease исполнителя, процесс может быть полностью завершён.</li>
+<li>При возобновлении (<code>HumanApprovalToken</code>) другой Worker поднимает задачу из Checkpoint без повторного прогона пройденных стадий.</li>
+</ul>
+<h3 id="сценарий-2-падение-исполнителя-посередине-задачи-worker-crash-amp-lease-expiration">Сценарий 2: Падение исполнителя посередине задачи (Worker Crash &amp; Lease Expiration)</h3>
+<ul>
+<li><strong>Цель:</strong> Исключить зависание задачи при внезапном сбое процесса (OOM, SIGKILL, обрыв связи).</li>
+<li><strong>Внешние платформы:</strong></li>
+<li>*Temporal:* Обнаруживает через Activity Heartbeat Timeout и переназначает задачу другому воркеру.</li>
+<li>*LangGraph / CrewAI / Dify:* Не имеют встроенного механизма Lease/Heartbeat для распределённых воркеров; задача навсегда зависает в статусе &quot;Running&quot; без кастомного супервизора.</li>
+<li><strong>Эталон KAT9I_OS:</strong></li>
+<li>На задачу выдаётся <code>WorkerLease</code> с TTL (например, 60 секунд) и обязательным <code>Heartbeat</code>.</li>
+<li>При отсутствии Heartbeat супервизор Core переводит задачу в статус <code>ABANDONED</code>.</li>
+<li>Производится откат незафиксированных временных файлов в изоляции (<code>Workspace Isolation Cleanup</code>).</li>
+<li>Задача безопасно переназначается новому Worker с инкрементом <code>lease_generation</code>.</li>
+</ul>
+<h3 id="сценарий-3-повтор-внешней-изменяющей-операции-без-создания-дубля-idempotency-amp-resultref">Сценарий 3: Повтор внешней изменяющей операции без создания дубля (Idempotency &amp; ResultRef)</h3>
+<ul>
+<li><strong>Цель:</strong> Предотвратить дублирование внешних действий (создание повторного PR, коммита, комментария, списания баланса).</li>
+<li><strong>Внешние платформы:</strong></li>
+<li>*Temporal:* Гарантирует идемпотентность через Activity Idempotency Keys и детерминированную историю.</li>
+<li>*Агентные SDK (LangGraph, CrewAI, AutoGen):* Повторный запуск шага выполняет обращение к инструменту повторно, создавая дублирующий вызов API.</li>
+<li><strong>Эталон KAT9I_OS:</strong></li>
+<li>Каждая изменяющая операция формирует детерминированный <code>IdempotencyKey(task_id, stage_id, operation_hash)</code>.</li>
+<li>Перед вызовом внешнего инструмента модуль Execution проверяет наличие зафиксированного <code>ResultRef</code> в реестре результатов.</li>
+<li>При наличии готового результата возвращается существующий <code>ResultRef</code> без повторного вызова инструмента.</li>
+</ul>
+<h3 id="сценарий-4-смена-версии-правила-системного-контракта-во-время-паузы-задачи-schema-amp-policy-drift">Сценарий 4: Смена версии правила / системного контракта во время паузы задачи (Schema &amp; Policy Drift)</h3>
+<ul>
+<li><strong>Цель:</strong> Предотвратить исполнение задачи по устаревшим правилам или разрушение структур при обновлении софта во время выполнения длительного процесса.</li>
+<li><strong>Внешние платформы:</strong></li>
+<li>*Temporal:* Требует явного использования Workflow Versioning API (<code>GetVersion()</code>), иначе недетерминированное изменение кода ломает Replay.</li>
+<li>*LangGraph / Letta:* Изменение схемы стейта во время нахождения процесса в паузе приводит к ошибке десериализации (Schema mismatch).</li>
+<li><strong>Эталон KAT9I_OS:</strong></li>
+<li>Контракт задачи содержит неизменяемый <code>RulesRef</code> и <code>SystemContractVersion</code>, зафиксированные в момент старта задачи (<code>TaskContract.immutable</code>).</li>
+<li>При возобновлении задачи проверяется <code>PolicyDriftDetector</code>:</li>
+<li>Если изменились критические правила безопасности (<code>deny wins</code>) — задача принудительно запрашивает повторную валидацию (<code>REVALIDATE_RULES</code>).</li>
+<li>Если обновились внутренние структуры, применяется адаптер миграции контрактов.</li>
+</ul>
+<h3 id="сценарий-5-конкуренция-двух-исполнителей-за-одну-изменяющую-операцию-fencing-token-amp-split-brain-prevention">Сценарий 5: Конкуренция двух исполнителей за одну изменяющую операцию (Fencing Token &amp; Split-Brain Prevention)</h3>
+<ul>
+<li><strong>Цель:</strong> Исключить запись устаревшим («зомби») воркером, который временно завис, но очнулся после того, как задача была переназначена.</li>
+<li><strong>Внешние платформы:</strong></li>
+<li>*Temporal:* Сервер отклоняет завершение Activity от устаревшего воркера по номеру TaskToken.</li>
+<li>*Большинство агентных библиотек:* Отсутствует защита от split-brain; оба агента выполнят запись и перезапишут данные друг друга.</li>
+<li><strong>Эталон KAT9I_OS:</strong></li>
+<li>Каждая выдача права сопровождается монотонно растущим номером поколения (<code>Lease Generation / Fencing Token</code>).</li>
+<li>Результирующий приёмник (ResultSink / Git Workspace / Database) принимает изменения только с <code>token == current_generation</code>.</li>
+<li>Попытка записи от старого исполнителя отклоняется ошибкой <code>FENCING_TOKEN_STALE</code>.</li>
+</ul>
+<h3 id="сценарий-6-выполнение-детерминированной-задачи-без-языковой-модели-executable-first-0-token-cost">Сценарий 6: Выполнение детерминированной задачи без языковой модели (Executable-first, 0-Token Cost)</h3>
+<ul>
+<li><strong>Цель:</strong> Проверить способность системы решать алгоритмически формализованные подзадачи без паразитного расхода токенов и задержек LLM.</li>
+<li><strong>Внешние платформы:</strong></li>
+<li>*Dify / Temporal:* Отлично исполняют детерминированные ноды и шаги кода.</li>
+<li>*CrewAI / AutoGen:* Часто требуют прогона системных промптов и «размышлений» LLM даже для тривиальной сортировки или проверки файла.</li>
+<li><strong>Эталон KAT9I_OS:</strong></li>
+<li>Архитектурный инвариант <strong>ADR-001 (Executable-first)</strong>: приоритет <code>CODE → HYBRID → MODEL</code>.</li>
+<li>Модуль Inference направляет детерминированные операции в локальный исполнитель (<code>LocalExecutor / Rust Tool</code>), стоимость шага: 0 токенов, latency &lt; 10 мс.</li>
+</ul>
+<h3 id="сценарий-7-сквозная-трассировка-модель-инструмент-результат-независимый-qa-traceability-amp-evidence-chain">Сценарий 7: Сквозная трассировка: Модель → Инструмент → Результат → Независимый QA (Traceability &amp; Evidence Chain)</h3>
+<ul>
+<li><strong>Цель:</strong> Обеспечить неразрывную цепочку аудита от намерения модели до приёмки независимым инспектором.</li>
+<li><strong>Внешние платформы:</strong></li>
+<li>*LangGraph + LangSmith:* Обеспечивает детальный граф трейсов (Input → Tool → Output), но концепция «независимого QA» отсутствует как архитектурная сущность.</li>
+<li>*Temporal:* Хранит историю событий, но не привязывает семантическое качество к процессу приёмки.</li>
+<li><strong>Эталон KAT9I_OS:</strong></li>
+<li>Задаче присваивается глобальный <code>CorrelationId</code>.</li>
+<li>Все шаги фиксируют входные <code>ContextRef</code>, вызовы инструментов с аргументами, хешированные <code>EvidenceRef</code>.</li>
+<li>Результат передаётся отдельному <code>QA Worker</code> (инвариант <strong>ADR-009</strong>), который валидирует результат по чек-листу и формирует подписанный протокол проверки <code>QAPassRef</code>.</li>
+</ul>
+<hr>
+<h2 id="33-5-анализ-разрывов-и-архитектурные-решения-gap-decisions">33.5. Анализ разрывов и архитектурные решения (Gap Decisions)</h2>
+<p>На основе бенчмарка для выявленных различий зафиксированы следующие обязательные решения:</p>
+<h3 id="1-что-kat9i_os-берёт-напрямую-adopt">1. Что KAT9I_OS берёт напрямую (Adopt)</h3>
+<ul>
+<li><strong>Модель контрольных точек и графов (LangGraph):</strong> Разделение графа выполнения на явные ноды с фиксацией состояния в контрольных точках (Checkpoints) берётся за основу модуля Orchestration.</li>
+<li><strong>Модель Durable Execution и Heartbeat-супервизии (Temporal):</strong> Использование аренды (Lease), монотонных токенов защиты от сбоев (Fencing tokens) и отслеживания сигналов жизни (Heartbeat) переносится в модули <code>Coworker</code> и <code>Execution</code>.</li>
+<li><strong>Иерархическая организация памяти (Letta):</strong> Разделение памяти на быструю рабочую память (Core Context), архивную базу знаний (Archival Knowledge / Obsidian) и хронологию событий (Event Journal).</li>
+</ul>
+<h3 id="2-что-kat9i_os-адаптирует-adapt">2. Что KAT9I_OS адаптирует (Adapt)</h3>
+<ul>
+<li><strong>Протокол Handoffs (OpenAI Agents SDK / AutoGen):</strong> Вместо неконтролируемой передачи контекста между агентами вводится типизированный контракт делегирования <code>SubtaskContract</code> с ограничением прав <code>WorkerGrant</code>.</li>
+<li><strong>Конструктор рабочих процессов (Dify):</strong> Визуализация процессов адаптируется для десктопной оболочки Electron исключительно как инструмент наблюдения и отладки (<code>TaskGraph Viewer</code>), но не как конкурирующий источник бизнес-логики.</li>
+<li><strong>Оценки качества (LangSmith / Evals):</strong> Адаптируются в форме обязательного независимого тестирования (<strong>ADR-009 Independent QA</strong>), где тестирующий агент изолирован от контекста рассуждений исполнителя.</li>
+</ul>
+<h3 id="3-от-чего-kat9i_os-осознанно-отказывается-reject">3. От чего KAT9I_OS осознанно отказывается (Reject)</h3>
+<ul>
+<li><strong>Прямое исполнение системных команд из промптов агентов (Unsandboxed Tool Execution):</strong> Отказ от прямого неконтролируемого доступа LLM к shell/fs. Любое воздействие строго фильтруется через <code>Scope Guard</code> и изоляцию рабочих каталогов.</li>
+<li><strong>Смешение инструкций и пользовательских данных (Unified Prompt Context):</strong> Отказ от общего неструктурированного окна контекста. Архитектура строго разделяет потоки <code>CONTROL</code> (системные правила, инварианты) и <code>DATA</code> (пользовательский ввод, внешние файлы) для защиты от Prompt Injection.</li>
+<li><strong>Хранение секретов в переменных окружения процессов агентов:</strong> Отказ от передачи API-ключей в явном виде рабочим процессам. Доступ только по <code>SecretRef</code> через защищённый Vault Windows Credential Manager.</li>
+</ul>
+<h3 id="4-что-откладывается-за-пределы-mvp-v0-1-defer">4. Что откладывается за пределы MVP v0.1 (Defer)</h3>
+<ul>
+<li><strong>Распределённый консенсус (Raft/Paxos) для кластера нод:</strong> Для версии v0.1 применяется Local-first модель с одним Primary координатором и пулом локальных/удалённых воркеров.</li>
+<li><strong>Динамический маркетплейс сторонних навыков:</strong> Загрузка сторонних непроверенных плагинов отложена до реализации доказанной криптографической верификации манифестов и полного аудита безопасности.</li>
+</ul>
+<hr>
+<h2 id="33-6-взаимосвязь-с-канонической-архитектурой-ssot-integrity">33.6. Взаимосвязь с канонической архитектурой (SSoT Integrity)</h2>
+<p>Настоящий сравнительный бенчмарк не заменяет и не дублирует канонические архитектурные разделы:</p>
+<ul>
+<li>Спецификация контрактов и жизненного цикла зафиксирована в <a href="03_TASK_CONTRACT.md">03_TASK_CONTRACT.md</a> и <a href="20_TASK_LIFECYCLE_AND_ORCHESTRATION.md">20_TASK_LIFECYCLE_AND_ORCHESTRATION.md</a>.</li>
+<li>Изоляция и исполнение зафиксированы в <a href="12_EXECUTION.md">12_EXECUTION.md</a> и <a href="14_SECURITY.md">14_SECURITY.md</a>.</li>
+<li>Независимый контроль качества зафиксирован в <a href="../spec/23_TESTING_QA_AND_READINESS.md">23_TESTING_QA_AND_READINESS.md</a>.</li>
+<li>Реестр модулей и зон ответственности зафиксирован в <a href="27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md">27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md</a>.</li>
+<li>Фундаментальные архитектурные решения зафиксированы в <a href="32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md">32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md</a>.</li>
+</ul>
     </section>
         
 
