@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/ApprovalRecord.json",
+  "title": "ApprovalRecord",
+  "description": "Запись структурированного одобрения человеком (USER / ADMIN) действия или мандата прав с защитой от replay-атак.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "approval_id",
+    "approver_identity_id",
+    "approver_role",
+    "task_id",
+    "action_hash",
+    "nonce",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "approval_id": {
+      "type": "string",
+      "pattern": "^appr-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор записи одобрения."
+    },
+    "approver_identity_id": {
+      "type": "string",
+      "pattern": "^id-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Идентификатор субъекта (Identity), предоставившего подтверждение."
+    },
+    "approver_role": {
+      "type": "string",
+      "enum": [
+        "LOCAL_USER",
+        "LOCAL_ADMIN"
+      ],
+      "description": "Роль, от имени которой дано подтверждение. Worker или сервис не могут давать Human Approval."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор задачи, к которой относится подтверждение."
+    },
+    "action_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Криптографический хэш параметров одобряемого действия (предотвращает подмену параметров)."
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{16,64}$",
+      "description": "Одноразовый криптографический случайный токен для предотвращения повторного использования (Replay Attack Protection)."
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "Обоснование или комментарий пользователя при подтверждении."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка выдачи подтверждения в формате ISO 8601."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка истечения срока действия одобрения (Fail-Closed при превышении срока)."
+    }
+  }
+}

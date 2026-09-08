@@ -1613,16 +1613,54 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Security учитывает безопасность Skills, локального кода, зависимостей, MCP-серверов, Runtime, библиотек, обновлений и моделей.</p>
 <h2 id="14-13-идентичность-субъектов-identity">14.13. Идентичность субъектов (Identity)</h2>
 <p>Типы Identity: USER, ADMIN, LOCAL_WORKER, REMOTE_WORKER, KAT9I_REMOTE, SERVICE, CONNECTOR, MCP_SERVER, PROVIDER.</p>
-<p>Identity и Capability — разные сущности.</p>
+<p>Identity и Capability — разные сущности:</p>
+<ul>
+<li><strong>Identity (<code>identity_id</code>)</strong>: кто субъект (устойчивый канонический идентификатор вида <code>id-...</code>, не зависящий от отображаемого имени);</li>
+<li><strong>Role</strong>: какую логическую роль субъект выполняет (<code>LOCAL_USER</code>, <code>LOCAL_ADMIN</code>, <code>WORKER</code>, <code>CORE_SERVICE</code>);</li>
+<li><strong>Trust Level</strong>: уровень доверия к источнику (<code>UNTRUSTED</code>, <code>PROVISIONAL</code>, <code>AUTHENTICATED</code>, <code>FULL_LOCAL_TRUST</code>);</li>
+<li><strong>Capability Grant</strong>: выданный временный мандат на выполнение строго определённых операций.</li>
+</ul>
+<p>Каноническая машинная спецификация субъекта определяется схемой <code>schemas/v1/Identity.json</code>.</p>
+<h2 id="14-13a-привязка-к-локальному-пользователю-windows-windows-binding">14.13a. Привязка к локальному пользователю Windows (Windows Binding)</h2>
+<p>Привязка субъектов типа <code>HUMAN_USER</code> к операционной системе Windows осуществляется строго по принципу нулевого доверия к паролям:</p>
+<ol>
+<li><strong>Категорический запрет на хранение паролей</strong>: в системе запрещено сохранять, логировать, передавать или обрабатывать в открытом виде либо в виде обратимых хэшей пароли Windows (<code>NTLM</code>/<code>LM</code> хэши).</li>
+<li><strong>Идентификация через Windows SID</strong>: связывание выполняется через канонический идентификатор безопасности Windows (<code>security_identifier</code>, например <code>S-1-5-21-...</code>).</li>
+<li><strong>Хэшированная привязка машины (<code>account_hash</code>)</strong>: вычисляется криптографический SHA-256 хэш комбинации локального SID и соли инсталляции, что исключает перенос профиля идентичности на чужие машины.</li>
+<li><strong>Смена или удаление учетной записи Windows</strong>: при смене активного Windows SID все активные сессии, Capability Grants и кэшированные подтверждения немедленно аннулируются (<code>Fail-Closed</code>).</li>
+<li><strong>Изоляция контекста запуска</strong>: запуск процессов Core и Worker&#x27;ов привязывается к токену создавшей сессии без наследования неконтролируемых административных дескрипторов.</li>
+</ol>
 <h2 id="14-14-роль-пользователя-user">14.14. Роль пользователя (USER)</h2>
 <p>USER принимает решения, относящиеся к пользовательскому намерению: выбор варианта, желаемый результат, недостающая информация, личные предпочтения, содержательные решения.</p>
 <h2 id="14-15-роль-администратора-admin">14.15. Роль администратора (ADMIN)</h2>
 <p>ADMIN отвечает за высокорисковые системные решения: расширение прав, подключение доверенного Worker, изменение Security Policy, доступ к секретам, критические Integrations и системные границы.</p>
-<p>USER и ADMIN могут физически быть одним человеком, но логически это разные роли.</p>
+<p>USER и ADMIN могут физически быть одним человеком, но логически это строго разные роли:</p>
+<ul>
+<li>Роль <code>LOCAL_USER</code> выдаётся при обычной аутентификации в сессии.</li>
+<li>Роль <code>LOCAL_ADMIN</code> требует явного подтверждения elevation (UAC / запуск от имени администратора с проверкой <code>is_elevated=true</code> в Windows токене). Обычный пользователь не может самовольно активировать привилегии <code>LOCAL_ADMIN</code>.</li>
+</ul>
 <h2 id="14-16-одобрение-человеком-human-approval">14.16. Одобрение человеком (Human Approval)</h2>
-<p>Human Approval должен быть структурированным и содержать actor, action, resource, scope, срок, task_id и timestamp.</p>
+<p>Human Approval должен быть строго машиночитаемым и соответствовать канонической схеме <code>schemas/v1/ApprovalRecord.json</code>:</p>
+<ul>
+<li><code>approval_id</code>: уникальный идентификатор подтверждения;</li>
+<li><code>approver_identity_id</code>: канонический идентификатор субъекта-человека;</li>
+<li><code>approver_role</code>: роль подтверждающего (<code>LOCAL_USER</code> или <code>LOCAL_ADMIN</code>);</li>
+<li><code>task_id</code>: идентификатор задачи;</li>
+<li><code>action_hash</code>: криптографический SHA-256 хэш параметров и полезной нагрузки одобряемого действия;</li>
+<li><code>nonce</code>: одноразовый криптографический токен (не менее 16 символов);</li>
+<li><code>issued_at</code> и <code>expires_at</code>: строгие временные рамки действия одобрения (Fail-Closed при истечении срока).</li>
+</ul>
+<p>Исполнители (<code>WORKER</code>) или сторонние компоненты (<code>CONNECTOR</code>, <code>MCP_SERVER</code>) категорически не могут генерировать или подписывать Human Approval.</p>
+<h2 id="14-16a-модель-угроз-identity-и-approval-threat-model">14.16a. Модель угроз Identity и Approval (Threat Model)</h2>
+<p>Система безопасности предотвращает следующие типовые векторы атак:</p>
+<ol>
+<li><strong>Подмена Identity (Spoofing)</strong>: Worker или сторонний процесс пытается объявить себя доверенным субъектом или пользователем <code>ADMIN</code>. Предотвращается валидацией Windows SID и токена сессии в Rust Core.</li>
+<li><strong>Replay-атака (повтор старого подтверждения)</strong>: попытка повторно применить ранее выданный Approval к новой операции. Предотвращается проверкой одноразового <code>nonce</code>, проверкой срока действия (<code>expires_at</code>) и сверкой <code>action_hash</code>.</li>
+<li><strong>Эскалация привилегий Worker -&gt; USER / ADMIN</strong>: Worker пытается утвердить собственное расширение полномочий. Предотвращается строгой схемой <code>ApprovalRecord.json</code>, где <code>approver_role</code> ограничена только <code>LOCAL_USER</code> и <code>LOCAL_ADMIN</code>, а валидация выполняется независимым модулем Security в ядре.</li>
+<li><strong>Запуск от имени другого аккаунта Windows</strong>: перенос конфигурации или базы на другую машину/пользователя приводит к несовпадению <code>account_hash</code> и Windows SID, блокируя доступ к защищённым ресурсам и требуя повторного онбординга.</li>
+</ol>
 <h2 id="14-17-ограниченность-approval">14.17. Ограниченность Approval</h2>
-<p>Разрешение на одно действие не является постоянным разрешением на весь класс действий.</p>
+<p>Разрешение на одно действие не является постоянным разрешением на весь класс действий. Approval действует однократно для конкретного <code>action_hash</code> в рамках установленного тайм-аута.</p>
 <h2 id="14-18-приоритет-запрета-deny-wins">14.18. Приоритет запрета (Deny wins)</h2>
 <p>Запрет выше разрешения. USER не может отменить системный запрет без соответствующего административного полномочия.</p>
 <h2 id="14-19-наименьшие-привилегии-least-privilege">14.19. Наименьшие привилегии (Least Privilege)</h2>
@@ -10984,6 +11022,34 @@ Learning (самообучение)
 <li>Каждый модуль обязан иметь уникальную каноническую ответственность в соответствии с инвариантом ADR-032.</li>
 <li>Любой требуемый контракт (<code>requires_contracts</code>) должен обеспечиваться хотя бы одним зарегистрированным модулем (<code>provides_contracts</code>).</li>
 </ol>
+<h2 id="32-40c-adr-036-модель-identity-роли-субъектов-и-безопасная-привязка-к-windows">32.40c. ADR-036 — модель Identity, роли субъектов и безопасная привязка к Windows</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <code>schemas/v1/Identity.json</code>, <code>schemas/v1/ApprovalRecord.json</code>, <code>docs/spec/14_SECURITY.md</code>, <code>tests/test_identity_security.py</code>, Issue #44).</p>
+<ol>
+<li><strong>Разделение сущностей безопасности</strong>:</li>
+</ol>
+<ul>
+<li><code>Identity</code> (<code>identity_id</code> вида <code>id-...</code>): кто субъект;</li>
+<li><code>Role</code>: логическая роль в системе (<code>LOCAL_USER</code>, <code>LOCAL_ADMIN</code>, <code>WORKER</code>, <code>CORE_SERVICE</code>, <code>NODE_OPERATOR</code>, <code>AUDITOR</code>);</li>
+<li><code>Trust Level</code>: уровень доверия (<code>UNTRUSTED</code>, <code>PROVISIONAL</code>, <code>AUTHENTICATED</code>, <code>FULL_LOCAL_TRUST</code>);</li>
+<li><code>Capability</code>: временный мандат на исполнение конкретных действий (<code>CapabilityGrant.json</code>).</li>
+</ul>
+<ol>
+<li><strong>Привязка к Windows без хранения паролей</strong>:</li>
+</ol>
+<ul>
+<li>Категорически запрещено сохранение любых паролей или хэшей паролей Windows (NTLM/LM);</li>
+<li>Субъекты связываются через канонический Windows SID (<code>security_identifier</code>) и криптографический <code>account_hash</code> (соль машины);</li>
+<li>Роль <code>LOCAL_USER</code> и <code>LOCAL_ADMIN</code> строго разделены: получение <code>LOCAL_ADMIN</code> требует подтверждённого административного токена Windows (<code>is_elevated=true</code>);</li>
+<li>При смене или удалении учетной записи Windows сессии и временные права немедленно отзываются (<code>Fail-Closed</code>).</li>
+</ul>
+<ol>
+<li><strong>Защита Human Approval от Replay-атак</strong>:</li>
+</ol>
+<ul>
+<li>Человеческое подтверждение описывается канонической схемой <code>schemas/v1/ApprovalRecord.json</code>;</li>
+<li>Запись обязана содержать <code>approval_id</code>, <code>approver_identity_id</code>, <code>approver_role</code>, <code>task_id</code>, <code>action_hash</code>, криптографический <code>nonce</code> (длиной не менее 16 символов), метки <code>issued_at</code> и <code>expires_at</code>;</li>
+<li>Воркеры (<code>WORKER</code>) или внешние сервисы не могут генерировать или подписывать Human Approval.</li>
+</ul>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
 <h2 id="32-42-реализация-ipc-electron">32.42. Реализация IPC Electron</h2>
@@ -11084,7 +11150,7 @@ Learning (самообучение)
 <li><strong>OQ-003</strong> — единый машинный формат системных контрактов (JSON Schema / Protobuf) и правила версий (Issue #40) — <strong>ACCEPTED</strong> (ADR-034).</li>
 <li><strong>OQ-005</strong> — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47) — <strong>ACCEPTED</strong> (ADR-035, <code>modules_registry.json</code>).</li>
 <li><strong>OQ-006</strong> — каталог физических канонических схем (Issue #40) — <strong>ACCEPTED</strong> (ADR-034, <code>schemas/v1/</code>).</li>
-<li><strong>OQ-007</strong> — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44).</li>
+<li><strong>OQ-007</strong> — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44) — <strong>ACCEPTED</strong> (ADR-036, <code>schemas/v1/Identity.json</code>, <code>schemas/v1/ApprovalRecord.json</code>).</li>
 <li><strong>OQ-009</strong> — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).</li>
 </ul>
 <h3 id="этап-g3-runtime-foundation-фундамент-исполняемой-системы">Этап G3 — Runtime Foundation (Фундамент исполняемой системы)</h3>
@@ -11175,19 +11241,33 @@ Learning (самообучение)
 <li><code>SystemEvent.json</code> — универсальный конверт событий.</li>
 </ul>
 <h2 id="32-59-oq-007-минимальная-модель-identity">32.59. OQ-007 — минимальная модель Identity</h2>
-<p>Нужно окончательно определить:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-036, канонический источник: <a href="../spec/14_SECURITY.md">docs/spec/14_SECURITY.md</a>, <code>schemas/v1/Identity.json</code>, <code>schemas/v1/ApprovalRecord.json</code>, Issue #44).</div>
+<p>Решение формализовано:</p>
+<ol>
+<li><strong>Канонические сущности</strong>:</li>
+</ol>
 <ul>
-<li>local USER;</li>
-<li>ADMIN;</li>
-<li>Worker;</li>
-<li>Node;</li>
-<li>external account;</li>
-<li>service identity.</li>
+<li><code>Identity</code> (<code>identity_id</code> вида <code>id-...</code>): уникальный неизменный субъект;</li>
+<li><code>Role</code>: роль субъекта (<code>LOCAL_USER</code>, <code>LOCAL_ADMIN</code>, <code>WORKER</code>, <code>CORE_SERVICE</code>, <code>NODE_OPERATOR</code>, <code>AUDITOR</code>);</li>
+<li><code>Trust Level</code>: уровень доверия (<code>UNTRUSTED</code>, <code>PROVISIONAL</code>, <code>AUTHENTICATED</code>, <code>FULL_LOCAL_TRUST</code>);</li>
+<li><code>Capability Grant</code>: временные мандаты прав (<code>schemas/v1/CapabilityGrant.json</code>).</li>
 </ul>
-<p>Особенно:</p>
-<div class="note"><strong>Примечание:</strong> как Windows-пользователь связывается с Identity KAT9I_OS.</div>
-<p>Статус:</p>
-<p><code>OPEN BEFORE v0.1</code>.</p>
+<ol>
+<li><strong>Безопасная привязка к Windows без хранения паролей</strong>:</li>
+</ol>
+<ul>
+<li>Никакие пароли или NTLM/LM хэши Windows не хранятся;</li>
+<li>Связывание осуществляется через канонический Windows SID (<code>security_identifier</code>) и криптографический <code>account_hash</code>;</li>
+<li>Роль <code>LOCAL_ADMIN</code> требует подтверждённого административного токена Windows (<code>is_elevated=true</code>);</li>
+<li>Смена активного Windows SID немедленно отзывает активные сессии (<code>Fail-Closed</code>).</li>
+</ul>
+<ol>
+<li><strong>Модель Human Approval и защита от Replay</strong>:</li>
+</ol>
+<ul>
+<li>Человеческое одобрение оформляется по схеме <code>schemas/v1/ApprovalRecord.json</code> с проверкой <code>task_id</code>, <code>action_hash</code>, криптографического <code>nonce</code> (длина &gt;= 16) и временного окна <code>issued_at</code> - <code>expires_at</code>;</li>
+<li>Worker не может выступать автором Human Approval.</li>
+</ul>
 <h2 id="32-60-oq-008-минимальный-secret-store">32.60. OQ-008 — минимальный Secret Store</h2>
 <p>Нужно выбрать первую Windows-реализацию SecretRef.</p>
 <p>Статус:</p>

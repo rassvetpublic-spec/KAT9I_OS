@@ -492,6 +492,25 @@ Obsidian может быть:
 4. Каждый модуль обязан иметь уникальную каноническую ответственность в соответствии с инвариантом ADR-032.
 5. Любой требуемый контракт (`requires_contracts`) должен обеспечиваться хотя бы одним зарегистрированным модулем (`provides_contracts`).
 
+## 32.40c. ADR-036 — модель Identity, роли субъектов и безопасная привязка к Windows
+
+**Статус:** ACCEPTED (канонический источник: `schemas/v1/Identity.json`, `schemas/v1/ApprovalRecord.json`, `docs/spec/14_SECURITY.md`, `tests/test_identity_security.py`, Issue #44).
+
+1. **Разделение сущностей безопасности**:
+   - `Identity` (`identity_id` вида `id-...`): кто субъект;
+   - `Role`: логическая роль в системе (`LOCAL_USER`, `LOCAL_ADMIN`, `WORKER`, `CORE_SERVICE`, `NODE_OPERATOR`, `AUDITOR`);
+   - `Trust Level`: уровень доверия (`UNTRUSTED`, `PROVISIONAL`, `AUTHENTICATED`, `FULL_LOCAL_TRUST`);
+   - `Capability`: временный мандат на исполнение конкретных действий (`CapabilityGrant.json`).
+2. **Привязка к Windows без хранения паролей**:
+   - Категорически запрещено сохранение любых паролей или хэшей паролей Windows (NTLM/LM);
+   - Субъекты связываются через канонический Windows SID (`security_identifier`) и криптографический `account_hash` (соль машины);
+   - Роль `LOCAL_USER` и `LOCAL_ADMIN` строго разделены: получение `LOCAL_ADMIN` требует подтверждённого административного токена Windows (`is_elevated=true`);
+   - При смене или удалении учетной записи Windows сессии и временные права немедленно отзываются (`Fail-Closed`).
+3. **Защита Human Approval от Replay-атак**:
+   - Человеческое подтверждение описывается канонической схемой `schemas/v1/ApprovalRecord.json`;
+   - Запись обязана содержать `approval_id`, `approver_identity_id`, `approver_role`, `task_id`, `action_hash`, криптографический `nonce` (длиной не менее 16 символов), метки `issued_at` и `expires_at`;
+   - Воркеры (`WORKER`) или внешние сервисы не могут генерировать или подписывать Human Approval.
+
 ## 32.41. Технологические решения, которые пока не должны становиться архитектурными догмами
 
 Следующие вещи могут быть заменены без изменения архитектурных принципов.
@@ -626,7 +645,7 @@ Discovery не должен автоматически выдавать Trust.
 - **OQ-003** — единый машинный формат системных контрактов (JSON Schema / Protobuf) и правила версий (Issue #40) — **ACCEPTED** (ADR-034).
 - **OQ-005** — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47) — **ACCEPTED** (ADR-035, `modules_registry.json`).
 - **OQ-006** — каталог физических канонических схем (Issue #40) — **ACCEPTED** (ADR-034, `schemas/v1/`).
-- **OQ-007** — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44).
+- **OQ-007** — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44) — **ACCEPTED** (ADR-036, `schemas/v1/Identity.json`, `schemas/v1/ApprovalRecord.json`).
 - **OQ-009** — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).
 
 ### Этап G3 — Runtime Foundation (Фундамент исполняемой системы)
@@ -743,22 +762,22 @@ Core является отдельным локальным процессом/s
 
 ## 32.59. OQ-007 — минимальная модель Identity
 
-Нужно окончательно определить:
+> **Статус:** `ACCEPTED` (ADR-036, канонический источник: [docs/spec/14_SECURITY.md](../spec/14_SECURITY.md), `schemas/v1/Identity.json`, `schemas/v1/ApprovalRecord.json`, Issue #44).
 
-- local USER;
-- ADMIN;
-- Worker;
-- Node;
-- external account;
-- service identity.
-
-Особенно:
-
-> как Windows-пользователь связывается с Identity KAT9I_OS.
-
-Статус:
-
-`OPEN BEFORE v0.1`.
+Решение формализовано:
+1. **Канонические сущности**:
+   - `Identity` (`identity_id` вида `id-...`): уникальный неизменный субъект;
+   - `Role`: роль субъекта (`LOCAL_USER`, `LOCAL_ADMIN`, `WORKER`, `CORE_SERVICE`, `NODE_OPERATOR`, `AUDITOR`);
+   - `Trust Level`: уровень доверия (`UNTRUSTED`, `PROVISIONAL`, `AUTHENTICATED`, `FULL_LOCAL_TRUST`);
+   - `Capability Grant`: временные мандаты прав (`schemas/v1/CapabilityGrant.json`).
+2. **Безопасная привязка к Windows без хранения паролей**:
+   - Никакие пароли или NTLM/LM хэши Windows не хранятся;
+   - Связывание осуществляется через канонический Windows SID (`security_identifier`) и криптографический `account_hash`;
+   - Роль `LOCAL_ADMIN` требует подтверждённого административного токена Windows (`is_elevated=true`);
+   - Смена активного Windows SID немедленно отзывает активные сессии (`Fail-Closed`).
+3. **Модель Human Approval и защита от Replay**:
+   - Человеческое одобрение оформляется по схеме `schemas/v1/ApprovalRecord.json` с проверкой `task_id`, `action_hash`, криптографического `nonce` (длина >= 16) и временного окна `issued_at` - `expires_at`;
+   - Worker не может выступать автором Human Approval.
 
 ## 32.60. OQ-008 — минимальный Secret Store
 
