@@ -482,6 +482,16 @@ Obsidian может быть:
 3. Все контракты обязаны содержать инвариант безопасности `additionalProperties: false` (Fail-Closed).
 4. Версионирование схем осуществляется по SemVer 2.0.0; неизвестные мажорные версии вызывают немедленный отказ `INCOMPATIBLE_SCHEMA_VERSION`.
 
+## 32.40b. ADR-035 — машинная структура Module Registry и правила графа зависимостей
+
+**Статус:** ACCEPTED (канонический источник: `schemas/v1/ModuleRegistry.json`, `modules_registry.json`, `scripts/verify_module_registry.py`, Issue #47).
+
+1. Реестр модулей KAT9I_OS описывается строго машинно через каноническую схему `schemas/v1/ModuleRegistry.json` (JSON Schema Draft 2020-12).
+2. Реестр не дублирует текстовые архитектурные спецификации, а ссылается на канонический источник ответственности (`docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md`).
+3. Граф зависимостей между модулями обязан быть направленным ациклическим графом (DAG). Наличие циклов (`CIRCULAR_DEPENDENCY_DETECTED`) является фатальной ошибкой инициализации.
+4. Каждый модуль обязан иметь уникальную каноническую ответственность в соответствии с инвариантом ADR-032.
+5. Любой требуемый контракт (`requires_contracts`) должен обеспечиваться хотя бы одним зарегистрированным модулем (`provides_contracts`).
+
 ## 32.41. Технологические решения, которые пока не должны становиться архитектурными догмами
 
 Следующие вещи могут быть заменены без изменения архитектурных принципов.
@@ -614,7 +624,7 @@ Discovery не должен автоматически выдавать Trust.
 
 ### Этап G2 — Machine Contracts (Машинные контракты)
 - **OQ-003** — единый машинный формат системных контрактов (JSON Schema / Protobuf) и правила версий (Issue #40) — **ACCEPTED** (ADR-034).
-- **OQ-005** — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47).
+- **OQ-005** — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47) — **ACCEPTED** (ADR-035, `modules_registry.json`).
 - **OQ-006** — каталог физических канонических схем (Issue #40) — **ACCEPTED** (ADR-034, `schemas/v1/`).
 - **OQ-007** — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44).
 - **OQ-009** — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).
@@ -705,20 +715,14 @@ Core является отдельным локальным процессом/s
 
 ## 32.57. OQ-005 — структура Module Registry
 
-Нужно формально определить машинные поля:
+> **Статус:** `ACCEPTED` (ADR-035, канонический источник: `schemas/v1/ModuleRegistry.json`, `modules_registry.json`, `scripts/verify_module_registry.py`, Issue #47).
 
-- module_id;
-- version;
-- owner;
-- contracts;
-- dependencies;
-- health;
-- documentation;
-- capabilities.
-
-Статус:
-
-`OPEN`.
+Машинная структура реестра модулей утверждена:
+- Формат: JSON Schema Draft 2020-12 (`schemas/v1/ModuleRegistry.json`);
+- Физический реестр первой вертикали v0.1: `modules_registry.json`;
+- Обязательные машинные поля: `module_id`, `name`, `version`, `tier`, `canonical_owner_ref`, `canonical_responsibility`, `provides_contracts`, `requires_contracts`, `dependencies`, `capabilities`, `health_interface`, `documentation_ref`;
+- Автоматическая валидация и построение топологического порядка: `scripts/verify_module_registry.py`;
+- Инварианты: ацикличность графа (DAG), уникальность ответственности (ADR-032) и полная связность контрактов.
 
 ## 32.58. OQ-006 — каталог канонических схем
 

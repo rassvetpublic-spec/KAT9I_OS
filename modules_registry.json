@@ -1,0 +1,125 @@
+{
+  "registry_version": "1.0.0",
+  "updated_at": "2026-09-08T10:20:00Z",
+  "modules": [
+    {
+      "module_id": "Storage",
+      "name": "Модуль хранения и аудита",
+      "version": "0.1.0",
+      "tier": "STORAGE_AUDIT",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.24",
+      "canonical_responsibility": "Физическое хранение состояния, ведение журнала Event Journal, контрольные точки и аудит",
+      "provides_contracts": ["SystemEvent"],
+      "requires_contracts": [],
+      "dependencies": [],
+      "capabilities": ["EVENT_JOURNAL_APPEND", "CHECKPOINT_PERSIST", "AUDIT_LOG"],
+      "health_interface": {
+        "type": "INTERNAL_STATE_PROBE",
+        "endpoint": "storage.health_check"
+      },
+      "documentation_ref": "docs/architecture/25_DATA_STORAGE.md"
+    },
+    {
+      "module_id": "RuleManager",
+      "name": "Менеджер правил",
+      "version": "0.1.0",
+      "tier": "SECURITY_CONTROL",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.5",
+      "canonical_responsibility": "Система обязательных правил, вычисление Effective Ruleset и разрешение конфликтов deny wins",
+      "provides_contracts": ["RulesRef"],
+      "requires_contracts": [],
+      "dependencies": [],
+      "capabilities": ["RULE_EVALUATION", "CONFLICT_RESOLUTION_DENY_WINS"],
+      "health_interface": {
+        "type": "INTERNAL_STATE_PROBE",
+        "endpoint": "rule_manager.health_check"
+      },
+      "documentation_ref": "docs/architecture/04_RULES_AND_EXECUTION_PRIORITIES.md"
+    },
+    {
+      "module_id": "Security",
+      "name": "Модуль безопасности и Scope Guard",
+      "version": "0.1.0",
+      "tier": "SECURITY_CONTROL",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.6",
+      "canonical_responsibility": "Проверка границ безопасности, вынесение решений Scope Guard и выдача CapabilityGrant",
+      "provides_contracts": ["SecurityDecision", "CapabilityGrant"],
+      "requires_contracts": ["SystemEvent"],
+      "dependencies": ["Storage", "RuleManager"],
+      "capabilities": ["SCOPE_GUARD", "CAPABILITY_ISSUANCE", "PERMISSION_VERIFICATION"],
+      "health_interface": {
+        "type": "INTERNAL_STATE_PROBE",
+        "endpoint": "security.health_check"
+      },
+      "documentation_ref": "docs/spec/14_SECURITY.md"
+    },
+    {
+      "module_id": "Context",
+      "name": "Менеджер контекста",
+      "version": "0.1.0",
+      "tier": "CORE_RUNTIME",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.8",
+      "canonical_responsibility": "Политика формирования рабочего контекста, ContextPack и расчёт Context Budget",
+      "provides_contracts": ["ContextRef", "ContextPack"],
+      "requires_contracts": ["SystemEvent"],
+      "dependencies": ["Storage"],
+      "capabilities": ["CONTEXT_PACKING", "CONTEXT_BUDGETING", "REFS_RESOLVER"],
+      "health_interface": {
+        "type": "INTERNAL_STATE_PROBE",
+        "endpoint": "context.health_check"
+      },
+      "documentation_ref": "docs/architecture/07_CONTEXT.md"
+    },
+    {
+      "module_id": "Core",
+      "name": "Системное ядро управления",
+      "version": "0.1.0",
+      "tier": "CORE_RUNTIME",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.4",
+      "canonical_responsibility": "Управление паспортом TaskContract, координация жизненного цикла и модель TaskGraph",
+      "provides_contracts": ["TaskContract", "TaskRuntimeState"],
+      "requires_contracts": ["SecurityDecision", "CapabilityGrant", "SystemEvent"],
+      "dependencies": ["Storage", "Security", "Context"],
+      "capabilities": ["TASK_LIFECYCLE", "TASK_GRAPH_SCHEDULING", "SYSTEM_COORDINATION"],
+      "health_interface": {
+        "type": "INTERNAL_STATE_PROBE",
+        "endpoint": "core.health_check"
+      },
+      "documentation_ref": "docs/architecture/03_TASK_CONTRACT.md"
+    },
+    {
+      "module_id": "Execution",
+      "name": "Среда исполнения",
+      "version": "0.1.0",
+      "tier": "EXECUTION_WORKER",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.14",
+      "canonical_responsibility": "Физическое изолированное выполнение разрешённых задач и фиксация артефактов с Evidence",
+      "provides_contracts": ["TaskResult", "Evidence"],
+      "requires_contracts": ["TaskContract", "CapabilityGrant", "SystemEvent"],
+      "dependencies": ["Core", "Security", "Storage"],
+      "capabilities": ["PROCESS_ISOLATION", "ARTIFACT_COLLECTION", "EVIDENCE_RECORDING"],
+      "health_interface": {
+        "type": "INTERNAL_STATE_PROBE",
+        "endpoint": "execution.health_check"
+      },
+      "documentation_ref": "docs/spec/12_EXECUTION.md"
+    },
+    {
+      "module_id": "DesktopShell",
+      "name": "Пользовательская настольная оболочка",
+      "version": "0.1.0",
+      "tier": "DESKTOP_UI",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.22",
+      "canonical_responsibility": "Графический интерфейс коворкера, отображение состояния и диагностика без владения состоянием",
+      "provides_contracts": ["UIEvent"],
+      "requires_contracts": ["TaskRuntimeState", "SystemEvent"],
+      "dependencies": ["Core", "Storage"],
+      "capabilities": ["UI_STATE_RENDER", "COWORKER_INTERACTION", "TELEMETRY_VIEW"],
+      "health_interface": {
+        "type": "IPC_PING",
+        "endpoint": "electron.renderer_ping"
+      },
+      "documentation_ref": "docs/architecture/29_ELECTRON_UI.md"
+    }
+  ]
+}

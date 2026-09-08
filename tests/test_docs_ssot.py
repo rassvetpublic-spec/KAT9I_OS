@@ -216,11 +216,15 @@ class TestDocumentationSSoT(unittest.TestCase):
             "Evidence.json",
             "SecurityDecision.json",
             "CapabilityGrant.json",
-            "SystemEvent.json"
+            "SystemEvent.json",
+            "ModuleRegistry.json"
         ]
         for s in expected_schemas:
             p = schemas_dir / s
             self.assertTrue(p.exists(), f"Каноническая схема {s} отсутствует в {schemas_dir}")
+
+        registry_file = REPO_ROOT / "modules_registry.json"
+        self.assertTrue(registry_file.exists(), "Файл modules_registry.json отсутствует в корне репозитория")
 
 if __name__ == "__main__":
     unittest.main()
