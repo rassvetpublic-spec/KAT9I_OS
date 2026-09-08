@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/StateMigration.json",
+  "title": "StateMigration",
+  "description": "Машинный контракт детерминированной миграции состояния длительной задачи при обновлении версии Workflow в KAT9I_OS.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "migration_id",
+    "task_id",
+    "workflow_id",
+    "source_version",
+    "target_version",
+    "compatibility_class",
+    "migration_status",
+    "applied_operations",
+    "evidence_ref",
+    "migrated_at"
+  ],
+  "properties": {
+    "migration_id": {
+      "type": "string",
+      "pattern": "^mig-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор записи миграции состояния."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор мигрируемой задачи."
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_.-]{3,64}$",
+      "description": "Идентификатор определения рабочего процесса (Workflow)."
+    },
+    "source_version": {
+      "type": "string",
+      "description": "Исходная версия Workflow, в которой было зафиксировано состояние (SemVer)."
+    },
+    "target_version": {
+      "type": "string",
+      "description": "Целевая версия Workflow после миграции (SemVer)."
+    },
+    "compatibility_class": {
+      "type": "string",
+      "enum": [
+        "FULLY_COMPATIBLE",
+        "REQUIRES_STATE_MIGRATION",
+        "BREAKING_INCOMPATIBLE"
+      ],
+      "description": "Класс совместимости между версиями Workflow."
+    },
+    "migration_status": {
+      "type": "string",
+      "enum": [
+        "APPLIED",
+        "SKIPPED_IDEMPOTENT",
+        "BLOCKED_INCOMPATIBLE",
+        "FAILED"
+      ],
+      "description": "Итоговый статус выполнения миграции."
+    },
+    "applied_operations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Список детерминированных шагов трансформации состояния."
+    },
+    "evidence_ref": {
+      "type": "string",
+      "description": "Ссылка на аудит и доказательство корректности миграции (Evidence)."
+    },
+    "migrated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка выполнения миграции в ISO 8601."
+    }
+  }
+}
