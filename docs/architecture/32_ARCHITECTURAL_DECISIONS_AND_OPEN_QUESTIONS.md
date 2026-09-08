@@ -821,21 +821,21 @@ Core является отдельным локальным процессом/s
 
 ## 32.66. OQ-014 — формат документации с уровнями подробности
 
-> **Статус:** `ACCEPTED` (канонический источник: `scripts/generate_html_docs.py`, PR #60, Issue #36).
+> **Статус:** `ACCEPTED` (канонический источник: `scripts/generate_html_docs.py`, PR #60, PR #68, Issue #36).
 
-Реализовано единое производное представление с 5 уровнями подробности (1. Очень просто / 2. Просто / 3. Рабочий / 4. Технический / 5. Максимум) на базе разметки атрибутов `data-detail-level` без дублирования текста спецификаций.
+Реализовано единое производное представление с 5 уровнями подробности (1. Очень просто / 2. Просто / 3. Рабочий / 4. Технический / 5. Максимум) на базе двухуровневой разметки атрибутов `data-section-level` и `data-detail-level` без дублирования текста спецификаций. Навигация и фильтрация доказаны автоматическими тестами `tests/test_docs_ssot.py`.
 
 ## 32.67. OQ-015 — интерфейс архитектурного словаря
 
-> **Статус:** `ACCEPTED` (канонический источник: [docs/GLOSSARY.md](../GLOSSARY.md), PR #25).
+> **Статус:** `ACCEPTED` (канонический источник: [docs/GLOSSARY.md](../GLOSSARY.md), PR #24).
 
 Формат многоуровневых словарных статей утверждён и реализован в `docs/GLOSSARY.md`: «Очень просто», «Рабочее объяснение», «Технически» со ссылками на канонические архитектурные разделы.
 
 ## 32.68. OQ-016 — GitHub Project и Ruleset
 
-> **Статус:** `ACCEPTED` / `INFRASTRUCTURE CONFIGURED` (канонический источник: [docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md](../spec/24_GITHUB_PROJECT_MANAGEMENT.md), `.github/workflows/quality.yml`, PR #54).
+> **Статус:** `SPECIFICATION ACCEPTED / INFRASTRUCTURE PROVISIONAL` (канонический источник: [docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md](../spec/24_GITHUB_PROJECT_MANAGEMENT.md), `.github/workflows/quality.yml`, PR #54, Issue #1).
 
-Правила защиты ветки main, CI Quality Gate и шаблоны Issue/PR внедрены и действуют.
+Архитектурная спецификация процессов разработки, ролей коворкеров и автоматический CI Quality Gate приняты и внедрены через workflow GitHub Actions (`.github/workflows/quality.yml`). Настройка платформенных Rulesets защиты ветки main и досок GitHub Project v2 в API репозитория отслеживается в Issue #1 и выполняется координатором инфраструктуры.
 
 ## 32.69. Вопросы, которые сознательно откладываются
 
