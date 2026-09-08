@@ -1,36 +1,36 @@
-# KAT9I OS — Architecture Context
+# KAT9I_OS — Архитектурный контекст (Architecture Context)
 
-> Initial architecture snapshot distilled from the design discussion that started with the modular-monolith proposal.
-> This document intentionally excludes unrelated earlier chat context.
-> Status: architecture draft / design context, not an implementation specification.
+> Начальный архитектурный снимок, сформированный на основе дискуссии по проектированию модульного монолита.
+> Этот документ намеренно исключает не связанный с архитектурой контекст более ранних обсуждений.
+> Статус: архитектурный проект / контекст проектирования, не является реализационной спецификацией.
 
-## 1. Core direction: modular monolith
+## 1. Базовое направление: модульный монолит (Modular Monolith)
 
-The proposed direction is to converge KAT9I and AG25 into a **modular monolith** rather than continue growing cross-repository bridges.
+Предлагаемое направление заключается в сведении KAT9I и AG25 в **модульный монолит (modular monolith)** вместо дальнейшего наращивания межрепозиторных мостов.
 
-The goal is not a "single pile of code". The goal is:
+Цель заключается не в создании «одной неструктурированной кучи кода». Цель состоит в обеспечении:
 
-- one repository;
-- one release;
-- one CI graph;
-- one end-to-end lifecycle;
-- one task model;
-- one policy model;
-- strict internal module boundaries;
-- external data/knowledge kept outside the product repository.
+- одного репозитория;
+- одного релиза;
+- одного графа CI;
+- одного сквозного жизненного цикла;
+- одной модели задач (TaskContract);
+- одной модели политик (Policy Model);
+- строгих внутренних границ между модулями;
+- хранения внешних данных и знаний за пределами продуктового репозитория.
 
-The main expected gains:
+Основные ожидаемые преимущества:
 
-- fewer cross-repository contracts and compatibility problems;
-- easier end-to-end testing;
-- easier Windows bootstrap and local deployment;
-- simpler debugging and telemetry;
-- atomic refactoring across policy + execution;
-- less duplicated state and transport logic;
-- faster development of worker orchestration;
-- easier enforcement of rules directly in execution.
+- меньше межрепозиторных контрактов и проблем совместимости;
+- более простое сквозное тестирование (E2E testing);
+- упрощённая инициализация под Windows и локальное развёртывание;
+- упрощённая отладка и телеметрия;
+- атомарный рефакторинг сквозь политики и исполнение;
+- меньше дублирования состояния и транспортной логики;
+- более быстрая разработка оркестрации исполнителей (Coworker);
+- более строгое применение правил непосредственно в исполнении (Execution).
 
-A proposed top-level decomposition:
+Предлагаемая высокоуровневая декомпозиция:
 
 ```text
 KAT9I/
@@ -48,27 +48,27 @@ KAT9I/
 └── tests/
 ```
 
-The architectural question split is:
+Архитектурное разделение обязанностей по вопросам:
 
 ```text
-DOMAIN      → What needs to be done?
-CORE        → Which rules/policies/contracts apply?
-CONTEXT     → What does the model need to know?
-INFERENCE   → Which intelligence/provider should be used?
-COWORKER    → Who should do the work?
-EXECUTION   → How is the work physically executed?
-INTEGRATION → How do we reach external systems?
-PERSONAL    → How should the system behave for this user?
-RESOURCES   → Where are source context and result artifacts located?
+DOMAIN      → Что именно требуется сделать?
+CORE        → Какие правила, политики и контракты применяются?
+CONTEXT     → Что модели/исполнителю необходимо знать для работы?
+INFERENCE   → Какой вычислительный интеллект или провайдер должен использоваться?
+COWORKER    → Кто конкретно выполняет работу?
+EXECUTION   → Как работа физически исполняется?
+INTEGRATION → Как осуществляется связь с внешними системами?
+PERSONAL    → Как система должна вести себя для конкретного пользователя?
+RESOURCES   → Где физически расположены исходный контекст и результирующие артефакты?
 ```
 
 ---
 
-## 2. Core
+## 2. Ядро платформы (Core)
 
-`core/` is the generic control plane.
+Каталог `core/` представляет собой универсальный уровень управления (Control Plane).
 
-Suggested contents:
+Предлагаемый состав:
 
 ```text
 core/
@@ -81,32 +81,32 @@ core/
 └── learning/
 ```
 
-Responsibilities:
+Обязанности ядра:
 
-- generic task contracts;
-- skill registry and skill routing;
-- Rule Manager;
-- Effective Ruleset;
-- policy conflict resolution;
-- generic task/domain routing;
-- governed learning/proposals;
-- stable internal contracts.
+- универсальные контракты задач (`TaskContract`);
+- реестр навыков (`Skill Registry`) и маршрутизация навыков (`Skill Routing`);
+- менеджер правил (`Rule Manager`);
+- эффективный набор действующих правил (`Effective Ruleset`);
+- разрешение конфликтов политик (`Policy Conflict Resolution`);
+- общая маршрутизация задач и доменов;
+- контролируемое самообучение и предложения улучшений (`Governed Learning / Proposals`);
+- стабильные внутренние интерфейсные контракты.
 
-Hard rule:
+Жёсткое инвариантное правило:
 
-> Domain-specific semantics must not leak into the generic core.
+> Специфическая семантика конкретных предметных областей (доменов) не должна проникать в универсальное ядро платформы.
 
-Examples:
-- Core may know that a rule applies to a task.
-- Core should not know what a chorus, BPM, rhyme, pressure sensor, or PR review means.
+Примеры:
+- Ядро может знать, что к задаче применяется определённое правило.
+- Ядро не должно знать, что означают понятия «припев», «BPM», «рифма», «датчик давления» или «ревью Pull Request».
 
 ---
 
-## 3. Execution
+## 3. Уровень исполнения (Execution)
 
-`execution/` contains the low-level mechanics that AG25 currently largely owns.
+Каталог `execution/` содержит низкоуровневые механизмы, за которые сейчас в значительной степени отвечает AG25.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 execution/
@@ -121,36 +121,36 @@ execution/
 └── cleanup/
 ```
 
-Responsibilities:
+Обязанности:
 
-- run processes;
-- launch/supervise workers;
-- manage worktrees and branches;
-- enforce timeout;
-- maintain leases;
-- collect execution evidence;
-- scope guard;
-- cleanup;
-- process lifecycle.
+- запуск процессов;
+- запуск и надзор за исполнителями (`Worker Supervision`);
+- управление рабочими деревьями (`Git Worktree`) и ветками;
+- контроль тайм-аутов (`Timeouts`);
+- поддержание временных прав (`Leases`);
+- сбор доказательств исполнения (`Execution Evidence`);
+- контроль границ разрешённой области (`Scope Guard`);
+- очистка ресурсов (`Cleanup`);
+- контроль жизненного цикла процессов.
 
-Key boundary:
+Ключевая архитектурная граница:
 
 ```text
-Coworker = WHO gets the task
-Execution = HOW the task is physically run
+Coworker  = КТО получает задачу
+Execution = КАК задача физически исполняется
 ```
 
 ---
 
-## 4. Coworker: distributed agent work
+## 4. Коллега (Coworker): распределённая агентная работа
 
-`coworker/` is a first-class platform component, not a domain.
+Компонент `coworker/` является первоклассным компонентом платформы, а не отдельным прикладным доменом.
 
-Purpose:
+Назначение:
 
-> Coordinate distributed work between local agents, local machines, remote Katya, cloud workers, and potentially humans.
+> Координация распределённой работы между локальными агентами, локальными машинами, удалённым экземпляром Кати (Remote Katya), облачными исполнителями и людьми.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 coworker/
@@ -170,9 +170,9 @@ coworker/
 └── federation/
 ```
 
-### Worker Registry
+### Реестр исполнителей (Worker Registry)
 
-A worker should be describable as:
+Исполнитель должен описываться следующей структурой:
 
 ```text
 Worker
@@ -188,7 +188,7 @@ Worker
 └── last_seen
 ```
 
-Worker types may include:
+Типы исполнителей могут включать:
 
 ```text
 LOCAL
@@ -197,11 +197,11 @@ CLOUD
 HUMAN
 ```
 
-Remote Katya should not use a special privileged architecture. It should be another worker/coordinator endpoint with explicit capabilities and scope.
+Удалённая Катя (Remote Katya) не должна использовать специальную привилегированную архитектуру: она выступает обычной конечной точкой исполнителя или координатора с явно заданными полномочиями и областью действия (Scope).
 
-### Capability grants
+### Предоставление полномочий (Capability Grants)
 
-Remote/local workers should receive a bounded grant, for example:
+Удалённые и локальные исполнители должны получать строго ограниченный грант полномочий (`WorkerGrant`), например:
 
 ```text
 WorkerGrant
@@ -214,50 +214,50 @@ WorkerGrant
 └── expiration
 ```
 
-A worker receives only:
+Исполнитель получает только:
 
-- task scope;
-- required context;
-- Effective Ruleset / rules reference;
-- temporary capabilities;
-- output contract.
+- область задачи (`Task Scope`);
+- необходимый контекст (`Context`);
+- эффективный набор правил (`Effective Ruleset`) / ссылку на правила (`RulesRef`);
+- временные полномочия (`Temporary Capabilities`);
+- контракт выходных результатов (`Output Contract`).
 
-### Distributed layout example
+### Пример распределённой структуры
 
 ```text
                    KAT9I Coordinator
-                         │
-          ┌──────────────┼───────────────┐
-          ▼              ▼               ▼
-     Local PC       Remote Katya      Server
-          │              │               │
-      ┌───┴───┐      ┌───┴───┐       ┌───┴───┐
-    Worker A Worker B Agent C Agent D Worker E
+                          │
+           ┌──────────────┼───────────────┐
+           ▼              ▼               ▼
+      Local PC       Remote Katya      Server
+           │              │               │
+       ┌───┴───┐      ┌───┴───┐       ┌───┴───┐
+     Worker A Worker B Agent C Agent D Worker E
 ```
 
-The current AG25 Mesh concepts map naturally here:
+Существующие концепции Mesh из AG25 естественным образом проецируются на эту структуру:
 
 ```text
-AG25 orchestration  → coworker/
-AG25 worker runtime → execution/
-AG25 security       → security/
-AG25 GitHub logic   → integrations/github/
-AG25 Suno logic     → domains/suno/
+Оркестрация AG25            → coworker/
+Среда исполнения AG25       → execution/
+Безопасность AG25           → security/
+Логика взаимодействия с Git → integrations/github/
+Логика Suno                 → domains/suno/
 ```
 
-AG25 does not need to be "deleted"; its useful components are absorbed into the correct modules.
+Нет необходимости «удалять» полезные наработки AG25: они абсорбируются в соответствующие специализированные модули.
 
 ---
 
-## 5. Domains
+## 5. Предметные области (Domains)
 
-`domains/` contains applied task stacks.
+Каталог `domains/` содержит прикладные стеки задач.
 
-A domain answers:
+Домен отвечает на вопрос:
 
-> What kind of work are we doing, and what domain-specific workflow/skills/validators apply?
+> Какую именно работу мы выполняем, и какой специфический рабочий процесс (Workflow), навыки (Skills) и валидаторы к ней применяются?
 
-Proposed examples:
+Примеры предлагаемых доменов:
 
 ```text
 domains/
@@ -270,15 +270,15 @@ domains/
 └── automation/
 ```
 
-Domains should call platform capabilities through contracts, not reach into execution internals.
+Домены должны вызывать возможности платформы через контракты, не вмешиваясь во внутреннее устройство среды исполнения (Execution).
 
 ---
 
-## 6. Software Delivery domain
+## 6. Домен разработки ПО (Software Delivery Domain)
 
-`software_delivery/` covers Issue/PR/QA/release work.
+Модуль `software_delivery/` охватывает задачи работы с Issue, PR, контролем качества (QA) и релизами.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 domains/software_delivery/
@@ -291,86 +291,86 @@ domains/software_delivery/
 └── tests/
 ```
 
-Example stacks:
+Примеры стеков процессов:
 
-### issue_to_pr
-
-```text
-Issue
-→ Analyze
-→ Plan
-→ Claim
-→ Implement
-→ Test
-→ PR
-```
-
-### pr_to_merge
+### От задачи к PR (issue_to_pr)
 
 ```text
-PR
-→ Diff Analysis
-→ Policy Check
-→ QA
-→ CI
-→ Review
-→ Merge
+Issue (Задача)
+→ Analyze (Анализ)
+→ Plan (Планирование)
+→ Claim (Захват)
+→ Implement (Реализация)
+→ Test (Тестирование)
+→ PR (Создание PR)
 ```
 
-### qa
+### От PR к слиянию (pr_to_merge)
 
 ```text
-Target
-→ Exact Head Binding
-→ Static Checks
-→ Tests
-→ Behavioral Checks
-→ Evidence
-→ PASS / FAIL
+PR (Запрос на слияние)
+→ Diff Analysis (Анализ изменений)
+→ Policy Check (Проверка политик)
+→ QA (Контроль качества)
+→ CI (Непрерывная интеграция)
+→ Review (Ревью)
+→ Merge (Слияние)
 ```
 
-### bug_repair
+### Контроль качества (QA)
 
 ```text
-Failure
-→ Reproduce
-→ Root Cause
-→ Fix
-→ Regression Test
-→ QA
-→ PR
+Target (Цель)
+→ Exact Head Binding (Привязка к точной ревизии)
+→ Static Checks (Статические проверки)
+→ Tests (Тесты)
+→ Behavioral Checks (Поведенческие проверки)
+→ Evidence (Сбор доказательств)
+→ PASS / FAIL (Вердикт)
 ```
 
-### roadmap
+### Исправление ошибок (bug_repair)
 
 ```text
-Issues
-→ Dependency Graph
-→ Duplicate Detection
-→ Priority
-→ Batch Formation
-→ Execution Order
+Failure (Сбой)
+→ Reproduce (Воспроизведение)
+→ Root Cause (Поиск первопричины)
+→ Fix (Исправление)
+→ Regression Test (Регрессионное тестирование)
+→ QA (Контроль качества)
+→ PR (Запрос на слияние)
 ```
 
-Important governance rule:
+### Дорожная карта (Roadmap)
+
+```text
+Issues (Задачи)
+→ Dependency Graph (Граф зависимостей)
+→ Duplicate Detection (Поиск дубликатов)
+→ Priority (Приоритезация)
+→ Batch Formation (Формирование пакетов задач)
+→ Execution Order (Порядок выполнения)
+```
+
+Важное правило управления:
 
 ```text
 ImplementationWorker != QAWorker
 ```
 
-Independent QA should be a workflow invariant, not merely text guidance.
+Независимый контроль качества (Independent QA) должен быть системным инвариантом рабочего процесса, а не просто текстовым пожеланием.
 
 ---
 
-## 7. Repository Optimization domain
+## 7. Домен оптимизации репозитория (Repository Optimization Domain)
 
-This should be separate from normal issue implementation.
+Этот процесс должен быть отделён от обычной реализации единичных Issue.
 
-Purpose:
+Назначение:
 
-> Analyze a repository as a system and produce an evidence-backed optimization backlog.
+> Анализ репозитория как целостной системы и формирование подтверждённого доказательствами бэклога оптимизаций.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 domains/repository_optimization/
@@ -382,85 +382,85 @@ domains/repository_optimization/
 └── tests/
 ```
 
-Pipeline:
+Конвейер анализа:
 
 ```text
-Repository
+Repository (Репозиторий)
    ↓
-Inventory
+Inventory (Инвентаризация)
    ↓
-Architecture Map
+Architecture Map (Архитектурная карта)
    ↓
-Dependency Analysis
+Dependency Analysis (Анализ зависимостей)
    ↓
-Duplication Analysis
+Duplication Analysis (Анализ дублирования)
    ↓
-Dead Code
+Dead Code (Мёртвый код)
    ↓
-Complexity
+Complexity (Сложность)
    ↓
-Tests / CI
+Tests / CI (Тесты / CI)
    ↓
-Documentation
+Documentation (Документация)
    ↓
-Security
+Security (Безопасность)
    ↓
-Performance
+Performance (Производительность)
    ↓
-Improvement Backlog
+Improvement Backlog (Бэклог улучшений)
 ```
 
-Potential output:
+Возможный артефакт вывода:
 
 ```text
 RepositoryOptimizationReport
-├── findings
-├── severity
-├── evidence
-├── suggested_fix
-├── estimated_effort
-├── dependencies
-└── proposed_issues
+├── findings (Находки)
+├── severity (Критичность)
+├── evidence (Доказательства)
+├── suggested_fix (Предлагаемое исправление)
+├── estimated_effort (Оценка трудозатрат)
+├── dependencies (Зависимости)
+└── proposed_issues (Предложенные задачи)
 ```
 
-Then:
+Дальнейший поток:
 
 ```text
-Repository Optimization
+Repository Optimization (Оптимизация репозитория)
         ↓
-proposed Issues
+Proposed Issues (Предложенные задачи)
         ↓
-Software Delivery
+Software Delivery (Доставка ПО)
         ↓
-Coworker
+Coworker (Координатор)
         ↓
-implementation workers
+Implementation Workers (Исполнители)
 ```
 
 ---
 
-## 8. Suno domain
+## 8. Домен генерации музыки Suno (Suno Domain)
 
-Suno is explicitly separated as a **domain module** while remaining inside the monolith.
+Suno явно выделяется в **доменный прикладной модуль**, оставаясь при этом внутри монолита.
 
-Reason:
+Обоснование:
 
-> Suno is an application of the agent platform, not infrastructure of the agent platform.
+> Suno — это прикладное применение агентной платформы, а не базовая инфраструктура агентной платформы.
 
-Generic execution should not know about:
+Универсальная среда исполнения не должна знать о таких понятиях, как:
 
-- Verse;
-- Chorus;
-- BPM;
-- key;
-- vocals;
-- rhyme;
-- dramaturgy;
-- arrangement;
-- Style/Lyrics/Negative;
-- Suno-specific validation.
+- куплет (Verse);
+- припев (Chorus);
+- темп (BPM);
+- тональность (Key);
+- тип вокала (Vocals);
+- рифма (Rhyme);
+- драматургия (Dramaturgy);
+- аранжировка (Arrangement);
+- разметка Style / Lyrics / Negative;
+- специфическая валидация генератора Suno.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 domains/suno/
@@ -476,112 +476,112 @@ domains/suno/
 └── tests/
 ```
 
-Example skills:
+Примеры прикладных навыков:
 
 ```text
-dramaturg
-lyric-editor
-rhyme-editor
-structure-editor
-vocal-director
-style-engineer
-suno-prompt-engineer
-final-reviewer
+dramaturg (драматург)
+lyric-editor (редактор текста)
+rhyme-editor (редактор рифмы)
+structure-editor (редактор структуры)
+vocal-director (вокальный режиссёр)
+style-engineer (инженер стиля)
+suno-prompt-engineer (инженер промптов Suno)
+final-reviewer (финальный контролёр)
 ```
 
-The dramaturg module belongs here because concepts such as exposition, conflict, culmination, hero, and dramatic function are song-domain semantics.
+Модуль драматурга относится именно сюда, поскольку экспозиция, конфликт, кульминация, герой и драматическая функция являются семантикой музыкального песенного домена.
 
-Example Suno pipeline:
+Пример конвейера Suno:
 
 ```text
-INPUT
-  ↓
-IDEA ANALYSIS
-  ↓
-DRAMATURGY
-  ↓
-LYRICS EDIT
-  ↓
-STRUCTURE
-  ↓
-VOCAL DESIGN
-  ↓
-STYLE DESIGN
-  ↓
-SUNO FORMAT
-  ↓
-VALIDATION
-  ↓
-FINAL
+ВХОДНЫЕ ДАННЫЕ (INPUT)
+   ↓
+АНАЛИЗ ИДЕИ (IDEA ANALYSIS)
+   ↓
+ДРАМАТУРГИЯ (DRAMATURGY)
+   ↓
+РЕДАКТУРА ТЕКСТА (LYRICS EDIT)
+   ↓
+СТРУКТУРА (STRUCTURE)
+   ↓
+ВОКАЛЬНЫЙ ДИЗАЙН (VOCAL DESIGN)
+   ↓
+СТИЛЕВОЙ ДИЗАЙН (STYLE DESIGN)
+   ↓
+ФОРМАТИРОВАНИЕ ДЛЯ SUNO (SUNO FORMAT)
+   ↓
+ВАЛИДАЦИЯ (VALIDATION)
+   ↓
+ФИНАЛЬНЫЙ РЕЗУЛЬТАТ (FINAL)
 ```
 
-Important ownership split:
+Важное разделение зон ответственности:
 
 ```text
-Suno owns skill content and domain workflow.
-KAT9I Core owns registry, routing, governance, policy and generic contracts.
-Execution owns physical execution.
+Suno владеет содержанием навыков и прикладным рабочим процессом (Workflow).
+KAT9I Core владеет реестром, маршрутизацией, управлением, политиками и общими контрактами.
+Execution отвечает за физическое исполнение процессов.
 ```
 
-The same KAT9I platform can later host other domains without contaminating the execution engine with music logic.
+Та же платформа KAT9I в дальнейшем сможет обслуживать другие предметные области без засорения движка исполнения музыкальной спецификой.
 
 ---
 
-## 9. Other example domains
+## 9. Другие примеры предметных областей (Domains)
 
-### Research
+### Исследования (Research)
 
 ```text
-Question
-→ Discovery
-→ Sources
-→ Verification
-→ Comparison
-→ Synthesis
-→ Report
+Вопрос (Question)
+→ Поиск источников (Discovery)
+→ Источники (Sources)
+→ Верификация (Verification)
+→ Сравнение (Comparison)
+→ Синтез (Synthesis)
+→ Отчёт (Report)
 ```
 
-### Documents
+### Документооборот (Documents)
 
 ```text
-Input files
-→ Extraction
-→ Validation
-→ Translation
-→ Formatting
-→ PDF/DOCX
+Входные файлы (Input files)
+→ Извлечение (Extraction)
+→ Валидация (Validation)
+→ Перевод (Translation)
+→ Форматирование (Formatting)
+→ Генерация PDF/DOCX
 ```
 
-### Engineering
+### Инженерия (Engineering)
 
 ```text
-Requirements
-→ Standards
-→ Candidate search
-→ Compliance check
-→ Configuration
-→ Technical description
-→ Documentation
+Требования (Requirements)
+→ Стандарты (Standards)
+→ Поиск вариантов (Candidate search)
+→ Проверка соответствия (Compliance check)
+→ Конфигурация (Configuration)
+→ Техническое описание (Technical description)
+→ Документация (Documentation)
 ```
 
-### Automation
+### Автоматизация (Automation)
 
 ```text
-Trigger
-→ Condition
-→ Task
-→ Worker
-→ Result
-→ Notification
+Событие/Триггер (Trigger)
+→ Условие (Condition)
+→ Задача (Task)
+→ Исполнитель (Worker)
+→ Результат (Result)
+→ Уведомление (Notification)
 ```
 
 ---
 
-## 10. Personal layer
+## 10. Персональный слой (Personal Layer)
 
-A separate personal layer is required.
+Требуется выделение отдельного персонального слоя пользователя.
 
-Proposed structure:
+Предлагаемая структура:
 
 ```text
 personal/
@@ -593,42 +593,42 @@ personal/
 └── workspaces/
 ```
 
-Four concepts must remain separate:
+Необходимо строго различать четыре концепции:
 
-| Layer | Purpose |
+| Слой | Назначение |
 |---|---|
-| Knowledge | Facts/history/decisions |
-| Rules | MUST / MUST NOT constraints |
-| Preferences | Soft preferences |
-| Settings | Runtime/environment configuration |
+| Знания (Knowledge) | Факты, история, принятые решения |
+| Правила (Rules) | Обязательные ограничения (MUST / MUST NOT) |
+| Предпочтения (Preferences) | Мягкие пользовательские предпочтения |
+| Настройки (Settings) | Конфигурация среды и времени выполнения |
 
-Examples:
+Примеры:
 
-### Knowledge
-
-```text
-Canonical KAT repository is X.
-A certain song has BPM/key Y.
-A project uses Windows.
-```
-
-### Rule
+### Знания (Knowledge)
 
 ```text
-Never use a mirror as runtime source-of-truth.
-A specific project forbids male vocals.
-Secrets must not leave local environment.
+Канонический репозиторий KAT9I — X.
+Песня имеет темп Y BPM и тональность Z.
+Проект разрабатывается под ОС Windows.
 ```
 
-### Preference
+### Правила (Rules)
 
 ```text
-Prefer concise reports.
-Prefer tables.
-Prefer Russian output.
+Никогда не использовать зеркало в качестве канонического источника истины (SSoT).
+В конкретном проекте запрещён мужской вокал.
+Секреты не должны покидать локальное окружение.
 ```
 
-### Setting
+### Предпочтения (Preferences)
+
+```text
+Предпочитать краткие отчёты.
+Предпочитать таблицы для структурированных данных.
+Предпочитать русский язык для ответов и документации.
+```
+
+### Настройки (Settings)
 
 ```text
 platform = windows
@@ -637,15 +637,15 @@ max_local_workers = 3
 default_provider = ...
 ```
 
-Hard rules can block work. Preferences must not.
+Жёсткие правила (Rules) могут блокировать выполнение работы при несоответствии. Пользовательские предпочтения (Preferences) не имеют права блокировать исполнение.
 
 ---
 
-## 11. Personal knowledge base
+## 11. Персональная база знаний (Personal Knowledge Base)
 
-The personal knowledge mechanism belongs to the product, but the physical knowledge data should remain external.
+Механизм персональных знаний является частью продукта, однако физические файлы знаний должны оставаться во внешнем хранилище.
 
-Inside KAT9I:
+Внутри репозитория KAT9I:
 
 ```text
 personal/knowledge/
@@ -655,38 +655,38 @@ personal/knowledge/
 └── policies/
 ```
 
-External Personal Data Plane may contain:
+Внешний слой персональных данных (Personal Data Plane) может включать:
 
 ```text
 KAT9I_IIIJIIOXA
 Obsidian
-ChatGPT memory
+Память ChatGPT
 Google Drive
-local notes
-project documentation
-research databases
+Локальные заметки
+Документацию проектов
+Исследовательские базы данных
 ```
 
-The Engine should access them through providers/connectors.
+Движок KAT9I должен обращаться к ним через провайдеры и коннекторы (Connectors).
 
-Do not merge all private/personal data into the product Git repository.
+Не следует смешивать и коммитить все приватные и персональные данные в продуктовый Git-репозиторий.
 
 ---
 
-## 12. Personal workspaces/projects
+## 12. Персональные рабочие пространства и проекты (Personal Workspaces/Projects)
 
-Projects are not domains.
+Проекты не являются доменными модулями платформы.
 
-Examples:
+Примеры:
 
 ```text
-Suno        = domain
-AG25        = project/repository
-Genre_test  = project
-KAT9I_OS    = project/system
+Suno        = прикладной домен
+AG25        = проект / репозиторий
+Genre_test  = проект
+KAT9I_OS    = проект / метасистема
 ```
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 personal/workspaces/
@@ -696,7 +696,7 @@ personal/workspaces/
 └── sqwin/
 ```
 
-A workspace may define:
+Рабочее пространство (Workspace) может определять:
 
 ```text
 ProjectContext
@@ -709,15 +709,15 @@ ProjectContext
 └── preferred_workflows
 ```
 
-This allows one KAT instance to work across many projects.
+Это позволяет одному экземпляру KAT9I эффективно и изолированно работать с множеством различных проектов.
 
 ---
 
-## 13. Context Engine
+## 13. Движок управления контекстом (Context Engine)
 
-Token/context optimization should be a platform layer.
+Оптимизация токенов и контекста должна представлять собой платформенный слой.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 context/
@@ -734,60 +734,60 @@ context/
 └── materializer/
 ```
 
-Initial concept:
+Исходная базовая концепция:
 
 ```text
-Task
+Задача (Task)
  ↓
-Context Compiler
+Компилятор контекста (Context Compiler)
  ↓
-Minimal Context Pack
+Минимальный пакет контекста (Minimal Context Pack)
  ↓
-Model
+Модель (Model)
 ```
 
-But the preferred design evolves into **reference-first context**, where KAT does not carry large context bodies unless necessary.
+Однако предпочтительная архитектура эволюционирует к подходу **приоритета ссылок (Reference-first Context)**, где KAT9I не переносит большие тела контекста без крайней необходимости.
 
 ---
 
-## 14. Reference-first architecture
+## 14. Архитектура с приоритетом ссылок (Reference-first Architecture)
 
-The central design principle:
+Центральный архитектурный принцип:
 
-> KAT9I should orchestrate references, permissions, tasks and result locations instead of transporting large model context payloads.
+> KAT9I_OS должна координировать ссылки, права доступа, задачи и места назначения результатов вместо сквозной пересылки больших объёмов контекста через модель.
 
-Bad path:
-
-```text
-KAT
-→ download repository
-→ put large repository into prompt
-→ send to provider
-→ receive huge response
-→ resend it to another worker
-```
-
-Preferred path:
+Неэффективный путь:
 
 ```text
-KAT
-→ TaskContract
-→ ContextRefs
-→ provider reads sources through its own connectors
-→ performs work
-→ writes result directly to shared sink
-→ KAT receives ResultRef
+KAT9I
+→ скачивает весь репозиторий
+→ загружает огромный репозиторий в промпт
+→ отправляет провайдеру
+→ получает огромный ответ
+→ пересылает его следующему исполнителю
 ```
 
-This turns KAT from a **data bus** into a **control bus**.
+Предпочтительный архитектурный путь:
+
+```text
+KAT9I
+→ формирует контракт задачи (TaskContract)
+→ передаёт ссылки на контекст (ContextRefs)
+→ провайдер напрямую читает источники через собственные коннекторы
+→ выполняет работу
+→ сохраняет результат напрямую в общий приёмник (Shared ResultSink)
+→ KAT9I получает ссылку на результат (ResultRef)
+```
+
+Это преобразует KAT9I из **шины данных (Data Bus)** в **шину управления (Control Bus)**.
 
 ---
 
-## 15. Resource Fabric
+## 15. Фабрика ресурсов (Resource Fabric)
 
-Introduce a first-class `resources/` component.
+Вводится первоклассный платформенный компонент `resources/`.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 resources/
@@ -800,7 +800,7 @@ resources/
 └── cache/
 ```
 
-It manages resource identities such as:
+Компонент управляет идентичностями ресурсов, такими как:
 
 ```text
 github://...
@@ -811,9 +811,9 @@ mcp://...
 artifact://...
 ```
 
-### ResourceRef / ContextRef
+### Ссылка на ресурс и контекст (ResourceRef / ContextRef)
 
-Concept:
+Концепция:
 
 ```text
 ContextRef
@@ -828,7 +828,7 @@ ContextRef
 └── resolver_hint
 ```
 
-Example:
+Пример:
 
 ```text
 type: github
@@ -841,31 +841,31 @@ scope:
 access: read
 ```
 
-### URL is identity; Connector is transport
+### URL как идентичность; коннектор как транспорт
 
-Important abstraction:
-
-```text
-ResourceRef = WHAT
-Connector   = HOW TO GET IT
-```
-
-The same GitHub resource may be resolved by:
+Важная абстракция:
 
 ```text
-ChatGPT GitHub connector
-native GitHub API
-MCP GitHub server
-local Git checkout
+ResourceRef = ЧТО за ресурс
+Connector   = КАК ЕГО ПОЛУЧИТЬ
 ```
 
-The domain should not need to know which one.
+Один и тот же ресурс GitHub может быть разрешён через:
+
+```text
+Коннектор GitHub в ChatGPT
+Нативный GitHub API
+Сервер MCP GitHub
+Локальный Git checkout
+```
+
+Доменный модуль не должен зависеть от того, какой именно коннектор используется.
 
 ---
 
-## 16. Context Manifest
+## 16. Манифест контекста (Context Manifest)
 
-A task should normally carry references, not full source material.
+Задача должна переносить ссылки, а не полные исходные материалы.
 
 ```text
 TaskContract
@@ -880,49 +880,49 @@ TaskContract
 └── result_sink
 ```
 
-Reference-first resolution algorithm:
+Алгоритм разрешения контекста с приоритетом ссылок:
 
 ```text
-RESOURCE REFERENCE
+ССЫЛКА НА РЕСУРС (RESOURCE REFERENCE)
     ↓
-Can provider resolve source itself?
+Может ли провайдер разрешить источник самостоятельно?
     │
-   YES → pass reference
+   ДА → передать ссылку
     │
-    NO
+   НЕТ
     ↓
-Can a connector be attached?
+Можно ли подключить готовый коннектор?
     │
-   YES → use connector
+   ДА → использовать коннектор
     │
-    NO
+   НЕТ
     ↓
-KAT materializes minimal context
+KAT9I материализует минимально необходимый контекст
 ```
 
-Rule:
+Правило:
 
-> Materialize context only when reference resolution is unavailable.
+> Материализация контекста выполняется только тогда, когда прямое разрешение по ссылкам недоступно.
 
 ---
 
-## 17. ResultRef and ResultSink
+## 17. Ссылка на результат и приёмник результата (ResultRef и ResultSink)
 
-Results should follow the same reference-first design.
+Результаты выполнения задач следуют тому же принципу приоритета ссылок.
 
-Instead of returning a huge report/diff through KAT, a provider writes directly to a sink:
+Вместо возврата гигантского отчёта или diff через KAT9I, исполнитель записывает данные напрямую в приёмник (ResultSink):
 
 ```text
 ResultSink
 ├── GitHub PR
-├── GitHub Issue/comment
-├── GitHub artifact
-├── Google Drive document
-├── file/artifact store
-└── Knowledge entry
+├── Комментарий или Issue GitHub
+├── Артефакт GitHub
+├── Документ Google Drive
+├── Хранилище локальных файлов и артефактов
+└── Запись в базе знаний
 ```
 
-KAT receives:
+KAT9I получает компактную ссылку:
 
 ```text
 ResultRef
@@ -933,43 +933,43 @@ ResultRef
 └── provenance
 ```
 
-Example development flow:
+Пример процесса разработки:
 
 ```text
-KAT
+KAT9I
  ↓
-task source = GitHub Issue
-context = GitHub repository reference
-result sink = GitHub PR
+источник задачи = GitHub Issue
+контекст = ссылка на репозиторий GitHub
+приёмник результата = GitHub PR
 
-Provider/worker
+Провайдер / исполнитель
  ↓
-reads repo using connector
+читает репозиторий через коннектор
  ↓
-creates PR
+создаёт PR
 
-KAT
+KAT9I
  ↓
-receives PR ResultRef
+получает ResultRef созданного PR
 ```
 
-QA should then receive the PR reference, not a re-transmitted diff:
+Процесс контроля качества (QA) затем получает ссылку на PR, а не ретранслированный diff:
 
 ```text
-Worker A → PR #X
-KAT → QA Task(target = PR #X)
-QA Worker → reads PR through GitHub connector
+Worker A → создаёт PR #X
+KAT9I → формирует задачу QA(target = PR #X)
+QA Worker → считывает PR через коннектор GitHub
 ```
 
-This naturally supports independent QA and minimizes outgoing payloads.
+Это естественным образом гарантирует независимость проверки и минимизирует исходящий сетевой трафик.
 
 ---
 
-## 18. RulesRef
+## 18. Ссылка на правила (RulesRef)
 
-Effective Ruleset can also be reference-backed.
+Действующий набор правил (Effective Ruleset) также может передаваться по ссылке.
 
-Instead of passing a large resolved rules body every time:
+Вместо постоянной передачи полного тела всех правил:
 
 ```text
 RulesRef
@@ -979,19 +979,19 @@ RulesRef
 └── required
 ```
 
-The worker/provider resolves the snapshot itself and records the digest used.
+Исполнитель или провайдер сам разрешает снимок правил и фиксирует использованный дайджест (хэш).
 
-This preserves provenance:
+Это обеспечивает строгое сохранение происхождения данных (Provenance):
 
-> Which exact rule snapshot governed the task?
+> Какой именно снимок правил управлял выполнением задачи?
 
 ---
 
-## 19. Inference / Provider layer
+## 19. Уровень инференса и провайдеров (Inference / Provider Layer)
 
-Model selection should be a dedicated platform component, separate from Coworker.
+Выбор модели и способа вычисления должен быть выделенным компонентом платформы, отделённым от Coworker.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 inference/
@@ -1008,129 +1008,129 @@ inference/
     └── remote_kat/
 ```
 
-Key distinction:
+Ключевое различие обязанностей:
 
 ```text
-Coworker = who executes?
-Inference/Provider Router = which intelligence/runtime/provider route?
+Coworker                  = кто исполняет работу?
+Inference/Provider Router = какой вычислительный интеллект и маршрут провайдера выбрать?
 ```
 
 ---
 
-## 20. Intelligence tiers
+## 20. Уровни интеллекта моделей (Intelligence Tiers)
 
-Keep a simple abstract quality classification:
+Используется простая абстрактная классификация качества моделей:
 
 ```text
-LOW
+LOW    (Низкий / Эконом)
+NORMAL (Стандартный / Нормальный)
+HIGH   (Высокий / Рассуждающий)
+```
+
+Примеры применения:
+
+### LOW (Низкий / Эконом)
+- классификация;
+- тегирование;
+- извлечение данных;
+- простые сводки;
+- сообщения коммитов;
+- обнаружение дубликатов;
+- проверка форматов;
+- ранжирование фрагментов.
+
+### NORMAL (Стандартный / Нормальный)
+- стандартная реализация задач и фич;
+- стандартное ревью PR;
+- написание тестов;
+- ограниченный рефакторинг;
+- инженерия промптов для Suno;
+- синтез результатов исследований;
+- подготовка документации;
+- базовый контроль качества (QA).
+
+### HIGH (Высокий / Рассуждающий)
+- системная архитектура;
+- сложная отладка и поиск первопричин (Root-cause analysis);
+- аудит безопасности;
+- разрешение сложных конфликтов правил;
+- межрепозиторное проектирование;
+- критический контроль качества;
+- принятие решений в условиях высокой неопределённости и рисков.
+
+Уровень HIGH должен быть путём эскалации при необходимости, а не выбором по умолчанию для всех промежуточных шагов.
+
+---
+
+## 21. Выбор модели на уровне отдельных стадий (Stage-level Model Selection)
+
+Задача не должна быть жестко привязана к одному уровню интеллекта на всём своём протяжении.
+
+Пример распределения по стадиям:
+
+```text
+Приём и разбор задачи        → LOCAL / LOW
+Извлечение контекста         → детерминированный код / локально
+Планирование                 → NORMAL
+Архитектурное решение        → HIGH (при необходимости)
+Реализация кода              → NORMAL
+Форматирование и стили       → LOW
+Контроль качества (QA)       → NORMAL
+Критическая неопределённость → HIGH
+```
+
+Базовый принцип:
+
+> Уровни HIGH / NORMAL / LOW являются свойством конкретной стадии задачи, а не постоянной характеристикой всей задачи или постоянным свойством агента.
+
+Модель эскалации:
+
+```text
+LOCAL / LOW
+  ↓ если результат недостаточен
 NORMAL
+  ↓ если результат недостаточен или возникла критическая неоднозначность
 HIGH
 ```
 
-Examples:
-
-### LOW
-- classification;
-- tagging;
-- extraction;
-- simple summaries;
-- commit messages;
-- duplicate detection;
-- format checks;
-- chunk ranking.
-
-### NORMAL
-- ordinary issue implementation;
-- ordinary PR review;
-- tests;
-- bounded refactoring;
-- Suno prompt engineering;
-- research synthesis;
-- documentation;
-- common QA.
-
-### HIGH
-- architecture;
-- complex debugging/root-cause;
-- security;
-- difficult rule conflicts;
-- cross-repository design;
-- critical QA;
-- ambiguous high-risk decisions.
-
-HIGH should be an escalation path, not the default for every stage.
+Политика безопасности определяет минимально допустимый уровень, который не может быть занижен более дешёвым классификатором.
 
 ---
 
-## 21. Stage-level model selection
+## 22. Экономические классы провайдеров (Provider Economic Classes)
 
-A task must not be tied to one intelligence tier.
+При выборе провайдера необходимо разделять уровень интеллекта модели и экономическую модель доступа.
 
-Example:
-
-```text
-Issue ingestion        → LOCAL/LOW
-Context retrieval      → deterministic/local
-Planning               → NORMAL
-Architecture decision  → HIGH if required
-Implementation         → NORMAL
-Formatting             → LOW
-QA                     → NORMAL
-Critical ambiguity     → HIGH
-```
-
-Core principle:
-
-> HIGH/NORMAL/LOW is a property of a task stage, not of the whole task or a permanent property of an agent.
-
-Escalation model:
+Предлагаемые экономические классы среды выполнения:
 
 ```text
-LOCAL/LOW
-  ↓ if insufficient
-NORMAL
-  ↓ if insufficient / critical ambiguity
-HIGH
+LOCAL_FREE            (Локальные бесплатные ресурсы)
+SUBSCRIPTION_INCLUDED (Включено в фиксированную подписку)
+METERED_API           (Тарифицируемый API с оплатой за токены)
+PREMIUM_API           (Премиальный API высокой стоимости)
 ```
 
-Security/policy defines the minimum floor and cannot be downgraded by a cheaper classifier.
-
----
-
-## 22. Provider economic classes
-
-Provider selection must distinguish intelligence from economics.
-
-Proposed economic/runtime classes:
-
-```text
-LOCAL_FREE
-SUBSCRIPTION_INCLUDED
-METERED_API
-PREMIUM_API
-```
-
-A provider may be:
+Провайдер может характеризоваться так:
 
 ```text
 intelligence = HIGH
 economic_class = SUBSCRIPTION_INCLUDED
 ```
 
-or:
+или:
 
 ```text
 intelligence = NORMAL
 economic_class = LOCAL_FREE
 ```
 
-This matters because a web subscription or licensed seat may not require per-token API optimization in the same way a metered API does.
+Это принципиально важно, так как веб-подписка или выделенное рабочее место (Seat) не требуют поминутной экономии каждого токена так, как тарифицируемый API.
 
 ---
 
-## 23. Subscription-seat providers
+## 23. Провайдеры рабочих мест по подписке (Subscription-seat Providers)
 
-A provider can be an already-paid interactive environment:
+Провайдером может выступать уже оплаченная интерактивная среда:
 
 ```text
 providers/seat/
@@ -1139,28 +1139,28 @@ providers/seat/
 └── other/
 ```
 
-Conceptual provider type:
+Концептуальный тип провайдера:
 
 ```text
 SUBSCRIPTION_SEAT
 ```
 
-Examples:
+Примеры:
 
-- ChatGPT web/Work environment;
-- Antigravity;
-- another AI web environment;
-- a licensed coding agent environment.
+- веб-среда ChatGPT / рабочий контекст;
+- Google Antigravity;
+- сторонние агентные веб-среды;
+- лицензированные среды кодинг-агентов.
 
-Important constraint:
+Важное проектное ограничение:
 
-> A web subscription is not the same thing as an API.
+> Доступ по веб-подписке принципиально отличается от вызова прямого API.
 
-KAT must not assume it can automate a web product via arbitrary HTTP calls.
+KAT9I_OS не должна исходить из ложного предположения, что веб-продукт можно автоматически вызывать произвольными HTTP-запросами.
 
-Use a supported adapter for that seat/environment.
+Для таких рабочих мест используются поддерживаемые специализированные адаптеры.
 
-A seat endpoint can advertise:
+Конечная точка рабочего места сообщает:
 
 ```text
 WorkerEndpoint
@@ -1175,27 +1175,27 @@ WorkerEndpoint
 
 ---
 
-## 24. Connector-aware provider routing
+## 24. Маршрутизация провайдеров с учётом коннекторов (Connector-aware Provider Routing)
 
-If the provider already has the required connector, KAT should prefer sending a reference instead of materializing context.
+Если провайдер уже имеет доступ к требуемому коннектору данных, KAT9I_OS должна предпочесть передачу ссылки вместо материализации и прокачки контекста через сеть.
 
-Example:
+Пример:
 
 ```text
-TASK source = Google Drive
+Источник задачи = Google Drive
 
 Worker A:
 HIGH
-Drive connector = YES
+Коннектор к Drive = ЕСТЬ
 
 Worker B:
 HIGH+
-Drive connector = NO
+Коннектор к Drive = НЕТ
 ```
 
-Worker A may be the better route because it has **data affinity**.
+Исполнитель Worker A может оказаться значительно более эффективным выбором, поскольку обладает **близостью к данным (Data Affinity)**.
 
-Routing should consider:
+Формула оценки маршрута учитывает:
 
 ```text
 RouteScore =
@@ -1211,15 +1211,15 @@ RouteScore =
   - latency
 ```
 
-`transfer_cost` becomes a first-class routing concern.
+Стоимость передачи данных (`transfer_cost`) становится первоклассным фактором маршрутизации.
 
 ---
 
-## 25. ProviderRoute
+## 25. Маршрут провайдера (ProviderRoute)
 
-The earlier "Model Router" concept should evolve into a broader provider/execution-intelligence router.
+Ранее использовавшаяся концепция простого «маршрутизатора моделей» расширяется до полноценного маршрутизатора провайдеров и вычислительного интеллекта.
 
-Concept:
+Концепция:
 
 ```text
 ProviderRoute
@@ -1234,184 +1234,184 @@ ProviderRoute
 └── fallback
 ```
 
-Possible route examples:
+Примеры возможных маршрутов:
 
 ```text
 HIGH
-ChatGPT subscription
-GitHub connector
-result → GitHub PR
+Подписка ChatGPT
+Коннектор к GitHub
+Результат → GitHub PR
 ```
 
 ```text
 NORMAL
-Local AI
-local filesystem
-result → local artifact
+Локальный ИИ
+Локальная файловая система
+Результат → локальный артефакт
 ```
 
 ```text
 HIGH
-Metered API
-KAT-materialized context
-result → KAT
+Тарифицируемый API
+Контекст, материализованный KAT9I
+Результат → KAT9I
 ```
 
-The last route can be more expensive even with similar intelligence because of context transfer.
+Последний маршрут может оказаться значительно дороже даже при схожем интеллекте из-за накладных расходов на передачу контекста.
 
 ---
 
-## 26. Local AI provider layer
+## 26. Уровень локальных провайдеров ИИ (Local AI Provider Layer)
 
-Local models belong under:
+Локальные модели располагаются в каталоге:
 
 ```text
 inference/providers/local/
 ```
 
-Possible backend adapters:
+Возможные адаптеры бэкендов:
 
 ```text
 Ollama
 llama.cpp
 LM Studio
 vLLM
-custom local API
+Пользовательский локальный API
 ```
 
-Core should only see a stable inference contract.
+Ядро видит только стабильный контракт инференса.
 
-Local AI is useful for:
+Локальный ИИ эффективен для:
 
-- private/local-only content;
-- logs;
-- repository inventory;
-- classification;
-- indexing;
-- deduplication;
-- secret detection;
-- chunk ranking;
-- context compression;
-- repetitive low-cost analysis.
+- приватного и строго локального контента;
+- обработки логов;
+- инвентаризации репозиториев;
+- задач классификации;
+- индексации;
+- поиска дубликатов;
+- поиска уязвимостей и утечек секретов;
+- ранжирования текстовых фрагментов;
+- сжатия контекста;
+- рутинного низкозатратного анализа.
 
-A strong pattern:
+Эффективный паттерн применения:
 
 ```text
-large local data
+Большие локальные данные
    ↓
-deterministic parser
+Детерминированный парсер
    ↓
-local AI filtering/summary
+Локальный ИИ для фильтрации и суммаризации
    ↓
-small set of ContextRefs / summary
+Компактный набор ContextRefs / резюме
    ↓
-remote HIGH provider
+Удалённый провайдер уровня HIGH
 ```
 
 ---
 
-## 27. Token/context economy
+## 27. Экономика токенов и контекста (Token/Context Economy)
 
-The priority order should not simply be "use cheaper model".
+Приоритетом оптимизации не должен быть банальный поиск «самой дешёвой модели».
 
-Recommended order:
+Рекомендуемый приоритетный порядок:
 
 ```text
-1. Avoid LLM where deterministic tools work.
-2. Avoid moving context at all; pass references.
-3. Minimize/limit context if materialization is required.
-4. Minimize exposed tools and skills.
-5. Use local inference where appropriate.
-6. Use cheaper cloud/API tier when quality/risk allow.
+1. Исключать вызовы LLM там, где работают детерминированные инструменты.
+2. Не передавать сам контекст; передавать ссылки на ресурсы.
+3. Минимизировать и ограничивать контекст, если материализация неизбежна.
+4. Минимизировать число передаваемых инструментов и навыков.
+5. Использовать локальный инференс, где это оправдано.
+6. Выбирать более экономный облачный тариф API, когда позволяют требования к качеству и риски.
 ```
 
-Examples of work that should not require LLM:
+Примеры задач, не требующих привлечения LLM:
 
-- scope guard;
-- hash comparison;
-- schema validation;
-- file change detection;
-- AST/dependency extraction where tooling exists;
-- deterministic diff checks.
+- контроль границ изменений (Scope Guard);
+- сравнение хэшей и контрольных сумм;
+- валидация схем данных;
+- обнаружение изменённых файлов;
+- извлечение AST и графа зависимостей существующими парсерами;
+- детерминированная проверка diff.
 
-Principle:
+Принцип:
 
-> Tool first, tokens second.
+> Сначала специализированный инструмент, потом токены нейросети.
 
 ---
 
-## 28. Skill and tool progressive disclosure
+## 28. Поэтапное раскрытие навыков и инструментов (Progressive Disclosure)
 
-Workers should not receive the full skill/tool catalog.
+Исполнители (Workers) не должны получать весь каталог навыков и инструментов сразу.
 
-Task path:
+Путь назначения задачи:
 
 ```text
-Task
+Задача (Task)
  ↓
-Domain Router
+Маршрутизатор доменов (Domain Router)
  ↓
-Skill Router
+Маршрутизатор навыков (Skill Router)
  ↓
-relevant skills only
+Только релевантные навыки (relevant skills only)
  ↓
-Tool Broker
+Брокер инструментов (Tool Broker)
  ↓
-relevant tools only
+Только релевантные инструменты (relevant tools only)
  ↓
-Context Compiler
+Компилятор контекста (Context Compiler)
  ↓
-Worker
+Исполнитель (Worker)
 ```
 
-This reduces:
+Это позволяет снизить:
 
-- prompt size;
-- tool-schema size;
-- confusion;
-- accidental tool usage.
+- размер промпта (prompt size);
+- размер схемы вызова инструментов (tool-schema size);
+- путаницу (confusion);
+- случайные ошибочные вызовы инструментов (accidental tool usage).
 
 ---
 
-## 29. Tool Broker
+## 29. Брокер инструментов (Tool Broker)
 
-Add a generic tool routing/broker component.
+Вводится универсальный брокер вызова инструментов (Add a generic tool routing/broker component).
 
-One capability may be reachable through:
+Одна и та же функциональная возможность (capability) может быть доступна через:
 
 ```text
-native API
-MCP
-CLI
-local library
+Нативный API (native API)
+Протокол MCP
+Интерфейс командной строки (CLI)
+Локальную библиотеку (local library)
 ```
 
-Domain asks for the capability, not the transport.
+Доменный модуль запрашивает саму возможность (capability), а не способ её вызова (transport).
 
-Example:
+Пример:
 
 ```text
-Domain:
+Домен (Domain):
   github.issue.read
 
         ↓
 
-Tool Broker
+   Брокер инструментов (Tool Broker)
 
  ┌──────┼──────┐
  ▼      ▼      ▼
 Native MCP    CLI
 ```
 
-Policy chooses the allowed route.
+Политика (Policy) выбирает разрешённый способ вызова.
 
 ---
 
-## 30. MCP placement
+## 30. Размещение протокола MCP (MCP placement)
 
-MCP should live in integrations, not in Core/Coworker business logic.
+Протокол MCP должен располагаться в модуле интеграций, а не проникать в бизнес-логику Core или Coworker.
 
-Suggested structure:
+Предлагаемая структура:
 
 ```text
 integrations/mcp/
@@ -1421,117 +1421,117 @@ integrations/mcp/
 └── gateway/
 ```
 
-Roles:
+Роли компонентов:
 
-### MCP client
-KAT consumes external MCP servers.
+### Клиент MCP (MCP client)
+KAT потребляет (consumes) внешние серверы MCP.
 
-### MCP server
-KAT exposes selected capabilities to external environments.
+### Сервер MCP (MCP server)
+KAT предоставляет (exposes) избранные возможности внешним средам.
 
-### Registry
-Tracks approved servers/capabilities/trust/auth/version.
+### Реестр (Registry)
+Отслеживает проверенные серверы, права (capabilities), доверие, аутентификацию и версии.
 
-### Gateway
-Applies:
-
-```text
-request
- ↓
-authentication
- ↓
-permissions
- ↓
-schema validation
- ↓
-policy
- ↓
-tool invocation
- ↓
-sanitized result
-```
-
-Internal monolith modules should normally use typed/internal calls.
-
-MCP is most useful when crossing:
+### Шлюз (Gateway)
+Применяет пайплайн:
 
 ```text
-process boundary
-machine boundary
-product boundary
+запрос (request)
+ ↓
+аутентификация (authentication)
+ ↓
+проверка прав (permissions)
+ ↓
+валидация схемы (schema validation)
+ ↓
+политики безопасности (policy)
+ ↓
+вызов инструмента (tool invocation)
+ ↓
+санитизированный результат (sanitized result)
 ```
 
-Do not turn every internal KAT module call into MCP; that would recreate distributed-system overhead inside the monolith.
+Внутренние монолитные модули должны взаимодействовать через типизированные программные вызовы.
+
+MCP наиболее эффективен при пересечении границ (crossing boundaries):
+
+```text
+граница процессов (process boundary)
+граница машин (machine boundary)
+граница программных продуктов (product boundary)
+```
+
+Не следует превращать каждый внутренний вызов модулей KAT в MCP; это приведёт к избыточным накладным расходам распределённых систем прямо внутри монолита.
 
 ---
 
-## 31. MCP as resolver/transport, not source-of-truth
+## 31. MCP как транспорт и преобразователь, а не источник истины (MCP as resolver/transport, not source-of-truth)
 
-MCP fits naturally into Resource Fabric:
+Протокол MCP органично встраивается в Фабрику ресурсов (Resource Fabric):
 
 ```text
 ContextRef
  ↓
-Resolver Registry
- ├── Native connector
+Реестр резолверов (Resolver Registry)
+ ├── Нативный коннектор (Native connector)
  ├── MCP
  ├── GitHub API
  ├── Google Drive API
- └── Local FS
+ └── Локальная файловая система (Local FS)
 ```
 
-Similarly, Coworker tasks may later be transported over MCP, but the KAT-native task contract should remain the stable internal SSoT.
+Аналогично, задачи Coworker в дальнейшем могут передаваться через MCP, но внутренний контракт задач KAT (KAT-native task contract) должен оставаться стабильным внутренним источником истины (SSoT).
 
-Pattern:
+Паттерн:
 
 ```text
 KAT CoworkerTask
         │
-        ├── local adapter
-        ├── GitHub adapter
-        ├── remote adapter
-        └── MCP adapter
+        ├── локальный адаптер (local adapter)
+        ├── адаптер GitHub (GitHub adapter)
+        ├── удалённый адаптер (remote adapter)
+        └── адаптер MCP (MCP adapter)
 ```
 
-MCP is a transport/adapter, not the core task model.
+MCP выступает транспортом и адаптером, а не корневой моделью задач.
 
 ---
 
-## 32. Security order
+## 32. Приоритет безопасности (Security order)
 
-Economy must come after hard security/policy constraints.
+Экономия ресурсов должна оцениваться строго после соблюдения жёстких требований безопасности и политик.
 
-Routing order:
-
-```text
-1. Security classification
-2. Hard Rules
-3. Required capabilities
-4. Minimum quality floor
-5. Data locality/privacy
-6. Available providers/models
-7. Connector/source affinity
-8. Cost optimization
-9. Latency optimization
-10. Final route
-```
-
-Never:
+Очередность принятия решений при маршрутизации:
 
 ```text
-choose cheapest
-→ then see if it is safe
+1. Классификация безопасности (Security classification)
+2. Жёсткие правила (Hard Rules)
+3. Требуемые возможности (Required capabilities)
+4. Минимальный порог качества (Minimum quality floor)
+5. Локальность данных и приватность (Data locality/privacy)
+6. Доступные провайдеры и модели (Available providers/models)
+7. Близость к коннектору/источнику (Connector/source affinity)
+8. Оптимизация стоимости (Cost optimization)
+9. Оптимизация задержки (Latency optimization)
+10. Финальный маршрут (Final route)
 ```
 
-A local/cheap classifier may propose a route, but cannot lower a policy-enforced minimum.
+Недопустим подход:
+
+```text
+выбрать самый дешёвый вариант
+→ затем проверять, безопасен ли он
+```
+
+Локальный или дешёвый классификатор может предложить маршрут, но не имеет права понизить уровень, требуемый политикой безопасности.
 
 ---
 
-## 33. Telemetry and cost evidence
+## 33. Телеметрия и доказательства стоимости (Telemetry and cost evidence)
 
-Add telemetry for both quality and economic routing.
+Вводится сквозная телеметрия для оценки как качества, так и экономической эффективности маршрутизации.
 
-Example:
+Пример структуры данных:
 
 ```text
 InferenceEvidence
@@ -1552,19 +1552,19 @@ InferenceEvidence
 └── result_quality
 ```
 
-This allows future learning such as:
+Это даёт основу для будущего обучения системы (future learning):
 
-- which tasks truly require HIGH;
-- which work can move to local;
-- which connectors reduce transfer;
-- which providers are overloaded;
-- which routes fail more often.
+- какие задачи реально требуют уровня HIGH;
+- какую работу можно перенести на локальный ИИ;
+- какие коннекторы снижают передачу данных (transfer);
+- какие провайдеры перегружены;
+- какие маршруты чаще дают сбои.
 
 ---
 
-## 34. Task budgets
+## 34. Бюджеты задач (Task budgets)
 
-A task may carry a budget:
+Задача может содержать бюджет:
 
 ```text
 TaskBudget
@@ -1574,73 +1574,78 @@ TaskBudget
 ├── max_duration
 └── local_preferred
 ```
-
-For subscription providers, token cost pressure may be low, but usage/rate/availability constraints still matter.
+Для провайдеров по подписке (subscription providers) нагрузка по стоимости токенов может быть низкой, но лимиты использования, частота запросов и доступность по-прежнему имеют значение.
 
 ---
 
-## 35. End-to-end conceptual architecture
+## 35. Сквозная концептуальная архитектура (End-to-End Conceptual Architecture)
 
 ```text
-                         USER
-                          │
-              ┌───────────▼───────────┐
-              │     PERSONAL LAYER    │
-              │ Rules/Prefs/Settings  │
-              └───────────┬───────────┘
-                          │
-                          ▼
-                       CORE
-                          │
-                          ▼
-                       DOMAIN
-                          │
-                          ▼
-                   RESOURCE FABRIC
-             "Where is the context/result?"
-                          │
-        ┌─────────────────┼─────────────────┐
-        ▼                 ▼                 ▼
-     GitHub             Drive          Knowledge
-        │                 │                 │
-        └─────────────────┬─────────────────┘
-                          │ refs
-                          ▼
-                  CONTEXT ENGINE
-             select references / scope
-                          │
-                          ▼
-                  PROVIDER ROUTER
-                          │
-          ┌───────────────┼────────────────┐
-          ▼               ▼                ▼
-  Subscription Seat    Local AI      Metered API
-          │
-          ▼
-       COWORKER
-  choose worker / endpoint
-          │
-          ▼
-       EXECUTION
-          │
-          ▼
-      TOOL BROKER
-   Native / MCP / CLI
-          │
-          ▼
-       ResultSink
-  PR / Issue / Drive / Artifact
-          │
-          ▼
-       ResultRef
-          │
-          ▼
-         KAT
+                         ПОЛЬЗОВАТЕЛЬ (USER)
+                                  │
+                      ┌───────────▼───────────┐
+                      │  ПЕРСОНАЛЬНЫЙ СЛОЙ    │
+                      │ Rules/Prefs/Settings  │
+                      └───────────┬───────────┘
+                                  │
+                                  ▼
+                           ЯДРО (CORE)
+                                  │
+                                  ▼
+                       ПРЕДМЕТНАЯ ОБЛАСТЬ (DOMAIN)
+                                  │
+                                  ▼
+                        ФАБРИКА РЕСУРСОВ
+                        (RESOURCE FABRIC)
+                "Где находится контекст/результат?"
+                                  │
+                ┌─────────────────┼─────────────────┐
+                ▼                 ▼                 ▼
+             GitHub             Drive           Knowledge
+                │                 │                 │
+                └─────────────────┬─────────────────┘
+                                  │ ссылки (refs)
+                                  ▼
+                           ДВИЖОК КОНТЕКСТА
+                           (CONTEXT ENGINE)
+                      выбор ссылок / границ Scope
+                                  │
+                                  ▼
+                        МАРШРУТИЗАТОР ИНФЕРЕНСА
+                           (PROVIDER ROUTER)
+                                  │
+                  ┌───────────────┼────────────────┐
+                  ▼               ▼                ▼
+          Рабочее место        Локальный     Тарифицируемый
+          по подписке             ИИ              API
+                  │
+                  ▼
+              COWORKER
+          выбор исполнителя
+                  │
+                  ▼
+              EXECUTION
+          физический запуск
+                  │
+                  ▼
+             TOOL BROKER
+          Native / MCP / CLI
+                  │
+                  ▼
+              ResultSink
+          приёмник результата
+                  │
+                  ▼
+              ResultRef
+          ссылка на результат
+                  │
+                  ▼
+                KAT9I
 ```
 
 ---
 
-## 36. Proposed repository shape
+## 36. Предлагаемая структура репозитория (Repository Shape)
 
 ```text
 KAT9I/
@@ -1776,58 +1781,58 @@ KAT9I/
 
 ---
 
-## 37. Main architectural invariants
+## 37. Основные архитектурные инварианты (Main Architectural Invariants)
 
-1. **Modular monolith, not an unstructured monolith.**
-2. **One repository/release/CI, strict internal boundaries.**
-3. **KAT is control plane, not bulk data transport.**
-4. **Reference-first context and result exchange.**
-5. **Materialize context only as fallback.**
-6. **ResourceRef says what; Connector says how.**
-7. **Domain owns domain semantics.**
-8. **Core owns generic task/rule/skill/policy semantics.**
-9. **Coworker chooses who; Execution runs how.**
-10. **Provider Router chooses intelligence/provider route.**
-11. **LOW/NORMAL/HIGH apply per stage, not per whole task.**
-12. **Subscription seats are valid provider routes distinct from metered APIs.**
-13. **Local AI is a first-class provider.**
-14. **MCP is an integration/transport boundary, not internal architecture SSoT.**
-15. **Tools/skills/context use progressive disclosure.**
-16. **Deterministic tools should replace LLM calls where possible.**
-17. **Security/rules define hard floors before economy.**
-18. **Independent QA is enforceable workflow policy.**
-19. **Personal Knowledge, Rules, Preferences and Settings are separate concepts.**
-20. **Physical personal knowledge remains outside the product Git repository.**
-21. **Results should be written to shared sinks and returned as ResultRef.**
-22. **Telemetry measures quality, execution and economic routing.**
-23. **AG25 functionality is redistributed into correct internal modules rather than duplicated.**
-24. **Suno is a domain application, not execution infrastructure.**
+1. **Модульный монолит, а не неструктурированный монолит.**
+2. **Один репозиторий, единый релиз, единый CI, строгие внутренние границы.**
+3. **KAT9I — это шина управления (Control Plane), а не транспорт больших данных.**
+4. **Обмен контекстом и результатами строится на приоритете ссылок (Reference-first).**
+5. **Материализация контекста допустима только при недоступности прямого разрешения ссылок.**
+6. **ResourceRef определяет ЧТО за ресурс; Connector определяет КАК его получить.**
+7. **Доменный модуль владеет предметной семантикой.**
+8. **Ядро (Core) владеет общими контрактами задач, правил, навыков и политик.**
+9. **Coworker определяет КТО исполняет; Execution определяет КАК физически исполнить.**
+10. **Provider Router выбирает вычислительный интеллект и маршрут исполнения.**
+11. **Уровни LOW / NORMAL / HIGH действуют на уровне отдельной стадии, а не на всю задачу целиком.**
+12. **Рабочие места по подписке — это валидные маршруты, отличные от тарифицируемых API.**
+13. **Локальный ИИ является первоклассным полноправным провайдером платформы.**
+14. **Протокол MCP — это внешняя транспортная интеграция, а не внутренний единый источник истины (SSoT).**
+15. **Навыки, инструменты и контекст раскрываются поэтапно (Progressive Disclosure).**
+16. **Детерминированные инструменты должны заменять вызовы LLM везде, где это возможно.**
+17. **Требования безопасности и правил формируют жёсткий порог до оптимизации стоимости.**
+18. **Независимый контроль качества (Independent QA) является неотменяемой политикой процесса.**
+19. **Персональные знания, правила, предпочтения и настройки строго разделены.**
+20. **Физические файлы персональных знаний остаются за пределами продуктового Git-репозитория.**
+21. **Результаты работы сохраняются в общие приёмники (Shared ResultSinks) и возвращаются как ResultRef.**
+22. **Телеметрия фиксирует качество выполнения, ход исполнения и экономику маршрутизации.**
+23. **Функционал AG25 распределяется по соответствующим внутренним модулям, а не дублируется.**
+24. **Suno — это прикладной домен, а не базовая инфраструктура исполнения.**
 
 ---
 
-## 38. Current design status
+## 38. Текущий статус проектирования (Current Design Status)
 
-This file captures the architecture discussion only.
+Этот документ фиксирует исключительно результаты архитектурного проектирования.
 
-Not yet decided/implemented:
+По состоянию на данный момент ещё не финализированы в коде:
 
-- exact programming language/package boundaries;
-- concrete TaskContract schema;
-- concrete ResourceRef / ContextRef / ResultRef schema;
-- concrete ProviderRoute scoring formula;
-- exact subscription-seat adapter mechanism per provider;
-- exact MCP exposure surface;
-- storage backend for personal rules/preferences/settings;
-- migration plan from canonical KAT9I + AG25;
-- compatibility strategy during migration;
-- first minimal executable vertical slice;
-- exact GitHub governance/branch-protection policy for KAT9I_OS.
+- точные границы пакетов и язык программирования;
+- детальная схема контракта задачи (`TaskContract`);
+- детальные схемы `ResourceRef`, `ContextRef`, `ResultRef`;
+- конкретная формула расчёта рейтинга маршрута (`ProviderRoute score`);
+- точные адаптеры для рабочих мест по подписке;
+- точный состав внешних интерфейсов MCP;
+- бэкенд хранения персональных правил, настроек и предпочтений;
+- пошаговый план миграции с канонических репозиториев KAT9I и AG25;
+- стратегия обратной совместимости на период миграции;
+- первый минимальный исполняемый сквозной срез (Vertical Slice);
+- точная политика защиты веток и управления правами GitHub для KAT9I_OS.
 
-The recommended next design step is to turn this architecture context into:
+Рекомендуемые следующие шаги проектирования:
 
-1. architecture decision records (ADRs);
-2. a minimal repository skeleton;
-3. canonical contracts;
-4. a migration plan;
-5. one real vertical slice such as:
-   `GitHub Issue → ContextRefs → ProviderRoute → Coworker → Worker → PR ResultRef → independent QA`.
+1. Оформление архитектурных решений (ADR);
+2. Создание минимального скелета репозитория;
+3. Фиксация канонических контрактов;
+4. Подготовка плана миграции;
+5. Реализация одного сквозного вертикального среза:
+   `GitHub Issue → ContextRefs → ProviderRoute → Coworker → Worker → PR ResultRef → независимый QA`.

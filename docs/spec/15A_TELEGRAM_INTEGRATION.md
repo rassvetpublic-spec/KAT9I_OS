@@ -118,7 +118,7 @@ Resource Intake (приём ресурса)
 
 Содержимое файла не получает управляющую силу.
 
-## 15A.9. Research Discovery
+## 15A.9. Поиск в исследованиях (Research Discovery)
 
 Публичные Telegram-каналы могут использоваться как Discovery Source (источник обнаружения) для Research (исследований).
 
