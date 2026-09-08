@@ -5,12 +5,6 @@ Issues #2, #6, #15.
 
 Generates responsive, interactive index.html directly from canonical Markdown
 files in docs/ (docs/tz, docs/architecture, docs/spec, docs/guides, docs/GLOSSARY.md).
-Supports:
-- 5 levels of detail (Очень просто / Просто / Рабочий / Технический / Максимум)
-- Global "Показывать примеры" toggle and independent <details> folding
-- "Я здесь впервые" guide mode
-- Glossary integration
-- Auto-sync verification
 """
 
 import os
@@ -22,7 +16,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 def markdown_to_html_basic(text: str) -> str:
-    """Converts basic Markdown formatting to clean HTML."""
     lines = text.splitlines()
     output = []
     in_code_block = False
@@ -33,7 +26,6 @@ def markdown_to_html_basic(text: str) -> str:
     for line in lines:
         stripped = line.strip()
 
-        # Fenced code block
         if stripped.startswith("```"):
             if in_code_block:
                 escaped_code = html.escape("\n".join(code_lines))
@@ -49,7 +41,6 @@ def markdown_to_html_basic(text: str) -> str:
             code_lines.append(line)
             continue
 
-        # Lists
         if stripped.startswith("- ") or stripped.startswith("* "):
             if not in_list:
                 output.append("<ul>")
@@ -67,7 +58,6 @@ def markdown_to_html_basic(text: str) -> str:
         if not stripped:
             continue
 
-        # Headings
         if stripped.startswith("#### "):
             h_text = html.escape(stripped[5:])
             output.append(f"<h4>{h_text}</h4>")
@@ -98,15 +88,55 @@ def markdown_to_html_basic(text: str) -> str:
 
 def build_html_documentation():
     docs_dir = REPO_ROOT / "docs"
-    glossary_path = docs_dir / "GLOSSARY.md"
-    first_time_path = docs_dir / "guides" / "FIRST_TIME_GUIDE.md"
-    coworker_guide_path = docs_dir / "guides" / "GITHUB_FOR_COWORKERS.md"
-    tz_path = docs_dir / "tz" / "01-naznachenie-i-bazovaya-arhitektura.md"
+    arch_dir = docs_dir / "architecture"
+    guides_dir = docs_dir / "guides"
+    tz_dir = docs_dir / "tz"
 
-    glossary_content = glossary_path.read_text(encoding="utf-8") if glossary_path.exists() else ""
+    glossary_path = docs_dir / "GLOSSARY.md"
+    first_time_path = guides_dir / "FIRST_TIME_GUIDE.md"
+    coworker_path = guides_dir / "GITHUB_FOR_COWORKERS.md"
+    mapping_path = guides_dir / "GITHUB_KAT9I_MAPPING.md"
+    responsibility_path = arch_dir / "MODULE_RESPONSIBILITY_MAP.md"
+
+    sections = []
+
+    # 1. ТЗ
+    for f in sorted(tz_dir.glob("*.md")):
+        content = f.read_text(encoding="utf-8")
+        sections.append({
+            "title": f"ТЗ: {f.stem}",
+            "badge": "Принятое ТЗ",
+            "html": markdown_to_html_basic(content)
+        })
+
+    # 2. Архитектура (все ключевые разделы)
+    for f in sorted(arch_dir.glob("*.md")):
+        if f.name == "MODULE_RESPONSIBILITY_MAP.md":
+            continue
+        content = f.read_text(encoding="utf-8")
+        sections.append({
+            "title": f"Архитектура: {f.stem}",
+            "badge": "Каноническая архитектура",
+            "html": markdown_to_html_basic(content)
+        })
+
     first_time_content = first_time_path.read_text(encoding="utf-8") if first_time_path.exists() else ""
-    coworker_content = coworker_guide_path.read_text(encoding="utf-8") if coworker_guide_path.exists() else ""
-    tz_content = tz_path.read_text(encoding="utf-8") if tz_path.exists() else ""
+    coworker_content = coworker_path.read_text(encoding="utf-8") if coworker_path.exists() else ""
+    mapping_content = mapping_path.read_text(encoding="utf-8") if mapping_path.exists() else ""
+    glossary_content = glossary_path.read_text(encoding="utf-8") if glossary_path.exists() else ""
+    resp_content = responsibility_path.read_text(encoding="utf-8") if responsibility_path.exists() else ""
+
+    sections_html = []
+    for s in sections:
+        sections_html.append(f"""
+    <section>
+      <div class="badge">{s['badge']}</div>
+      <h2>{s['title']}</h2>
+      {s['html']}
+    </section>
+        """)
+
+    all_sections_rendered = "\n".join(sections_html)
 
     html_template = f"""<!doctype html>
 <html lang="ru">
@@ -150,7 +180,10 @@ def build_html_documentation():
       flex-wrap: wrap;
       gap: 16px;
       align-items: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 10px;
+      z-index: 100;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
     }}
     .control-group {{
       display: flex;
@@ -208,22 +241,19 @@ def build_html_documentation():
       font-weight: 600;
       cursor: pointer;
     }}
-    .level-simple, .level-worker, .level-tech, .level-max {{
-      transition: all 0.2s ease;
-    }}
   </style>
 </head>
 <body>
   <header>
     <h1>KAT9I_OS — Техническое задание и каноническая архитектура</h1>
-    <p><strong>Язык проекта:</strong> русский. Источник истины: <code>docs/</code>. Данная страница сгенерирована автоматически скриптом <code>scripts/generate_html_docs.py</code> (Issue #2, #6, #15).</p>
+    <p><strong>Язык проекта:</strong> русский. Источник истины: <code>docs/</code>. Сгенерировано автоматически (Issue #2, #6, #15).</p>
   </header>
 
   <div class="controls">
     <div class="control-group">
       <label for="detailLevel"><strong>Уровень подробности:</strong></label>
       <select id="detailLevel" onchange="updateDetailLevel()">
-        <option value="all">Максимум (полное ТЗ)</option>
+        <option value="all">Максимум (полное ТЗ и все модули)</option>
         <option value="simple">Очень просто</option>
         <option value="worker">Рабочий уровень</option>
         <option value="tech">Технический</option>
@@ -252,20 +282,27 @@ def build_html_documentation():
   </div>
 
   <main id="mainContent">
-    <section id="tz-section">
-      <div class="badge">Раздел 1: Принято</div>
-      {markdown_to_html_basic(tz_content)}
-    </section>
-
     <section id="coworker-section">
       <div class="badge">Обучение коворкеров</div>
       {markdown_to_html_basic(coworker_content)}
+    </section>
+
+    <section id="mapping-section">
+      <div class="badge">Карта соответствия</div>
+      {markdown_to_html_basic(mapping_content)}
+    </section>
+
+    <section id="resp-section">
+      <div class="badge">Карта ответственности</div>
+      {markdown_to_html_basic(resp_content)}
     </section>
 
     <section id="glossary-section">
       <div class="badge">Канонический словарь</div>
       {markdown_to_html_basic(glossary_content)}
     </section>
+
+    {all_sections_rendered}
   </main>
 
   <script>
