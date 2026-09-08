@@ -11125,6 +11125,38 @@ Learning (самообучение)
 <li>Защита от зомби-воркеров (Fencing Token): события от устаревшего поколения владения (<code>lease_generation &lt; current_lease_generation</code>) безусловно отклоняются;</li>
 <li>Срок хранения (Retention): события активных задач хранятся непрерывно, завершенных — минимум 30 суток для аудита.</li>
 </ul>
+<h2 id="32-40e-adr-038-физическая-граница-core-runtime-и-безопасный-ipc-с-electron">32.40e. ADR-038 — физическая граница Core Runtime и безопасный IPC с Electron</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <code>schemas/v1/CoreIpcMessage.json</code>, <code>scripts/core_ipc_prototype.py</code>, <code>tests/test_core_ipc_boundary.py</code>, Issue #41).</p>
+<ol>
+<li><strong>Физическая изоляция Core Runtime (Вариант B)</strong>:</li>
+</ol>
+<ul>
+<li>Системное ядро KAT9I_OS функционирует как <strong>отдельный локальный процесс</strong> (Rust Core Runtime), физически независимый от Electron Main и Renderer.</li>
+<li>Сбой, закрытие или перезапуск Electron не уничтожает состояние активных задач (Zero Task Disruption).</li>
+<li>Поддерживается нативный автономный фоновый режим (Headless Mode).</li>
+</ul>
+<ol>
+<li><strong>Локальный транспорт и сессионная аутентификация</strong>:</li>
+</ol>
+<ul>
+<li>В качестве локального транспорта выбран Loopback IPC (TCP / локальный именованный канал Windows на <code>127.0.0.1</code>);</li>
+<li>Подключение защищено локальным сессионным токеном <code>auth_token</code>, генерируемым ядром при запуске. Любое неавторизованное подключение немедленно отклоняется (<code>ACCESS_DENIED</code>).</li>
+</ul>
+<ol>
+<li><strong>Узкий типизированный контракт (Narrow API Surface)</strong>:</li>
+</ol>
+<ul>
+<li>Обмен строго регламентирован схемой <code>schemas/v1/CoreIpcMessage.json</code> (JSON Schema Draft 2020-12);</li>
+<li>Разрешённый набор методов: <code>core.ping</code>, <code>core.get_system_state</code>, <code>core.create_task</code>, <code>core.cancel_task</code>, <code>core.subscribe_events</code>;</li>
+<li>Строгий запрет произвольного выполнения shell/eval: любой неизвестный или недоверенный метод вызывает ошибку <code>METHOD_NOT_ALLOWED</code>;</li>
+<li>Задержка IPC на Windows 11 не превышает единиц миллисекунд (&lt; 5 мс).</li>
+</ul>
+<ol>
+<li><strong>Reconnect и синхронизация состояния</strong>:</li>
+</ol>
+<ul>
+<li>При перезапуске интерфейса или обрыве связи новый клиент Electron восстанавливает сессию и мгновенно считывает актуальное состояние ядра через <code>core.get_system_state</code>, возобновляя получение системных событий через <code>core.subscribe_events</code>.</li>
+</ul>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
 <h2 id="32-42-реализация-ipc-electron">32.42. Реализация IPC Electron</h2>
@@ -11230,8 +11262,8 @@ Learning (самообучение)
 </ul>
 <h3 id="этап-g3-runtime-foundation-фундамент-исполняемой-системы">Этап G3 — Runtime Foundation (Фундамент исполняемой системы)</h3>
 <ul>
-<li><strong>OQ-002</strong> — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41).</li>
-<li><strong>OQ-004</strong> — минимальный безопасный внутренний API между Electron и Core (Issue #41).</li>
+<li><strong>OQ-002</strong> — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41) — <strong>ACCEPTED</strong> (ADR-038).</li>
+<li><strong>OQ-004</strong> — минимальный безопасный внутренний API между Electron и Core (Issue #41) — <strong>ACCEPTED</strong> (ADR-038, <code>schemas/v1/CoreIpcMessage.json</code>).</li>
 <li><strong>OQ-008</strong> — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45).</li>
 <li><strong>OQ-010</strong> — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).</li>
 </ul>
@@ -11245,28 +11277,25 @@ Learning (самообучение)
 <li><strong>Python</strong> — специализированный AI/ML Worker-слой.</li>
 </ul>
 <h2 id="32-53-oq-002-точная-граница-electron-main-и-отдельного-core-runtime">32.53. OQ-002 — точная граница Electron Main и отдельного Core Runtime</h2>
-<p>Нужно выбрать:</p>
-<h3 id="вариант-a">Вариант A</h3>
-<p>Core находится внутри Electron Main Process.</p>
-<h3 id="вариант-b">Вариант B</h3>
-<p>Core является отдельным локальным процессом/service, Electron подключается к нему.</p>
-<p>Архитектурно уже принято:</p>
-<div class="note"><strong>Примечание:</strong> Core и UI имеют разные ответственности.</div>
-<p>Но физическая граница процесса пока требует решения.</p>
-<p>Статус:</p>
-<p><code>OPEN</code>.</p>
-<h2 id="32-54-предварительное-направление-по-oq-002">32.54. Предварительное направление по OQ-002</h2>
-<p>Для устойчивости более перспективной выглядит схема:</p>
-<div class="note"><strong>Примечание:</strong> <strong>Electron UI + отдельный Core Runtime.</strong></div>
-<p>Плюсы:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-038, канонический источник: <a href="23_TECHNOLOGY_STACK_AND_RUNTIME.md">docs/architecture/23_TECHNOLOGY_STACK_AND_RUNTIME.md</a>, <a href="29_ELECTRON_UI.md">docs/architecture/29_ELECTRON_UI.md</a>, Issue #41).</div>
+<p>Принят <strong>Вариант B</strong>: Core является физически отдельным локальным процессом (Rust Core Runtime), Electron подключается к нему через защищённый IPC.</p>
+<p>Обоснование:</p>
 <ul>
-<li>Renderer crash не влияет на задачи;</li>
-<li>Electron можно перезапустить;</li>
-<li>возможен Headless Mode;</li>
-<li>проще remote UI;</li>
-<li>Core не зависит от жизненного цикла окна.</li>
+<li>Сбой или перезапуск Electron не уничтожает состояние активных задач (Zero Task Disruption);</li>
+<li>Возможность автономной работы без GUI (Headless Mode);</li>
+<li>Renderer не получает прямого доступа к файловой системе, БД или shell;</li>
+<li>Reconnect восстанавливает наблюдение за текущим состоянием.</li>
 </ul>
-<p>Но это ещё должно пройти сравнительный анализ и прототип.</p>
+<h2 id="32-54-oq-004-внутренний-api-между-electron-и-core">32.54. OQ-004 — внутренний API между Electron и Core</h2>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-038, канонический источник: <code>schemas/v1/CoreIpcMessage.json</code>, <code>scripts/core_ipc_prototype.py</code>, <code>tests/test_core_ipc_boundary.py</code>, Issue #41).</div>
+<p>В качестве механизма взаимодействия принят узкий типизированный Loopback IPC (TCP / локальный сокет на <code>127.0.0.1</code> со строгим <code>auth_token</code>):</p>
+<ul>
+<li>Контракт сообщений: <code>schemas/v1/CoreIpcMessage.json</code> (JSON Schema Draft 2020-12);</li>
+<li>Разрешённые методы: <code>core.ping</code>, <code>core.get_system_state</code>, <code>core.create_task</code>, <code>core.cancel_task</code>, <code>core.subscribe_events</code>;</li>
+<li>Полная изоляция от произвольного выполнения команд: любой неразрешённый метод отклоняется (<code>METHOD_NOT_ALLOWED</code>);</li>
+<li>Высокая производительность: задержка ping/pong на Windows 11 составляет менее 5 мс;</li>
+<li>Поддержка стриминга событий и повторного подключения при сбоях UI.</li>
+</ul>
 <h2 id="32-55-oq-003-формат-системных-контрактов">32.55. OQ-003 — формат системных контрактов</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-034, канонический источник: <a href="../../schemas/README.md">schemas/README.md</a>, <code>schemas/v1/</code>, Issue #40).</div>
 <p>В качестве канонического машинного формата системных контрактов KAT9I_OS для всех слоёв (Rust Core, TypeScript UI, Python Workers) принят <strong>JSON Schema (Draft 2020-12)</strong>.</p>
@@ -11277,20 +11306,9 @@ Learning (самообучение)
 <li>Строгий инвариант безопасности <code>additionalProperties: false</code> (Fail-Closed при неизвестных полях);</li>
 <li>Человекочитаемость и прозрачность в журналах аудита и отладке.</li>
 </ul>
-<h2 id="32-56-oq-004-внутренний-api-между-electron-и-core">32.56. OQ-004 — внутренний API между Electron и Core</h2>
-<p>Нужно выбрать минимальный механизм локальной коммуникации.</p>
-<p>Критерии:</p>
-<ul>
-<li>безопасность;</li>
-<li>типизация;</li>
-<li>reconnect;</li>
-<li>event streaming;</li>
-<li>производительность;</li>
-<li>Headless support;</li>
-<li>тестирование.</li>
-</ul>
-<p>Статус:</p>
-<p><code>OPEN</code>.</p>
+<h2 id="32-56-итоги-выбора-внутреннего-api-electron-и-core">32.56. Итоги выбора внутреннего API Electron и Core</h2>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> Закрыто в рамках OQ-004 / ADR-038 (канонический источник: <code>schemas/v1/CoreIpcMessage.json</code>, <code>scripts/core_ipc_prototype.py</code>, <code>tests/test_core_ipc_boundary.py</code>, Issue #41).</div>
+<p>Выбран узкий типизированный Loopback IPC (TCP / сокет на <code>127.0.0.1</code>) с сессионной авторизацией и валидацией схем Draft 2020-12.</p>
 <h2 id="32-57-oq-005-структура-module-registry">32.57. OQ-005 — структура Module Registry</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-035, канонический источник: <code>schemas/v1/ModuleRegistry.json</code>, <code>modules_registry.json</code>, <code>scripts/verify_module_registry.py</code>, Issue #47).</div>
 <p>Машинная структура реестра модулей утверждена:</p>

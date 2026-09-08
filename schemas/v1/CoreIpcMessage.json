@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/CoreIpcMessage.json",
+  "title": "CoreIpcMessage",
+  "description": "Строгий типизированный контракт сообщений локального IPC между Electron Desktop UI и системным ядром Core Runtime.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "correlation_id",
+    "type",
+    "method",
+    "payload",
+    "timestamp"
+  ],
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "pattern": "^msg-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор IPC-сообщения."
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^corr-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Сквозной корреляционный идентификатор запроса-ответа или потока событий."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "REQUEST",
+        "RESPONSE",
+        "EVENT_STREAM",
+        "ERROR"
+      ],
+      "description": "Категория протокольного сообщения."
+    },
+    "method": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_.-]{3,64}$",
+      "description": "Имя RPC-метода ограниченной границы IPC (например, core.ping, core.get_system_state)."
+    },
+    "auth_token": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Локальный сессионный токен проверки подлинности процесса Electron."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Типизированная полезная нагрузка запроса, ответа или события."
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Машинный код ошибки (например, METHOD_NOT_ALLOWED, ACCESS_DENIED, TASK_NOT_FOUND)."
+        },
+        "message": {
+          "type": "string",
+          "description": "Человекочитаемое описание ошибки."
+        }
+      },
+      "description": "Детали ошибки при type=ERROR."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка сообщения в ISO 8601."
+    }
+  }
+}
