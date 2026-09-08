@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/Identity.json",
+  "title": "Identity",
+  "description": "Идентичность субъекта KAT9I_OS с безопасной привязкой к локальной системе Windows без хранения учетных данных/паролей.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "identity_id",
+    "subject_type",
+    "roles",
+    "trust_level",
+    "created_at"
+  ],
+  "properties": {
+    "identity_id": {
+      "type": "string",
+      "pattern": "^id-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Устойчивый канонический идентификатор субъекта KAT9I_OS (не зависит от отображаемого имени)."
+    },
+    "subject_type": {
+      "type": "string",
+      "enum": [
+        "HUMAN_USER",
+        "LOCAL_WORKER",
+        "REMOTE_WORKER",
+        "CORE_SERVICE",
+        "NODE",
+        "EXTERNAL_CONNECTOR"
+      ],
+      "description": "Тип субъекта в системе."
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "Человекочитаемое имя или псевдоним субъекта для отображения в UI."
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "LOCAL_USER",
+          "LOCAL_ADMIN",
+          "WORKER",
+          "CORE_SERVICE",
+          "NODE_OPERATOR",
+          "AUDITOR"
+        ]
+      },
+      "uniqueItems": true,
+      "minItems": 1,
+      "description": "Логические роли субъекта. Роли разделены: LOCAL_USER и LOCAL_ADMIN — разные роли даже для одного человека."
+    },
+    "trust_level": {
+      "type": "string",
+      "enum": [
+        "UNTRUSTED",
+        "PROVISIONAL",
+        "AUTHENTICATED",
+        "FULL_LOCAL_TRUST"
+      ],
+      "description": "Уровень доверия к субъекту."
+    },
+    "windows_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "security_identifier",
+        "is_elevated",
+        "account_hash"
+      ],
+      "properties": {
+        "security_identifier": {
+          "type": "string",
+          "pattern": "^S-1-[0-5](-[0-9]+)+$",
+          "description": "Канонический Windows SID субъекта (например, S-1-5-21-...). Пароли и хэши паролей Windows категорически запрещены к сохранению."
+        },
+        "account_name": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Локальное имя учетной записи Windows (DOMAIN\\\\User или Machine\\\\User) для аудита."
+        },
+        "is_elevated": {
+          "type": "boolean",
+          "description": "Флаг исполнения в контексте с повышенными привилегиями (UAC / Windows Administrator token). Роль LOCAL_ADMIN валидна только при is_elevated=true."
+        },
+        "account_hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Криптографический хэш SID и соли машины для верификации неизменности привязки без доступа к секретам."
+        }
+      },
+      "description": "Привязка субъекта к локальной сессии и учетной записи Windows."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка создания идентичности в формате ISO 8601."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "worker_type": {
+          "type": "string",
+          "description": "Специализация воркера (например, python_researcher, rust_builder)."
+        },
+        "node_id": {
+          "type": "string",
+          "description": "Идентификатор локальной ноды, если применимо."
+        }
+      }
+    }
+  }
+}
