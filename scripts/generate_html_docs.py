@@ -335,7 +335,9 @@ def build_html_documentation():
 </html>
 """
     output_path = REPO_ROOT / "index.html"
-    output_path.write_text(html_template, encoding="utf-8")
+    normalized_html = html_template.replace("\r\n", "\n")
+    with open(output_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(normalized_html)
     print(f"HTML-документация успешно сгенерирована в {output_path} ({len(html_template)} байт)")
 
 if __name__ == "__main__":
