@@ -11090,11 +11090,11 @@ Learning (самообучение)
 <h3 id="этап-g3-runtime-foundation-фундамент-исполняемой-системы">Этап G3 — Runtime Foundation (Фундамент исполняемой системы)</h3>
 <ul>
 <li><strong>OQ-002</strong> — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41).</li>
-<li><strong>OQ-004</strong> — реализация и гарантии изоляции локальных Workers (Windows Job Objects / cgroups) (Issue #49).</li>
+<li><strong>OQ-004</strong> — минимальный безопасный внутренний API между Electron и Core (Issue #41).</li>
 <li><strong>OQ-008</strong> — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45).</li>
 <li><strong>OQ-010</strong> — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).</li>
 </ul>
-<p>Все остальные открытые вопросы (OQ-011, OQ-012, OQ-013, OQ-017 и далее) сознательно классифицированы как <code>DEFERRED</code> (отложены до v0.2, v1.0 или post-release) и не блокируют допуск к реализации v0.1.</p>
+<p>Остальные вопросы не входят в список <code>OPEN BEFORE v0.1</code> выше и откладываются строго по своим детальным статусам: OQ-011 — <code>DEFERRED UNTIL PRE-RELEASE</code>, OQ-012 и OQ-013 — <code>DEFERRED UNTIL v0.2</code>; будущие OQ получают собственный явный этап. Они не должны считаться закрытыми или переноситься на другой срок только из-за этой сводки.</p>
 <h2 id="32-52-oq-001-основной-язык-стек-core">32.52. OQ-001 — основной язык/стек Core</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>SUPERSEDED</code> / <code>ACCEPTED</code> (ADR-033, канонический источник: <a href="23_TECHNOLOGY_STACK_AND_RUNTIME.md">Раздел 23. Технологический стек и границы среды выполнения</a>).</div>
 <p>Решение принято в разделе 23:</p>
@@ -11235,7 +11235,7 @@ Learning (самообучение)
 <p><code>DEFERRED UNTIL v0.2</code>.</p>
 <h2 id="32-66-oq-014-формат-документации-с-уровнями-подробности">32.66. OQ-014 — формат документации с уровнями подробности</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (канонический источник: <code>scripts/generate_html_docs.py</code>, PR #60, PR #68, Issue #36).</div>
-<p>Реализовано единое производное представление с 5 уровнями подробности (1. Очень просто / 2. Просто / 3. Рабочий / 4. Технический / 5. Максимум) на базе двухуровневой разметки атрибутов <code>data-section-level</code> и <code>data-detail-level</code> без дублирования текста спецификаций. Навигация и фильтрация доказаны автоматическими тестами <code>tests/test_docs_ssot.py</code>.</p>
+<p>Реализовано единое производное представление с 5 уровнями подробности (1. Очень просто / 2. Просто / 3. Рабочий / 4. Технический / 5. Максимум) на базе двухуровневой разметки атрибутов <code>data-section-level</code> и <code>data-detail-level</code> без дублирования текста спецификаций. Автоматические тесты <code>tests/test_docs_ssot.py</code> подтверждают структурное наличие разметки и связанной JavaScript-логики; они не являются browser/DOM-level доказательством фактического поведения навигации и фильтрации.</p>
 <h2 id="32-67-oq-015-интерфейс-архитектурного-словаря">32.67. OQ-015 — интерфейс архитектурного словаря</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (канонический источник: <a href="../GLOSSARY.md">docs/GLOSSARY.md</a>, PR #24).</div>
 <p>Формат многоуровневых словарных статей утверждён и реализован в <code>docs/GLOSSARY.md</code>: «Очень просто», «Рабочее объяснение», «Технически» со ссылками на канонические архитектурные разделы.</p>
