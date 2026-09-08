@@ -65,8 +65,8 @@
       "description": "SemVer версия алгоритма трансформации. При изменении версии кэш инвалидируется."
     },
     "payload_ref": {
-      "type": "object",
-      "description": "Ссылка на материализованные данные полезной нагрузки PayloadRef."
+      "$ref": "PayloadRef.json",
+      "description": "Строгая ссылка на материализованные данные полезной нагрузки по каноническому контракту PayloadRef."
     },
     "checksum": {
       "type": "string",

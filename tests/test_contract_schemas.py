@@ -12,6 +12,7 @@ import json
 import unittest
 from pathlib import Path
 import jsonschema
+import referencing
 from jsonschema import Draft202012Validator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -33,11 +34,17 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "PayloadRef.json"
         ]
         cls.schemas = {}
+        cls.registry = referencing.Registry()
         for sf in cls.schema_files:
             p = SCHEMAS_V1_DIR / sf
             cls.assertTrue(cls, p.exists(), f"Файл схемы {sf} отсутствует в {SCHEMAS_V1_DIR}")
             with open(p, "r", encoding="utf-8") as f:
-                cls.schemas[sf] = json.load(f)
+                schema_dict = json.load(f)
+                cls.schemas[sf] = schema_dict
+                res = referencing.Resource.from_contents(schema_dict)
+                cls.registry = cls.registry.with_resource(sf, res)
+                if "$id" in schema_dict:
+                    cls.registry = cls.registry.with_resource(schema_dict["$id"], res)
 
     def test_all_schemas_are_valid_draft202012(self):
         """Проверяет, что все схемы синтаксически корректны согласно мета-схеме Draft 2020-12."""
@@ -249,11 +256,11 @@ class TestCanonicalContractSchemas(unittest.TestCase):
     def test_cache_entry_valid_and_invalid(self):
         """Проверяет контракт CacheEntry (Issue #84)."""
         schema = self.schemas["CacheEntry.json"]
-        validator = Draft202012Validator(schema)
+        validator = Draft202012Validator(schema, registry=self.registry)
 
         valid_payload_ref = {
             "payload_id": "pay-001-symbols",
-            "storage_mode": "IN_RAM",
+            "storage_mode": "RAM_REGION",
             "byte_size": 2048,
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "created_at": "2026-09-08T10:00:00Z"
@@ -274,6 +281,16 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "scope": "SESSION_LOCAL"
         }
         self.assertTrue(validator.is_valid(valid_entry))
+
+        # Нарушение вложенного контракта: пустой payload_ref или отсутствующие required поля
+        invalid_nested = dict(valid_entry)
+        invalid_nested["payload_ref"] = {}
+        self.assertFalse(validator.is_valid(invalid_nested))
+
+        # Нарушение вложенного контракта: недопустимый storage_mode во вложенном объекте
+        invalid_nested_mode = dict(valid_entry)
+        invalid_nested_mode["payload_ref"] = dict(valid_payload_ref, storage_mode="INVALID_MODE")
+        self.assertFalse(validator.is_valid(invalid_nested_mode))
 
         # Нарушение: недопустимый namespace
         invalid_entry = dict(valid_entry)
@@ -301,9 +318,19 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         }
         self.assertTrue(validator.is_valid(valid_payload))
 
-        # Нарушение: недопустимый storage_mode
+        # Проверка RAM_REGION
+        valid_ram = {
+            "payload_id": "pay-003-ram-region",
+            "storage_mode": "RAM_REGION",
+            "byte_size": 1024,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertTrue(validator.is_valid(valid_ram))
+
+        # Нарушение: недопустимый storage_mode (например, устаревший IN_RAM)
         invalid_mode = dict(valid_payload)
-        invalid_mode["storage_mode"] = "INVALID_MODE"
+        invalid_mode["storage_mode"] = "IN_RAM"
         self.assertFalse(validator.is_valid(invalid_mode))
 
 if __name__ == "__main__":

@@ -22,13 +22,14 @@
     "storage_mode": {
       "type": "string",
       "enum": [
-        "IN_RAM",
+        "RAM_REGION",
         "SPILL_SEGMENT",
         "SHARED_MEMORY",
         "MMAP",
-        "INLINE"
+        "INLINE",
+        "REMOTE_REF"
       ],
-      "description": "Режим физического размещения и адресации данных."
+      "description": "Режим физического размещения и адресации данных согласно разделу 34.12."
     },
     "byte_size": {
       "type": "integer",
@@ -62,6 +63,13 @@
         "null"
       ],
       "description": "Дескриптор или имя именованной разделяемой памяти (Windows Named Shared Memory) при storage_mode=SHARED_MEMORY."
+    },
+    "remote_uri": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Удалённый URI полезной нагрузки при storage_mode=REMOTE_REF."
     },
     "created_at": {
       "type": "string",
