@@ -1,0 +1,71 @@
+name: Техническая задача
+description: Работы по архитектуре, CI, инфраструктуре, тестам, безопасности или внутреннему устройству проекта
+title: "[Техзадача] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Используйте эту форму для конкретной внутренней работы проекта. Не публикуйте токены, пароли, ключи и другие секреты.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Что хотим получить?
+      description: Один конкретный технический результат этой задачи.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Зачем это нужно проекту?
+      description: Какой риск, долг, блокер или потребность закрывается?
+    validations:
+      required: true
+  - type: textarea
+    id: work
+    attributes:
+      label: Что нужно сделать?
+      description: Перечислите основные работы без лишних деталей реализации.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope — область задачи
+      description: Какие части проекта разрешено менять?
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Что не входит в задачу?
+      description: Явно укажите, что нельзя незаметно включать в эту работу.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Зависимости и связанные задачи
+      description: Номера Issues, PR, Gate или другие блокеры. Если нет — напишите «нет».
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Как проверить результат?
+      description: Тесты, CI, ручная проверка или Evidence, которые должны подтвердить результат.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Критерии готовности
+      description: Список проверяемых условий, после которых задачу можно считать выполненной.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Проверка перед отправкой
+      options:
+        - label: Я проверил границы задачи и не добавляю секреты.
+          required: true
