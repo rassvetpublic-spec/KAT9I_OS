@@ -1,4 +1,4 @@
-﻿name: Контроль качества репозитория
+name: Контроль качества репозитория
 
 on:
   push:
@@ -112,11 +112,12 @@ jobs:
           print(f"Успешно проверено {len(yaml_files)} YAML-файлов.")
           PY
 
-      - name: Запустить модульные тесты SSoT и документации
+      - name: Запустить модульные тесты SSoT, документации и triage
         shell: bash
         run: |
           set -euo pipefail
           python tests/test_docs_ssot.py
+          python -m unittest tests/test_triage_helper.py
 
       - name: Проверить генератор HTML и синхронизацию единого источника истины (SSOT)
         shell: bash
