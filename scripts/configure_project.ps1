@@ -10,15 +10,15 @@ $ApiVersion='2026-03-10'
 function Gql([string]$Query,[hashtable]$Variables){
   $payload=@{query=$Query;variables=$Variables}|ConvertTo-Json -Depth 30 -Compress
   $raw=$payload|gh api graphql --input -
-  if($LASTEXITCODE-ne 0){throw 'GitHub GraphQL API вернул ошибку.'}
+  if($LASTEXITCODE -ne 0){throw 'GitHub GraphQL API вернул ошибку.'}
   $r=$raw|ConvertFrom-Json -Depth 30
   if($r.errors){throw (($r.errors|ForEach-Object{$_.message})-join '; ')}
   $r
 }
 function Rest([string]$Endpoint,[string]$Method='GET',$Body=$null){
   $a=@('api','--method',$Method,'-H','Accept: application/vnd.github+json','-H',"X-GitHub-Api-Version: $ApiVersion")
-  if($null-ne $Body){$raw=($Body|ConvertTo-Json -Depth 30 -Compress)|gh @a --input - $Endpoint}else{$raw=gh @a $Endpoint}
-  if($LASTEXITCODE-ne 0){throw "GitHub REST API вернул ошибку: $Endpoint"}
+  if($null -ne $Body){$raw=($Body|ConvertTo-Json -Depth 30 -Compress)|gh @a --input - $Endpoint}else{$raw=gh @a $Endpoint}
+  if($LASTEXITCODE -ne 0){throw "GitHub REST API вернул ошибку: $Endpoint"}
   if([string]::IsNullOrWhiteSpace($raw)){return $null}
   $raw|ConvertFrom-Json -Depth 30
 }
@@ -32,12 +32,12 @@ query($login:String!,$number:Int!,$repo:String!){
  (Gql $q @{login=$Owner;number=$ProjectNumber;repo=$Repository}).data
 }
 function Opt([string]$Name,[string]$Color,[string]$Description,[string[]]$Aliases=@()){
-  if($Aliases.Count-eq 0){$Aliases=@($Name)}
+  if($Aliases.Count -eq 0){$Aliases=@($Name)}
   [ordered]@{name=$Name;color=$Color;description=$Description;aliases=$Aliases}
 }
 function EnsureSelect([string]$Name,[object[]]$Defs){
   $p=(Snapshot).user.projectV2
-  $f=@($p.fields.nodes)|Where-Object{$_.name-eq $Name}|Select-Object -First 1
+  $f=@($p.fields.nodes)|Where-Object{$_.name -eq $Name}|Select-Object -First 1
   if(-not $f){
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){projectV2Field{... on ProjectV2SingleSelectField{id name options{id name}}}}}
@@ -46,13 +46,13 @@ mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){p
     $null=Gql $q @{input=@{projectId=$p.id;name=$Name;dataType='SINGLE_SELECT';singleSelectOptions=$opts}}
     Write-Host "Создано поле: $Name";return
   }
-  if($f.__typename-ne 'ProjectV2SingleSelectField'){throw "Поле '$Name' уже существует с другим типом."}
+  if($f.__typename -ne 'ProjectV2SingleSelectField'){throw "Поле '$Name' уже существует с другим типом."}
   $known=@($Defs|ForEach-Object{$_.aliases})
-  $unknown=@($f.options|Where-Object{$known-notcontains $_.name})
-  if($unknown.Count-gt 0){throw "Поле '$Name' содержит неизвестные значения: $(($unknown.name)-join ', '). Автоматическое удаление запрещено."}
+  $unknown=@($f.options|Where-Object{$known -notcontains $_.name})
+  if($unknown.Count -gt 0){throw "Поле '$Name' содержит неизвестные значения: $(($unknown.name)-join ', '). Автоматическое удаление запрещено."}
   $opts=@()
   foreach($d in $Defs){
-    $old=@($f.options)|Where-Object{$d.aliases-contains $_.name}|Select-Object -First 1
+    $old=@($f.options)|Where-Object{$d.aliases -contains $_.name}|Select-Object -First 1
     $o=[ordered]@{name=$d.name;color=$d.color;description=$d.description};if($old){$o.id=$old.id};$opts+=$o
   }
 $q=@'
@@ -66,8 +66,8 @@ function Monday{
 }
 function EnsureIteration{
   $p=(Snapshot).user.projectV2
-  $f=@($p.fields.nodes)|Where-Object{$_.name-eq 'Итерация'}|Select-Object -First 1
-  if($f){if($f.__typename-ne 'ProjectV2IterationField'){throw 'Поле Итерация существует с другим типом.'};if($f.configuration.duration-ne 7){throw 'Существующая Итерация не недельная; автоматическое изменение запрещено.'};Write-Host 'Проверено поле: Итерация';return}
+  $f=@($p.fields.nodes)|Where-Object{$_.name -eq 'Итерация'}|Select-Object -First 1
+  if($f){if($f.__typename -ne 'ProjectV2IterationField'){throw 'Поле Итерация существует с другим типом.'};if($f.configuration.duration -ne 7){throw 'Существующая Итерация не недельная; автоматическое изменение запрещено.'};Write-Host 'Проверено поле: Итерация';return}
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){projectV2Field{... on ProjectV2IterationField{id name}}}}
 '@
@@ -76,13 +76,13 @@ mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){p
 }
 function EnsureLink{
   $s=Snapshot;$p=$s.user.projectV2;$repo=$s.repository
-  if($p.title-ne 'KAT9I_OS — разработка'){
-$q=@' 
+  if($p.title -ne 'KAT9I_OS — разработка'){
+$q=@'
 mutation($input:UpdateProjectV2Input!){updateProjectV2(input:$input){projectV2{id title}}}
 '@
     $null=Gql $q @{input=@{projectId=$p.id;title='KAT9I_OS — разработка'}}
   }
-  if(-not (@($p.repositories.nodes)|Where-Object{$_.id-eq $repo.id})){
+  if(-not (@($p.repositories.nodes)|Where-Object{$_.id -eq $repo.id})){
 $q=@'
 mutation($input:LinkProjectV2ToRepositoryInput!){linkProjectV2ToRepository(input:$input){repository{id}}}
 '@
@@ -91,15 +91,15 @@ mutation($input:LinkProjectV2ToRepositoryInput!){linkProjectV2ToRepository(input
 }
 function EnsureItems{
   $repo="$Owner/$Repository";$urls=@()
-  $j=gh issue list --repo $repo --state open --limit 1000 --json url;if($LASTEXITCODE-eq 0-and $j){$urls+=@(($j|ConvertFrom-Json).url)}
-  $j=gh pr list --repo $repo --state open --limit 1000 --json url;if($LASTEXITCODE-eq 0-and $j){$urls+=@(($j|ConvertFrom-Json).url)}
+  $j=gh issue list --repo $repo --state open --limit 1000 --json url;if($LASTEXITCODE -eq 0 -and $j){$urls+=@(($j|ConvertFrom-Json).url)}
+  $j=gh pr list --repo $repo --state open --limit 1000 --json url;if($LASTEXITCODE -eq 0 -and $j){$urls+=@(($j|ConvertFrom-Json).url)}
   $urls+="https://github.com/$repo/issues/62"
-  foreach($u in @($urls|Sort-Object -Unique)){$null=gh project item-add $ProjectNumber --owner $Owner --url $u --format json 2>&1;if($LASTEXITCODE-ne 0){throw "Не удалось добавить $u"}}
+  foreach($u in @($urls|Sort-Object -Unique)){$null=gh project item-add $ProjectNumber --owner $Owner --url $u --format json 2>&1;if($LASTEXITCODE -ne 0){throw "Не удалось добавить $u"}}
   Write-Host 'Актуальные открытые Issues/PR и управляющая Issue #62 добавлены.'
 }
 function EnsureViews{
   $p=(Snapshot).user.projectV2
-  $blank=@($p.views.nodes)|Where-Object{$_.name-eq 'View 1'-and $_.layout-eq 'TABLE'-and [string]::IsNullOrWhiteSpace($_.filter)}|Select-Object -First 1
+  $blank=@($p.views.nodes)|Where-Object{$_.name -eq 'View 1' -and $_.layout -eq 'TABLE' -and [string]::IsNullOrWhiteSpace($_.filter)}|Select-Object -First 1
   if($blank){
 $q=@'
 mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){projectV2View{id}}}
@@ -107,32 +107,35 @@ mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){pro
     $null=Gql $q @{input=@{viewId=$blank.id}}
     $p=(Snapshot).user.projectV2
   }
-  $rf=Rest "users/$Owner/projectsV2/$ProjectNumber/fields?per_page=100"; $m=@{};foreach($f in @($rf)){$m[$f.name]=$f}
+  $rf=Rest "users/$Owner/projectsV2/$ProjectNumber/fields?per_page=100";$m=@{};foreach($f in @($rf)){$m[$f.name]=$f}
   $vid=@();foreach($n in @('Title','Assignees','Status','Gate','Priority','Область','Work Type','Размер','Итерация','Implementation Worker','QA Worker','Claim','Target','Risk','Evidence','Linked pull requests','Sub-issues progress')){if($m.ContainsKey($n)){$vid+=[int64]$m[$n].id}}
-  $id=@{};foreach($n in @('Status','Gate','Priority','Область','Implementation Worker','QA Worker','Claim')){$id[$n]=[int64]$m[$n].id}
+  $id=@{};foreach($n in @('Status','Gate','Priority','Область','Implementation Worker','QA Worker','Claim')){if(-not $m.ContainsKey($n)){throw "Для представлений не найдено поле $n"};$id[$n]=[int64]$m[$n].id}
   $u=Rest "users/$Owner";$uid=[string]$u.id
   $views=@(
-    @{n='00 — Control Tower';l='table';f='is:open';s=@(@($id.Gate,'asc'),@($id.Priority,'asc'),@($id.Status,'asc'))},
-    @{n='01 — Architecture G1';l='table';f='is:open Gate:"G1 — ТЗ и Architecture Baseline"';s=@(@($id.Priority,'asc'),@($id.Status,'asc'))},
-    @{n='02 — Ready Queue';l='table';f='is:open Status:"Готово к работе" -Claim:BLOCKED';s=@(@($id.Priority,'asc'))},
-    @{n='03 — Active Workers';l='board';f='is:open Claim:ACTIVE';s=@(@($id.Priority,'asc'));v=@($id.'Implementation Worker')},
-    @{n='04 — QA Queue';l='board';f='is:open Status:"Проверка QA"';s=@(@($id.Priority,'asc'));v=@($id.'QA Worker')},
-    @{n='05 — Blocked';l='table';f='is:open Status:"Заблокировано"';s=@(@($id.Gate,'asc'),@($id.Priority,'asc'))},
+    @{n='00 — Control Tower';l='table';f='is:open';s=@(@($id['Gate'],'asc'),@($id['Priority'],'asc'),@($id['Status'],'asc'))},
+    @{n='01 — Architecture G1';l='table';f='is:open Gate:"G1 — ТЗ и Architecture Baseline"';s=@(@($id['Priority'],'asc'),@($id['Status'],'asc'))},
+    @{n='02 — Ready Queue';l='table';f='is:open Status:"Готово к работе" -Claim:BLOCKED';s=@(@($id['Priority'],'asc'))},
+    @{n='03 — Active Workers';l='board';f='is:open Claim:ACTIVE';s=@(@($id['Priority'],'asc'));v=@($id['Implementation Worker'])},
+    @{n='04 — QA Queue';l='board';f='is:open Status:"Проверка QA"';s=@(@($id['Priority'],'asc'));v=@($id['QA Worker'])},
+    @{n='05 — Blocked';l='table';f='is:open Status:"Заблокировано"';s=@(@($id['Gate'],'asc'),@($id['Priority'],'asc'))},
     @{n='06 — v0.1 Roadmap';l='roadmap';f='is:open Target:v0.1'},
-    @{n='07 — Security';l='table';f='is:open Область:"Безопасность и управление"';s=@(@($id.Priority,'asc'),@($id.Status,'asc'))},
-    @{n='08 — Evidence / Compliance';l='table';f='is:open Priority:P0,P1 -Evidence:"QA PASS"';s=@(@($id.Priority,'asc'),@($id.Gate,'asc'))},
+    @{n='07 — Security';l='table';f='is:open Область:"Безопасность и управление"';s=@(@($id['Priority'],'asc'),@($id['Status'],'asc'))},
+    @{n='08 — Evidence / Compliance';l='table';f='is:open Priority:P0,P1 -Evidence:"QA PASS"';s=@(@($id['Priority'],'asc'),@($id['Gate'],'asc'))},
     @{n='09 — Unclassified';l='table';f='is:open no:Gate no:Priority'}
   )
   foreach($v in $views){
-    if(@($p.views.nodes)|Where-Object{$_.name-eq $v.n}){continue}
-    $b=[ordered]@{name=$v.n;layout=$v.l;filter=$v.f};if($v.l-ne 'roadmap'){$b.visible_fields=$vid};if($v.s){$b.sort_by=$v.s};if($v.v){$b.vertical_group_by=$v.v}
-    try{$null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b;Write-Host "Создано представление: $($v.n)"}catch{Write-Warning "Не удалось создать '$($v.n)' через REST API: $($_.Exception.Message)"}
+    if(@($p.views.nodes)|Where-Object{$_.name -eq $v['n']}){continue}
+    $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f']}
+    if($v['l'] -ne 'roadmap'){$b.visible_fields=$vid}
+    if($v.ContainsKey('s')){$b.sort_by=$v['s']}
+    if($v.ContainsKey('v')){$b.vertical_group_by=$v['v']}
+    try{$null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b;Write-Host "Создано представление: $($v['n'])"}catch{Write-Warning "Не удалось создать '$($v['n'])' через REST API: $($_.Exception.Message)"}
   }
 }
 
 if(-not(Get-Command gh -ErrorAction SilentlyContinue)){throw 'GitHub CLI (gh) не найден.'}
-$null=gh auth status 2>&1;if($LASTEXITCODE-ne 0){throw 'GitHub CLI не авторизован.'}
-$null=gh project view $ProjectNumber --owner $Owner --format json 2>&1;if($LASTEXITCODE-ne 0){throw 'Нужен scope project. Выполните авторизацию GitHub CLI с разрешением project.'}
+$null=gh auth status 2>&1;if($LASTEXITCODE -ne 0){throw 'GitHub CLI не авторизован.'}
+$null=gh project view $ProjectNumber --owner $Owner --format json 2>&1;if($LASTEXITCODE -ne 0){throw 'Нужен scope project. Авторизуйте GitHub CLI с разрешением project.'}
 
 EnsureLink
 EnsureSelect 'Status' @(
