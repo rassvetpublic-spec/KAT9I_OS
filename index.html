@@ -1369,6 +1369,41 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li>накладные расходы наблюдения.</li>
 </ul>
 <p>После нескольких задач система должна уметь построить компактный MetricsSnapshot без чтения всей истории языковой моделью.</p>
+<h2 id="5-16-стандарт-сквозной-трассировки-tracecontext-и-opentelemetry">5.16. Стандарт сквозной трассировки (TraceContext и OpenTelemetry)</h2>
+<p>Для сквозной корреляции распределённых и многоязычных процессов (Rust Core, Electron UI, Python Workers) введён единый стандарт трассировки:</p>
+<ol>
+<li><strong>Модель W3C TraceContext</strong>:</li>
+</ol>
+<ul>
+<li><code>trace_id</code> (32 hex / 16 байт) — общий идентификатор жизненного цикла задачи;</li>
+<li><code>span_id</code> (16 hex / 8 байт) — уникальный идентификатор отдельного этапа;</li>
+<li><code>parent_span_id</code> — идентификатор родительского спана для построения полного графа выполнения.</li>
+</ul>
+<ol>
+<li><strong>Типология этапов (SpanKind)</strong>:</li>
+</ol>
+<ul>
+<li><code>CORE</code>, <code>SECURITY_DECISION</code>, <code>CONTEXT_PREPARATION</code>, <code>MODEL_CALL</code>, <code>TOOL_CALL</code>, <code>WORKER_EXECUTION</code>, <code>EXTERNAL_INTEGRATION</code>, <code>QA</code>, <code>STORAGE</code>, <code>RECOVERY</code>.</li>
+</ul>
+<ol>
+<li><strong>Совместимость с OpenTelemetry</strong>:</li>
+</ol>
+<ul>
+<li>Экспорт в формат OTLP JSON (<code>ResourceSpans</code>), пригодный для визуализации в Jaeger, Grafana Tempo и SigNoz.</li>
+</ul>
+<ol>
+<li><strong>Политика Zero Leak</strong>:</li>
+</ol>
+<ul>
+<li>Категорический запрет на запись секретов, паролей, токенов аутентификации и скрытых рассуждений модели в атрибуты и события спанов.</li>
+</ul>
+<ol>
+<li><strong>Разделение Trace и Evidence</strong>:</li>
+</ol>
+<ul>
+<li>Trace фиксирует последовательность, тайминги и иерархию шагов;</li>
+<li>Evidence доказывает факт корректности полученного результата или прохождения приёмочных тестов.</li>
+</ul>
     </section>
         
 
@@ -11188,6 +11223,35 @@ Learning (самообучение)
 <li>Индексы и метаданные хранилища не содержат секретных значений;</li>
 <li>Предусмотрена процедура мгновенного отзыва (<code>revoke_secret</code>) с безопасной перезаписью блоба нулями;</li>
 <li>Резервное копирование (Backup) секретов: ключи шифруются аппаратно или привязываются к мастер-паролю пользователя, перенос в незашифрованном виде запрещён.</li>
+</ul>
+<h2 id="32-40g-adr-040-стандарт-сквозной-трассировки-tracecontext-spankind-opentelemetry">32.40g. ADR-040 — стандарт сквозной трассировки (TraceContext, SpanKind, OpenTelemetry)</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <code>schemas/v1/TraceContext.json</code>, <code>scripts/tracer.py</code>, <code>tests/test_trace_standard.py</code>, Issue #50).</p>
+<ol>
+<li><strong>W3C TraceContext и совместимость с OpenTelemetry</strong>:</li>
+</ol>
+<ul>
+<li>В качестве стандарта идентификации трасс принят W3C TraceContext: <code>trace_id</code> (16 байт / 32 hex) и <code>span_id</code> (8 байт / 16 hex).</li>
+<li>Поддерживается иерархическая вложенность через <code>parent_span_id</code>, позволяющая восстановить полный граф выполнения: <code>Task → Worker → Model/Tool → Result → QA</code>.</li>
+<li>Предусмотрен канонический экспорт в OTLP JSON (<code>ResourceSpans</code>), совместимый с Jaeger, Tempo, SigNoz и OpenTelemetry Collector.</li>
+</ul>
+<ol>
+<li><strong>Канонические типы этапов (SpanKind)</strong>:</li>
+</ol>
+<ul>
+<li>Введены строго типизированные категории спанов: <code>CORE</code>, <code>SECURITY_DECISION</code>, <code>CONTEXT_PREPARATION</code>, <code>MODEL_CALL</code>, <code>TOOL_CALL</code>, <code>WORKER_EXECUTION</code>, <code>EXTERNAL_INTEGRATION</code>, <code>QA</code>, <code>STORAGE</code>, <code>RECOVERY</code>.</li>
+</ul>
+<ol>
+<li><strong>Безопасность и Zero Leak в телеметрии</strong>:</li>
+</ol>
+<ul>
+<li>Трассировка категорически не должна содержать секретов, паролей, токенов и скрытых рассуждений модели (Fail-Closed фильтрация атрибутов).</li>
+<li>Trace показывает путь выполнения и временную шкалу, а Evidence подтверждает факт результата.</li>
+</ul>
+<ol>
+<li><strong>Производительность и накладные расходы</strong>:</li>
+</ol>
+<ul>
+<li>Накладные расходы на формирование, атрибутирование и закрытие одного спана составляют единицы миллисекунд (&lt; 1.5 мс с полной валидацией по схеме и &lt; 0.05 мс в памяти), что не создает заметной нагрузки на runtime.</li>
 </ul>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
