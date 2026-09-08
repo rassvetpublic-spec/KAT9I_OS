@@ -24,7 +24,7 @@
       "name": "Высокопроизводительный движок кэша",
       "version": "0.1.0",
       "tier": "RUNTIME_ACCELERATION",
-      "canonical_owner_ref": "docs/architecture/32_CACHE_ENGINE.md",
+      "canonical_owner_ref": "docs/architecture/34_CACHE_ENGINE.md",
       "canonical_responsibility": "RAM-first хранение только производных и безопасно пересоздаваемых данных, SingleFlight и редкий batch spill на SSD без владения каноническим состоянием",
       "provides_contracts": ["CacheKey", "CacheEntry", "PayloadRef", "CacheCapabilities"],
       "requires_contracts": [],
@@ -34,7 +34,7 @@
         "type": "LOCAL_IPC",
         "endpoint": "cache.health"
       },
-      "documentation_ref": "docs/architecture/32_CACHE_ENGINE.md"
+      "documentation_ref": "docs/architecture/34_CACHE_ENGINE.md"
     },
     {
       "module_id": "RuleManager",
