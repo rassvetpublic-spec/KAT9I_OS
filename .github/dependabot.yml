@@ -1,0 +1,13 @@
+# Конфигурация Dependabot для KAT9I_OS
+# Issue #14: автоматический мониторинг безопасности зависимостей
+version: 2
+updates:
+  # Проверка безопасности GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "security"
