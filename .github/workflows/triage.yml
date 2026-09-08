@@ -1,0 +1,68 @@
+name: Автоматический triage входящих обращений
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  triage:
+    name: Классификация и первичная обработка
+    runs-on: ubuntu-latest
+    steps:
+      - name: Анализ формы обратной связи и добавление меток
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            const labelsToAdd = [];
+
+            // Определение типа обращения из формы feedback.yml
+            if (body.includes('Задать вопрос')) {
+              labelsToAdd.push('question');
+            } else if (body.includes('Предложить идею')) {
+              labelsToAdd.push('enhancement');
+            } else if (body.includes('Сообщить об ошибке')) {
+              labelsToAdd.push('bug');
+            } else if (body.includes('Сказать, что документация непонятна')) {
+              labelsToAdd.push('documentation');
+            }
+
+            // Проверка домена документации
+            if (body.toLowerCase().includes('документ') || body.toLowerCase().includes('тз') || body.toLowerCase().includes('словарь')) {
+              if (!labelsToAdd.includes('documentation')) {
+                labelsToAdd.push('documentation');
+              }
+            }
+
+            // Добавление меток
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labelsToAdd
+              });
+            }
+
+            // Приветственный комментарий с навигацией для новичков
+            const commentBody = `Приветствуем! Спасибо за обращение в KAT9I_OS.
+
+Это обращение зарегистрировано в очереди первичного разбора (**triage**).
+
+Полезные ссылки для быстрого старта:
+- [Режим «Я здесь впервые»](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/FIRST_TIME_GUIDE.md) — 8 шагов для новичков;
+- [Словарь терминов](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/GLOSSARY.md) — простые пояснения;
+- [GitHub для коворкеров](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/GITHUB_FOR_COWORKERS.md) — практическое обучение.
+
+Координатор проекта или ответственный за модуль проверит детали и при необходимости уточнит контекст.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: commentBody
+            });
