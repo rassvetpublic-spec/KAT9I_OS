@@ -9963,6 +9963,14 @@ Learning (самообучение)
 <p>Storage имеет отдельную <code>schema_version</code>, не обязанную совпадать с версией продукта.</p>
 <h2 id="30-34-миграция-схемы">30.34. Миграция схемы</h2>
 <p>Обновление схемы выполняется последовательностью детерминированных миграций с проверкой каждого шага.</p>
+<h2 id="30-34a-версионирование-workflow-и-миграция-длительных-задач-statemigration">30.34a. Версионирование Workflow и миграция длительных задач (StateMigration)</h2>
+<p>Длительные и приостанавливаемые задачи привязаны к точной версии определения рабочего процесса: <code>workflow_id</code> и <code>workflow_version</code> (SemVer).</p>
+<p>При обновлении Workflow в процессе выполнения задачи детерминированный движок <code>WorkflowMigrationEngine</code> классифицирует изменение:</p>
+<ol>
+<li><strong><code>FULLY_COMPATIBLE</code></strong>: совместимое минорное или патч-обновление без изменения графа шагов. Состояние продолжается без трансформаций.</li>
+<li><strong><code>REQUIRES_STATE_MIGRATION</code></strong>: совместимое расширение структуры состояния (добавление параметров, реструктуризация переменных). Применяется зарегистрированный версионированный мигратор состояния с фиксацией машинной записи по схеме <code>schemas/v1/StateMigration.json</code>. Миграция строго <strong>идемпотентна</strong> (<code>SKIPPED_IDEMPOTENT</code> при повторном запуске).</li>
+<li><strong><code>BREAKING_INCOMPATIBLE</code></strong>: мажорное изменение графа выполнения или удаление этапов без зарегистрированного пути миграции. В соответствии с принципом <code>Fail-Closed</code> автоматическое возобновление задачи блокируется (<code>WorkflowIncompatibleError</code>), задача переводится в <code>BLOCKED</code> и требует явного управляемого репланирования.</li>
+</ol>
 <h2 id="30-35-неизвестная-новая-схема">30.35. Неизвестная новая схема</h2>
 <p>Core, не понимающий schema version, не работает приблизительно: BLOCKED, upgrade required либо Recovery/Rollback.</p>
 <h2 id="30-36-совместимость-electron">30.36. Совместимость Electron</h2>
@@ -11299,6 +11307,29 @@ Learning (самообучение)
 <li>Перед возобновлением задачи компонент <code>SemanticIsolationGuard</code> сопоставляет базовый снимок с текущим окружением.</li>
 <li>Критический дрейф (<code>BREAKING_DRIFT</code>: смена версии модели, изменение <code>RulesRef</code>, удаление/изменение схем инструментов) блокирует продолжение задачи (<code>RESUME_BLOCKED</code> / <code>SemanticDriftError</code>), предотвращая скрытые искажения результатов.</li>
 <li>Задача переводится в статус <code>BLOCKED</code> с требованием повторного планирования или ручного подтверждения оператором.</li>
+</ul>
+<h2 id="32-40i-adr-042-версионирование-workflow-и-детерминированная-миграция-длительных-задач-statemigration">32.40i. ADR-042 — версионирование Workflow и детерминированная миграция длительных задач (StateMigration)</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <a href="30_VERSIONING_RELEASES_AND_LIFECYCLE.md">docs/architecture/30_VERSIONING_RELEASES_AND_LIFECYCLE.md</a>, <code>schemas/v1/StateMigration.json</code>, <code>scripts/workflow_migration.py</code>, <code>tests/test_workflow_migration.py</code>, Issue #52).</p>
+<ol>
+<li><strong>Идентификация и версионирование процессов</strong>:</li>
+</ol>
+<ul>
+<li>Каждая длительная задача обязана содержать точные <code>workflow_id</code> и <code>workflow_version</code> (SemVer) в своем состоянии выполнения.</li>
+</ul>
+<ol>
+<li><strong>Классификация изменений структуры графа</strong>:</li>
+</ol>
+<ul>
+<li><code>FULLY_COMPATIBLE</code>: минорные обновления, не меняющие схему состояния и граф; продолжение задачи без модификации полей.</li>
+<li><code>REQUIRES_STATE_MIGRATION</code>: совместимое расширение схемы переменных или шагов. Применяется зарегистрированный версионированный мигратор состояния (<code>WorkflowMigrationEngine</code>).</li>
+<li><code>BREAKING_INCOMPATIBLE</code>: мажорное удаление шагов или изменение семантики без явного пути миграции. В соответствии с принципом <code>Fail-Closed</code> задача блокируется (<code>BLOCKED</code> / <code>WorkflowIncompatibleError</code>), исключая скрытое искажение логики выполнения.</li>
+</ul>
+<ol>
+<li><strong>Идемпотентность и доказательства (Evidence-first)</strong>:</li>
+</ol>
+<ul>
+<li>Миграции состояния строго идемпотентны: повторное применение возвращает <code>SKIPPED_IDEMPOTENT</code> без повторного изменения полей.</li>
+<li>Каждая операция миграции фиксируется машинным контрактом <code>StateMigration.json</code> и связывается с аудиторским Evidence.</li>
 </ul>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
