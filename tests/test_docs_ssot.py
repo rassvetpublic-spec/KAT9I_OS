@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Тесты контроля синхронизации единого источника истины (SSoT) и целостности документации.
-Проверяет требования Issues #35, #37, #38.
+Проверяет требования Issues #35, #36, #37, #38, #55.
 """
 
 import subprocess
@@ -46,6 +46,31 @@ class TestDocumentationSSoT(unittest.TestCase):
         glossary = docs_dir / "GLOSSARY.md"
         self.assertTrue(glossary.exists(), "docs/GLOSSARY.md отсутствует")
 
+    def test_html_includes_all_specs_and_tables(self):
+        """Проверяет, что index.html включает все спецификации из docs/spec/ и таблицы Markdown (Issues #36, #55)."""
+        index_file = REPO_ROOT / "index.html"
+        self.assertTrue(index_file.exists(), "index.html отсутствует")
+        html_content = index_file.read_text(encoding="utf-8")
+
+        # Проверка включения спецификаций
+        spec_dir = REPO_ROOT / "docs" / "spec"
+        for spec_file in spec_dir.glob("*.md"):
+            self.assertIn(
+                spec_file.stem.lower(),
+                html_content.lower(),
+                f"Спецификация {spec_file.name} не найдена в index.html"
+            )
+
+        # Проверка наличия таблиц
+        self.assertIn('<table class="doc-table">', html_content, "В index.html отсутствуют сгенерированные таблицы doc-table")
+
+        # Проверка наличия 5 уровней подробности
+        self.assertIn("1. Очень просто", html_content)
+        self.assertIn("2. Просто", html_content)
+        self.assertIn("3. Рабочий", html_content)
+        self.assertIn("4. Технический", html_content)
+        self.assertIn("5. Максимум", html_content)
+
     def test_index_html_is_clean_and_up_to_date(self):
         """Проверяет, что запуск генератора не меняет уже закоммиченный index.html."""
         gen_script = REPO_ROOT / "scripts" / "generate_html_docs.py"
@@ -53,9 +78,10 @@ class TestDocumentationSSoT(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Генератор завершился с ошибкой")
 
         diff_res = subprocess.run(["git", "diff", "--exit-code", "index.html"], capture_output=True, cwd=str(REPO_ROOT))
+        diff_text = diff_res.stdout.decode("utf-8", errors="replace") if diff_res.stdout else ""
         self.assertEqual(
             diff_res.returncode, 0,
-            "Ошибка SSoT: производный файл index.html устарел относительно Markdown-документации! "
+            f"Ошибка SSoT: производный файл index.html устарел относительно Markdown-документации!\nDIFF:\n{diff_text[:2000]}\n"
             "Запустите `python scripts/generate_html_docs.py` и закоммитьте обновлённый index.html."
         )
 
