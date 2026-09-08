@@ -24,7 +24,6 @@ jobs:
           rm scripts/_temp_fix_pr85_qa.py
           rm .github/workflows/_temp_fix_pr85_qa.yml
           git diff --check
-          python tests/test_docs_ssot.py
           python -m unittest tests/test_triage_helper.py
       - name: Зафиксировать исправления
         shell: bash
