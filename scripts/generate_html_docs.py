@@ -46,14 +46,16 @@ def resolve_doc_link(url: str) -> str:
             target = "mapping-section"
         elif md_name == "MODULE_RESPONSIBILITY_MAP.md":
             target = "resp-section"
-        elif "tz" in path_part.lower():
-            target = f"tz-{stem}"
-        elif "spec" in path_part.lower():
+        elif (REPO_ROOT / "docs" / "spec" / md_name).exists() or "spec" in path_part.lower():
             target = f"spec-{stem}"
-        elif "guides" in path_part.lower():
+        elif (REPO_ROOT / "docs" / "tz" / md_name).exists() or "tz" in path_part.lower():
+            target = f"tz-{stem}"
+        elif (REPO_ROOT / "docs" / "guides" / md_name).exists() or "guides" in path_part.lower():
             target = f"guide-{stem}"
+        elif (REPO_ROOT / "docs" / "architecture" / md_name).exists():
+            target = f"arch-{stem}"
         else:
-            # architecture files (07_CONTEXT.md, 34_CACHE_ENGINE.md, etc.)
+            # Fallback
             target = f"arch-{stem}"
 
         return f"#{target}"

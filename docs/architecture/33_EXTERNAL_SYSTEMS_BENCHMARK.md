@@ -194,7 +194,7 @@
 
 Настоящий сравнительный бенчмарк не заменяет и не дублирует канонические архитектурные разделы:
 - Спецификация контрактов и жизненного цикла зафиксирована в [03_TASK_CONTRACT.md](03_TASK_CONTRACT.md) и [20_TASK_LIFECYCLE_AND_ORCHESTRATION.md](20_TASK_LIFECYCLE_AND_ORCHESTRATION.md).
-- Изоляция и исполнение зафиксированы в [12_EXECUTION.md](12_EXECUTION.md) и [14_SECURITY.md](14_SECURITY.md).
+- Изоляция и исполнение зафиксированы в [12_EXECUTION.md](../spec/12_EXECUTION.md) и [14_SECURITY.md](../spec/14_SECURITY.md).
 - Независимый контроль качества зафиксирован в [23_TESTING_QA_AND_READINESS.md](../spec/23_TESTING_QA_AND_READINESS.md).
 - Реестр модулей и зон ответственности зафиксирован в [27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md](27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md).
 - Фундаментальные архитектурные решения зафиксированы в [32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md](32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md).
