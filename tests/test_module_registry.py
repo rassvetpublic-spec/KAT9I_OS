@@ -33,6 +33,8 @@ class TestModuleRegistry(unittest.TestCase):
         Draft202012Validator.check_schema(self.schema)
         self.assertEqual(self.schema.get("$schema"), "https://json-schema.org/draft/2020-12/schema")
         self.assertEqual(self.schema.get("title"), "ModuleRegistry")
+        self.assertEqual(self.schema.get("version"), "1.1.0")
+        self.assertEqual(self.registry_data.get("registry_version"), "1.1.0")
         self.assertFalse(self.schema.get("additionalProperties", True))
 
     def test_canonical_registry_passes(self):
