@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Тесты контроля синхронизации единого источника истины (SSoT) и целостности документации.
 Проверяет требования Issues #35, #37, #38.
@@ -49,10 +49,10 @@ class TestDocumentationSSoT(unittest.TestCase):
     def test_index_html_is_clean_and_up_to_date(self):
         """Проверяет, что запуск генератора не меняет уже закоммиченный index.html."""
         gen_script = REPO_ROOT / "scripts" / "generate_html_docs.py"
-        res = subprocess.run([sys.executable, str(gen_script)], capture_output=True, text=True, cwd=str(REPO_ROOT))
-        self.assertEqual(res.returncode, 0, f"Генератор завершился с ошибкой: {res.stderr}")
+        res = subprocess.run([sys.executable, str(gen_script)], capture_output=True, cwd=str(REPO_ROOT))
+        self.assertEqual(res.returncode, 0, f"Генератор завершился с ошибкой")
 
-        diff_res = subprocess.run(["git", "diff", "--exit-code", "index.html"], capture_output=True, text=True, cwd=str(REPO_ROOT))
+        diff_res = subprocess.run(["git", "diff", "--exit-code", "index.html"], capture_output=True, cwd=str(REPO_ROOT))
         self.assertEqual(
             diff_res.returncode, 0,
             "Ошибка SSoT: производный файл index.html устарел относительно Markdown-документации! "
@@ -62,13 +62,13 @@ class TestDocumentationSSoT(unittest.TestCase):
     def test_out_of_sync_detection(self):
         """Тест, подтверждающий обнаружение рассинхронизации при искусственном изменении."""
         index_file = REPO_ROOT / "index.html"
-        original_content = index_file.read_text(encoding="utf-8")
+        original_bytes = index_file.read_bytes()
         try:
-            index_file.write_text(original_content + "\n<!-- out_of_sync_test_tag -->\n", encoding="utf-8")
-            diff_res = subprocess.run(["git", "diff", "--exit-code", "index.html"], capture_output=True, text=True, cwd=str(REPO_ROOT))
+            index_file.write_bytes(original_bytes + b"\n<!-- out_of_sync_test_tag -->\n")
+            diff_res = subprocess.run(["git", "diff", "--exit-code", "index.html"], capture_output=True, cwd=str(REPO_ROOT))
             self.assertNotEqual(diff_res.returncode, 0, "Проверка diff обязана вернуть ненулевой код при рассинхронизации")
         finally:
-            index_file.write_text(original_content, encoding="utf-8")
+            index_file.write_bytes(original_bytes)
 
 if __name__ == "__main__":
     unittest.main()
