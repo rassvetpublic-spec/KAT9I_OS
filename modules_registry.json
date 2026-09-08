@@ -131,7 +131,7 @@
       "provides_contracts": ["CacheEntry", "PayloadRef"],
       "requires_contracts": ["SystemEvent"],
       "dependencies": ["Storage"],
-      "capabilities": ["RAM_CACHE", "SINGLE_FLIGHT", "IMMUTABLE_SPILL_SEGMENTS", "DEGRADED_MODE_FAIL_OPEN"],
+      "capabilities": ["RAM_CACHE", "SINGLEFLIGHT", "IMMUTABLE_SPILL_SEGMENTS", "DEGRADED_MODE_FAIL_OPEN"],
       "health_interface": {
         "type": "INTERNAL_STATE_PROBE",
         "endpoint": "cache_engine.health_check"

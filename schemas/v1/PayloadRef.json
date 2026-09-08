@@ -87,6 +87,13 @@
       ],
       "description": "Удалённый URI полезной нагрузки при storage_mode=REMOTE_REF."
     },
+    "inline_data": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Встроенные строковые или base64-кодированные данные полезной нагрузки при storage_mode=INLINE."
+    },
     "created_at": {
       "type": "string",
       "format": "date-time",
@@ -94,6 +101,25 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "storage_mode": {
+            "const": "INLINE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "inline_data"
+        ],
+        "properties": {
+          "inline_data": {
+            "type": "string"
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

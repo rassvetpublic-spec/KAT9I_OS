@@ -403,6 +403,29 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         }
         self.assertTrue(validator.is_valid(valid_ram))
 
+        # Проверка INLINE с inline_data
+        valid_inline = {
+            "payload_id": "pay-005-inline",
+            "storage_mode": "INLINE",
+            "byte_size": 13,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
+            "inline_data": "SGVsbG8sIFdvcmxkIQ==",
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertTrue(validator.is_valid(valid_inline))
+
+        # Нарушение INLINE: отсутствует inline_data
+        invalid_inline_no_data = {
+            "payload_id": "pay-005-inline",
+            "storage_mode": "INLINE",
+            "byte_size": 13,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertFalse(validator.is_valid(invalid_inline_no_data))
+
         # Нарушение: недопустимый storage_mode (например, устаревший IN_RAM)
         invalid_mode = dict(valid_payload)
         invalid_mode["storage_mode"] = "IN_RAM"
