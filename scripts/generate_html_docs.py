@@ -241,7 +241,7 @@ def build_html_documentation():
 
     # 1. ТЗ (docs/tz/*.md)
     if tz_dir.exists():
-        for f in sorted(tz_dir.glob("*.md")):
+        for f in sorted(tz_dir.glob("*.md"), key=lambda p: p.name):
             content = f.read_text(encoding="utf-8")
             sections.append({
                 "id": f"tz-{f.stem.lower()}",
@@ -252,7 +252,7 @@ def build_html_documentation():
 
     # 2. Спецификации (docs/spec/*.md) — устраняет выпадение спецификаций (#36, #55)
     if spec_dir.exists():
-        for f in sorted(spec_dir.glob("*.md")):
+        for f in sorted(spec_dir.glob("*.md"), key=lambda p: p.name):
             content = f.read_text(encoding="utf-8")
             sections.append({
                 "id": f"spec-{f.stem.lower()}",
@@ -263,7 +263,7 @@ def build_html_documentation():
 
     # 3. Архитектура (все разделы docs/architecture/*.md кроме навигационной карты)
     if arch_dir.exists():
-        for f in sorted(arch_dir.glob("*.md")):
+        for f in sorted(arch_dir.glob("*.md"), key=lambda p: p.name):
             if f.name == "MODULE_RESPONSIBILITY_MAP.md":
                 continue
             content = f.read_text(encoding="utf-8")
@@ -276,7 +276,7 @@ def build_html_documentation():
 
     # 4. Руководства (остальные руководства из docs/guides/*.md)
     if guides_dir.exists():
-        for f in sorted(guides_dir.glob("*.md")):
+        for f in sorted(guides_dir.glob("*.md"), key=lambda p: p.name):
             if f.name in ["FIRST_TIME_GUIDE.md", "GITHUB_FOR_COWORKERS.md", "GITHUB_KAT9I_MAPPING.md"]:
                 continue
             content = f.read_text(encoding="utf-8")
