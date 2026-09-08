@@ -34,7 +34,8 @@ schemas/
     ├── Identity.json           # Идентичность субъекта и привязка к Windows
     ├── ApprovalRecord.json     # Структурированное одобрение человеком с защитой от replay
     ├── JournalEvent.json       # Элемент append-only журнала событий Event Journal
-    └── Checkpoint.json         # Снимок состояния задачи для Replay Recovery
+    ├── Checkpoint.json         # Снимок состояния задачи для Replay Recovery
+    └── CoreIpcMessage.json     # Контракт типизированного IPC между Electron и Rust Core
 ```
 
 ## 4. Политика версионирования и эволюции схем
