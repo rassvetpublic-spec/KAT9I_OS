@@ -76,5 +76,72 @@
       "format": "date-time",
       "description": "Временная метка материализации полезной нагрузки в ISO 8601."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "storage_mode": {
+            "const": "SPILL_SEGMENT"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "segment_id",
+          "offset"
+        ],
+        "properties": {
+          "segment_id": {
+            "type": "string",
+            "pattern": "^seg-[a-zA-Z0-9_-]{8,64}$"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "storage_mode": {
+            "const": "SHARED_MEMORY"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "shm_handle"
+        ],
+        "properties": {
+          "shm_handle": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "storage_mode": {
+            "const": "REMOTE_REF"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "remote_uri"
+        ],
+        "properties": {
+          "remote_uri": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
 }

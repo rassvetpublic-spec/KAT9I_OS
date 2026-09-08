@@ -267,6 +267,7 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         }
 
         valid_entry = {
+            "schema_version": "1.0.0",
             "key": "AST_SYMBOL:core.rs:rev-123:parser:1.0.0:SESSION_LOCAL",
             "namespace": "AST_SYMBOL",
             "source_ref": "src/core.rs",
@@ -281,6 +282,11 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "scope": "SESSION_LOCAL"
         }
         self.assertTrue(validator.is_valid(valid_entry))
+
+        # Нарушение: отсутствие schema_version
+        invalid_no_version = dict(valid_entry)
+        del invalid_no_version["schema_version"]
+        self.assertFalse(validator.is_valid(invalid_no_version))
 
         # Нарушение вложенного контракта: пустой payload_ref или отсутствующие required поля
         invalid_nested = dict(valid_entry)
@@ -317,6 +323,16 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "created_at": "2026-09-08T10:00:00Z"
         }
         self.assertTrue(validator.is_valid(valid_payload))
+
+        # Нарушение SPILL_SEGMENT: отсутствует segment_id
+        invalid_spill_no_seg = dict(valid_payload)
+        del invalid_spill_no_seg["segment_id"]
+        self.assertFalse(validator.is_valid(invalid_spill_no_seg))
+
+        # Нарушение SPILL_SEGMENT: отсутствует offset
+        invalid_spill_no_offset = dict(valid_payload)
+        del invalid_spill_no_offset["offset"]
+        self.assertFalse(validator.is_valid(invalid_spill_no_offset))
 
         # Проверка RAM_REGION
         valid_ram = {
