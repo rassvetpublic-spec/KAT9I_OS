@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/PayloadRef.json",
+  "title": "PayloadRef",
+  "description": "Машинный контракт ссылки на материализованные данные полезной нагрузки (PayloadRef) CacheEngine KAT9I_OS.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "payload_id",
+    "storage_mode",
+    "byte_size",
+    "checksum",
+    "created_at"
+  ],
+  "properties": {
+    "payload_id": {
+      "type": "string",
+      "pattern": "^pay-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный системный идентификатор полезной нагрузки."
+    },
+    "storage_mode": {
+      "type": "string",
+      "enum": [
+        "IN_RAM",
+        "SPILL_SEGMENT",
+        "SHARED_MEMORY",
+        "MMAP",
+        "INLINE"
+      ],
+      "description": "Режим физического размещения и адресации данных."
+    },
+    "byte_size": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Размер полезной нагрузки в байтах."
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{32,128}$",
+      "description": "Контрольная сумма полезной нагрузки (SHA-256 или BLAKE3)."
+    },
+    "segment_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^(seg-[a-zA-Z0-9_-]{8,64})?$",
+      "description": "Идентификатор неизменяемого сегмента при storage_mode=SPILL_SEGMENT."
+    },
+    "offset": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Байтовое смещение внутри сегмента при storage_mode=SPILL_SEGMENT или MMAP."
+    },
+    "shm_handle": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Дескриптор или имя именованной разделяемой памяти (Windows Named Shared Memory) при storage_mode=SHARED_MEMORY."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка материализации полезной нагрузки в ISO 8601."
+    }
+  }
+}

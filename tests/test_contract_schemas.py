@@ -28,7 +28,9 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "Evidence.json",
             "SecurityDecision.json",
             "CapabilityGrant.json",
-            "SystemEvent.json"
+            "SystemEvent.json",
+            "CacheEntry.json",
+            "PayloadRef.json"
         ]
         cls.schemas = {}
         for sf in cls.schema_files:
@@ -243,6 +245,66 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         invalid_type = dict(valid_event)
         invalid_type["event_type"] = "INVALID_EVENT_TYPE"
         self.assertFalse(validator.is_valid(invalid_type))
+
+    def test_cache_entry_valid_and_invalid(self):
+        """Проверяет контракт CacheEntry (Issue #84)."""
+        schema = self.schemas["CacheEntry.json"]
+        validator = Draft202012Validator(schema)
+
+        valid_payload_ref = {
+            "payload_id": "pay-001-symbols",
+            "storage_mode": "IN_RAM",
+            "byte_size": 2048,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+
+        valid_entry = {
+            "key": "AST_SYMBOL:core.rs:rev-123:parser:1.0.0:SESSION_LOCAL",
+            "namespace": "AST_SYMBOL",
+            "source_ref": "src/core.rs",
+            "revision": "rev-123",
+            "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "transform_id": "tree_sitter_rust",
+            "transform_version": "0.20.0",
+            "payload_ref": valid_payload_ref,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "created_at": "2026-09-08T10:00:00Z",
+            "hit_count": 0,
+            "scope": "SESSION_LOCAL"
+        }
+        self.assertTrue(validator.is_valid(valid_entry))
+
+        # Нарушение: недопустимый namespace
+        invalid_entry = dict(valid_entry)
+        invalid_entry["namespace"] = "INVALID_NS"
+        self.assertFalse(validator.is_valid(invalid_entry))
+
+        # Нарушение: additionalProperties
+        invalid_props = dict(valid_entry)
+        invalid_props["unknown_prop"] = "leak"
+        self.assertFalse(validator.is_valid(invalid_props))
+
+    def test_payload_ref_valid_and_invalid(self):
+        """Проверяет контракт PayloadRef (Issue #84)."""
+        schema = self.schemas["PayloadRef.json"]
+        validator = Draft202012Validator(schema)
+
+        valid_payload = {
+            "payload_id": "pay-002-spill",
+            "storage_mode": "SPILL_SEGMENT",
+            "byte_size": 1048576,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "segment_id": "seg-001-immutable",
+            "offset": 4096,
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertTrue(validator.is_valid(valid_payload))
+
+        # Нарушение: недопустимый storage_mode
+        invalid_mode = dict(valid_payload)
+        invalid_mode["storage_mode"] = "INVALID_MODE"
+        self.assertFalse(validator.is_valid(invalid_mode))
 
 if __name__ == "__main__":
     unittest.main()

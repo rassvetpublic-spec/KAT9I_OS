@@ -36,7 +36,9 @@ schemas/
     ├── JournalEvent.json       # Элемент append-only журнала событий Event Journal
     ├── Checkpoint.json         # Снимок состояния задачи для Replay Recovery
     ├── CoreIpcMessage.json     # Контракт типизированного IPC между Electron и Rust Core
-    └── SecretRef.json          # Ссылка на защищённый секрет (DPAPI) без раскрытия значения
+    ├── SecretRef.json          # Ссылка на защищённый секрет (DPAPI) без раскрытия значения
+    ├── CacheEntry.json         # Метаданные записи кэша и детерминированная инвалидация
+    └── PayloadRef.json         # Ссылка на полезную нагрузку кэша (RAM, spill segment, shm)
 ```
 
 ## 4. Политика версионирования и эволюции схем

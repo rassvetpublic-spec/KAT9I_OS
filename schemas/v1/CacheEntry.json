@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/CacheEntry.json",
+  "title": "CacheEntry",
+  "description": "Машинный контракт метаданных записи кэша (CacheEntry) высокопроизводительного RAM-first движка CacheEngine KAT9I_OS.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "key",
+    "namespace",
+    "source_ref",
+    "revision",
+    "hash",
+    "transform_id",
+    "transform_version",
+    "payload_ref",
+    "checksum",
+    "created_at",
+    "hit_count",
+    "scope"
+  ],
+  "properties": {
+    "key": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_.:-]{8,256}$",
+      "description": "Детерминированный уникальный ключ записи кэша (namespace:source:rev:transform:ver:scope)."
+    },
+    "namespace": {
+      "type": "string",
+      "enum": [
+        "AST_SYMBOL",
+        "DEPENDENCY_GRAPH",
+        "MATERIALIZED_CONTEXT",
+        "CONTEXT_PACK",
+        "EMBEDDINGS",
+        "TOOL_RESULT_READONLY",
+        "COMPUTED_HASH",
+        "DOCUMENT_TRANSFORM",
+        "LOCAL_ANALYSIS"
+      ],
+      "description": "Изолированное логическое пространство кэширования производных артефактов."
+    },
+    "source_ref": {
+      "type": "string",
+      "description": "Идентификатор или путь канонического источника данных (SSoT)."
+    },
+    "revision": {
+      "type": "string",
+      "description": "Ревизия канонического источника (Git commit OID, версия или порядковый номер)."
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{32,128}$",
+      "description": "Криптографический хэш исходного контента (например, SHA-256) для детерминированной инвалидации."
+    },
+    "transform_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_.-]{3,64}$",
+      "description": "Идентификатор применённого детерминированного алгоритма или преобразования."
+    },
+    "transform_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "SemVer версия алгоритма трансформации. При изменении версии кэш инвалидируется."
+    },
+    "payload_ref": {
+      "type": "object",
+      "description": "Ссылка на материализованные данные полезной нагрузки PayloadRef."
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{32,128}$",
+      "description": "Контрольная сумма полезной нагрузки (SHA-256 или BLAKE3) для верификации целостности."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка создания записи кэша в ISO 8601."
+    },
+    "last_accessed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Временная метка последнего обращения к записи для политик вытеснения (LRU)."
+    },
+    "expires_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "description": "Опциональный TTL для нестрого детерминированных артефактов."
+    },
+    "hit_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Счётчик успешных попаданий в кэш (телеметрия и LFU)."
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "SESSION_LOCAL",
+        "TASK_LOCAL",
+        "WORKSPACE_SHARED",
+        "SYSTEM_GLOBAL"
+      ],
+      "description": "Область видимости и изоляции кэшированных данных (Security Domain)."
+    },
+    "build_cost_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Оценка времени построения артефакта в миллисекундах для стоимостных политик вытеснения."
+    }
+  }
+}

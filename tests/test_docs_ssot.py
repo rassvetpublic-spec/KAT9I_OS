@@ -223,7 +223,9 @@ class TestDocumentationSSoT(unittest.TestCase):
             "JournalEvent.json",
             "Checkpoint.json",
             "CoreIpcMessage.json",
-            "SecretRef.json"
+            "SecretRef.json",
+            "CacheEntry.json",
+            "PayloadRef.json"
         ]
         for s in expected_schemas:
             p = schemas_dir / s

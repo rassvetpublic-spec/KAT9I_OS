@@ -15,13 +15,60 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+def resolve_doc_link(url: str) -> str:
+    """Транслирует относительные ссылки на Markdown-документы docs/ в якорные ссылки #id для index.html."""
+    url = url.strip()
+    # Внешние ссылки или уже якоря
+    if url.startswith("http://") or url.startswith("https://") or url.startswith("#") or url.startswith("mailto:"):
+        return url
+
+    # Разделяем путь и существующий фрагмент/якорь
+    path_part, _, fragment = url.partition("#")
+
+    # Ссылки на файлы схем schemas/
+    if "schemas/" in path_part:
+        # Для schemas/ оставляем прямую ссылку на репозиторий GitHub
+        return url
+
+    # Если ссылка ведёт на .md файл
+    if path_part.endswith(".md"):
+        md_name = Path(path_part).name
+        stem = Path(path_part).stem.lower()
+
+        # Канонические секции верхнего уровня
+        if md_name == "GLOSSARY.md":
+            target = "glossary-section"
+        elif md_name == "FIRST_TIME_GUIDE.md":
+            target = "firstTimeSection"
+        elif md_name == "GITHUB_FOR_COWORKERS.md":
+            target = "coworker-section"
+        elif md_name == "GITHUB_KAT9I_MAPPING.md":
+            target = "mapping-section"
+        elif md_name == "MODULE_RESPONSIBILITY_MAP.md":
+            target = "resp-section"
+        elif "tz" in path_part.lower():
+            target = f"tz-{stem}"
+        elif "spec" in path_part.lower():
+            target = f"spec-{stem}"
+        elif "guides" in path_part.lower():
+            target = f"guide-{stem}"
+        else:
+            # architecture files (07_CONTEXT.md, 34_CACHE_ENGINE.md, etc.)
+            target = f"arch-{stem}"
+
+        return f"#{target}"
+
+    return url
+
+
 def format_inline_markdown(text: str) -> str:
     """Форматирует ссылки, жирный шрифт, курсив и код внутри инлайнового текста."""
     # Сохраняем ссылки [text](url)
     def replace_link(m):
         link_text = m.group(1)
-        url = m.group(2)
-        return f'<a href="{url}">{link_text}</a>'
+        raw_url = m.group(2)
+        resolved_url = resolve_doc_link(raw_url)
+        return f'<a href="{resolved_url}">{link_text}</a>'
 
     # Регулярка для ссылок: [текст](url)
     text = re.sub(r'\[(.*?)\]\((.*?)\)', replace_link, text)
