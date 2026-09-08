@@ -12,7 +12,15 @@ function Gql([string]$Query,[hashtable]$Variables){
   $raw=$payload|gh api graphql --input -
   if($LASTEXITCODE -ne 0){throw 'GitHub GraphQL API вернул ошибку.'}
   $r=$raw|ConvertFrom-Json -Depth 30
-  if($r.errors){throw (($r.errors|ForEach-Object{$_.message})-join '; ')}
+  if($null -eq $r){throw 'GitHub GraphQL API вернул пустой ответ.'}
+  $errorsProperty=$r.PSObject.Properties['errors']
+  if($null -ne $errorsProperty -and $null -ne $errorsProperty.Value){
+    $messages=@($errorsProperty.Value|ForEach-Object{
+      $messageProperty=$_.PSObject.Properties['message']
+      if($null -ne $messageProperty){$messageProperty.Value}else{$_|ConvertTo-Json -Depth 10 -Compress}
+    })
+    throw ($messages -join '; ')
+  }
   $r
 }
 function Rest([string]$Endpoint,[string]$Method='GET',$Body=$null){
@@ -35,9 +43,10 @@ function Opt([string]$Name,[string]$Color,[string]$Description,[string[]]$Aliase
   if($Aliases.Count -eq 0){$Aliases=@($Name)}
   [ordered]@{name=$Name;color=$Color;description=$Description;aliases=$Aliases}
 }
-function EnsureSelect([string]$Name,[object[]]$Defs){
+function EnsureSelect([string]$Name,[string[]]$FieldAliases,[object[]]$Defs){
+  if($FieldAliases.Count -eq 0){$FieldAliases=@($Name)}
   $p=(Snapshot).user.projectV2
-  $f=@($p.fields.nodes)|Where-Object{$_.name -eq $Name}|Select-Object -First 1
+  $f=@($p.fields.nodes)|Where-Object{$FieldAliases -contains $_.name}|Select-Object -First 1
   if(-not $f){
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){projectV2Field{... on ProjectV2SingleSelectField{id name options{id name}}}}}
@@ -46,10 +55,10 @@ mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){p
     $null=Gql $q @{input=@{projectId=$p.id;name=$Name;dataType='SINGLE_SELECT';singleSelectOptions=$opts}}
     Write-Host "Создано поле: $Name";return
   }
-  if($f.__typename -ne 'ProjectV2SingleSelectField'){throw "Поле '$Name' уже существует с другим типом."}
+  if($f.__typename -ne 'ProjectV2SingleSelectField'){throw "Поле '$($f.name)' уже существует с другим типом."}
   $known=@($Defs|ForEach-Object{$_.aliases})
   $unknown=@($f.options|Where-Object{$known -notcontains $_.name})
-  if($unknown.Count -gt 0){throw "Поле '$Name' содержит неизвестные значения: $(($unknown.name)-join ', '). Автоматическое удаление запрещено."}
+  if($unknown.Count -gt 0){throw "Поле '$($f.name)' содержит неизвестные значения: $(($unknown.name)-join ', '). Автоматическое удаление запрещено."}
   $opts=@()
   foreach($d in $Defs){
     $old=@($f.options)|Where-Object{$d.aliases -contains $_.name}|Select-Object -First 1
@@ -58,8 +67,8 @@ mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){p
 $q=@'
 mutation($input:UpdateProjectV2FieldInput!){updateProjectV2Field(input:$input){projectV2Field{... on ProjectV2SingleSelectField{id name options{id name}}}}}
 '@
-  $null=Gql $q @{input=@{fieldId=$f.id;singleSelectOptions=$opts}}
-  Write-Host "Проверено поле: $Name"
+  $null=Gql $q @{input=@{fieldId=$f.id;name=$Name;singleSelectOptions=$opts}}
+  if($f.name -ne $Name){Write-Host "Переименовано поле: $($f.name) -> $Name"}else{Write-Host "Проверено поле: $Name"}
 }
 function Monday{
   $d=(Get-Date).Date;$n=([int]$d.DayOfWeek+6)%7;$d.AddDays(-$n).ToString('yyyy-MM-dd')
@@ -67,12 +76,22 @@ function Monday{
 function EnsureIteration{
   $p=(Snapshot).user.projectV2
   $f=@($p.fields.nodes)|Where-Object{$_.name -eq 'Итерация'}|Select-Object -First 1
-  if($f){if($f.__typename -ne 'ProjectV2IterationField'){throw 'Поле Итерация существует с другим типом.'};if($f.configuration.duration -ne 7){throw 'Существующая Итерация не недельная; автоматическое изменение запрещено.'};Write-Host 'Проверено поле: Итерация';return}
+  if($f){
+    if($f.__typename -ne 'ProjectV2IterationField'){throw 'Поле Итерация существует с другим типом.'}
+    if($f.configuration.duration -eq 3){Write-Host 'Проверено поле: Итерация (3 дня)';return}
+    if($f.configuration.duration -ne 7){throw "Неожиданная длительность Итерации: $($f.configuration.duration) дней. Автоматическое изменение запрещено."}
+$q=@'
+mutation($input:UpdateProjectV2FieldInput!){updateProjectV2Field(input:$input){projectV2Field{... on ProjectV2IterationField{id name configuration{duration}}}}}
+'@
+    $null=Gql $q @{input=@{fieldId=$f.id;iterationConfiguration=@{startDate=(Monday);duration=3;iterations=@()}}}
+    Write-Host 'Итерация изменена: 7 -> 3 дня'
+    return
+  }
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){projectV2Field{... on ProjectV2IterationField{id name}}}}
 '@
-  $null=Gql $q @{input=@{projectId=$p.id;name='Итерация';dataType='ITERATION';iterationConfiguration=@{startDate=(Monday);duration=7;iterations=@()}}}
-  Write-Host 'Создано недельное поле: Итерация'
+  $null=Gql $q @{input=@{projectId=$p.id;name='Итерация';dataType='ITERATION';iterationConfiguration=@{startDate=(Monday);duration=3;iterations=@()}}}
+  Write-Host 'Создано поле Итерация: 3 дня'
 }
 function EnsureLink{
   $s=Snapshot;$p=$s.user.projectV2;$repo=$s.repository
@@ -99,29 +118,32 @@ function EnsureItems{
 }
 function EnsureViews{
   $p=(Snapshot).user.projectV2
-  $blank=@($p.views.nodes)|Where-Object{$_.name -eq 'View 1' -and $_.layout -eq 'TABLE' -and [string]::IsNullOrWhiteSpace($_.filter)}|Select-Object -First 1
-  if($blank){
-$q=@'
-mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){projectV2View{id}}}
-'@
-    $null=Gql $q @{input=@{viewId=$blank.id}}
-    $p=(Snapshot).user.projectV2
+  $required=@('Статус','Этап','Приоритет','Область','Исполнитель','Проверяющий','Исполнение')
+  $m=@{}
+  for($attempt=1;$attempt -le 10;$attempt++){
+    $rf=Rest "users/$Owner/projectsV2/$ProjectNumber/fields?per_page=100"
+    $m=@{}
+    foreach($f in @($rf)){$m[$f.name]=$f}
+    $missing=@($required|Where-Object{-not $m.ContainsKey($_)})
+    if($missing.Count -eq 0){break}
+    if($attempt -lt 10){Write-Host "GitHub ещё синхронизирует поля. Повтор $attempt/10...";Start-Sleep -Seconds 2}
   }
-  $rf=Rest "users/$Owner/projectsV2/$ProjectNumber/fields?per_page=100";$m=@{};foreach($f in @($rf)){$m[$f.name]=$f}
-  $vid=@();foreach($n in @('Title','Assignees','Status','Gate','Priority','Область','Work Type','Размер','Итерация','Implementation Worker','QA Worker','Claim','Target','Risk','Evidence','Linked pull requests','Sub-issues progress')){if($m.ContainsKey($n)){$vid+=[int64]$m[$n].id}}
-  $id=@{};foreach($n in @('Status','Gate','Priority','Область','Implementation Worker','QA Worker','Claim')){if(-not $m.ContainsKey($n)){throw "Для представлений не найдено поле $n"};$id[$n]=[int64]$m[$n].id}
+  $missing=@($required|Where-Object{-not $m.ContainsKey($_)})
+  if($missing.Count -gt 0){throw "После ожидания API не видит поля: $(($missing)-join ', '). Повторите запуск через несколько секунд."}
+  $vid=@();foreach($n in @('Title','Assignees','Статус','Этап','Приоритет','Область','Тип','Размер','Итерация','Исполнитель','Проверяющий','Исполнение','Цель','Риск','Доказательство','Linked pull requests','Sub-issues progress')){if($m.ContainsKey($n)){$vid+=[int64]$m[$n].id}}
+  $id=@{};foreach($n in $required){$id[$n]=[int64]$m[$n].id}
   $u=Rest "users/$Owner";$uid=[string]$u.id
   $views=@(
-    @{n='00 — Control Tower';l='table';f='is:open';s=@(@($id['Gate'],'asc'),@($id['Priority'],'asc'),@($id['Status'],'asc'))},
-    @{n='01 — Architecture G1';l='table';f='is:open Gate:"G1 — ТЗ и Architecture Baseline"';s=@(@($id['Priority'],'asc'),@($id['Status'],'asc'))},
-    @{n='02 — Ready Queue';l='table';f='is:open Status:"Готово к работе" -Claim:BLOCKED';s=@(@($id['Priority'],'asc'))},
-    @{n='03 — Active Workers';l='board';f='is:open Claim:ACTIVE';s=@(@($id['Priority'],'asc'));v=@($id['Implementation Worker'])},
-    @{n='04 — QA Queue';l='board';f='is:open Status:"Проверка QA"';s=@(@($id['Priority'],'asc'));v=@($id['QA Worker'])},
-    @{n='05 — Blocked';l='table';f='is:open Status:"Заблокировано"';s=@(@($id['Gate'],'asc'),@($id['Priority'],'asc'))},
-    @{n='06 — v0.1 Roadmap';l='roadmap';f='is:open Target:v0.1'},
-    @{n='07 — Security';l='table';f='is:open Область:"Безопасность и управление"';s=@(@($id['Priority'],'asc'),@($id['Status'],'asc'))},
-    @{n='08 — Evidence / Compliance';l='table';f='is:open Priority:P0,P1 -Evidence:"QA PASS"';s=@(@($id['Priority'],'asc'),@($id['Gate'],'asc'))},
-    @{n='09 — Unclassified';l='table';f='is:open no:Gate no:Priority'}
+    @{n='00 — Центр управления';l='table';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
+    @{n='01 — Архитектура G1';l='table';f='is:open Этап:"G1 — ТЗ и базовая архитектура"';s=@(@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
+    @{n='02 — Готово к работе';l='table';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"';s=@(@($id['Приоритет'],'asc'))},
+    @{n='03 — Активные исполнители';l='board';f='is:open Исполнение:"Активно"';s=@(@($id['Приоритет'],'asc'));v=@($id['Исполнитель'])},
+    @{n='04 — Очередь проверки';l='board';f='is:open Статус:"Проверка качества"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
+    @{n='05 — Заблокировано';l='table';f='is:open Статус:"Заблокировано"';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'))},
+    @{n='06 — План v0.1';l='roadmap';f='is:open Цель:v0.1'},
+    @{n='07 — Безопасность';l='table';f='is:open Область:"Безопасность и управление"';s=@(@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
+    @{n='08 — Доказательства';l='table';f='is:open Приоритет:P0,P1 -Доказательство:"Проверка качества пройдена"';s=@(@($id['Приоритет'],'asc'),@($id['Этап'],'asc'))},
+    @{n='09 — Без классификации';l='table';f='is:open no:Этап no:Приоритет'}
   )
   foreach($v in $views){
     if(@($p.views.nodes)|Where-Object{$_.name -eq $v['n']}){continue}
@@ -129,7 +151,31 @@ mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){pro
     if($v['l'] -ne 'roadmap'){$b.visible_fields=$vid}
     if($v.ContainsKey('s')){$b.sort_by=$v['s']}
     if($v.ContainsKey('v')){$b.vertical_group_by=$v['v']}
-    try{$null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b;Write-Host "Создано представление: $($v['n'])"}catch{Write-Warning "Не удалось создать '$($v['n'])' через REST API: $($_.Exception.Message)"}
+    try{$null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b;Write-Host "Создано представление: $($v['n'])"}catch{Write-Warning "Не удалось создать '$($v['n'])' через API: $($_.Exception.Message)"}
+  }
+  $p=(Snapshot).user.projectV2
+  $hasCanonical=@($p.views.nodes)|Where-Object{$_.name -eq '00 — Центр управления'}|Select-Object -First 1
+  $blank=@($p.views.nodes)|Where-Object{$_.name -eq 'View 1' -and $_.layout -eq 'TABLE' -and [string]::IsNullOrWhiteSpace($_.filter)}|Select-Object -First 1
+  if($hasCanonical -and $blank){
+$q=@'
+mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){projectV2View{id}}}
+'@
+    $null=Gql $q @{input=@{viewId=$blank.id}}
+    Write-Host 'Удалено пустое представление View 1.'
+  }
+  if($hasCanonical){
+    $oldNames=@(
+      '00 — Control Tower','01 — Architecture G1','02 — Ready Queue','03 — Active Workers',
+      '04 — QA Queue','05 — Blocked','06 — v0.1 Roadmap','07 — Security',
+      '08 — Evidence / Compliance','09 — Unclassified'
+    )
+    foreach($old in @($p.views.nodes|Where-Object{$oldNames -contains $_.name})){
+$q=@'
+mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){projectV2View{id}}}
+'@
+      $null=Gql $q @{input=@{viewId=$old.id}}
+      Write-Host "Удалено старое англоязычное представление: $($old.name)"
+    }
   }
 }
 
@@ -138,37 +184,92 @@ $null=gh auth status 2>&1;if($LASTEXITCODE -ne 0){throw 'GitHub CLI не авт�
 $null=gh project view $ProjectNumber --owner $Owner --format json 2>&1;if($LASTEXITCODE -ne 0){throw 'Нужен scope project. Авторизуйте GitHub CLI с разрешением project.'}
 
 EnsureLink
-EnsureSelect 'Status' @(
+EnsureSelect 'Статус' @('Статус','Status') @(
  (Opt 'Входящие' 'GRAY' 'Новая работа.' @('Входящие','Todo')),
- (Opt 'Нужно разобрать' 'YELLOW' 'Нужно определить Gate, приоритет, Scope и зависимости.' @('Нужно разобрать','Разбор')),
+ (Opt 'Нужно разобрать' 'YELLOW' 'Нужно определить этап, приоритет, границы работы и зависимости.' @('Нужно разобрать','Разбор')),
  (Opt 'Готово к работе' 'BLUE' 'Задачу можно брать.'),
  (Opt 'В работе' 'ORANGE' 'Идёт активная работа.' @('В работе','In Progress')),
- (Opt 'Проверка QA' 'PURPLE' 'Review и независимый QA.' @('Проверка QA','QA')),
- (Opt 'Заблокировано' 'RED' 'Есть блокер.' @('Заблокировано','Blocked')),
+ (Opt 'Проверка качества' 'PURPLE' 'Результат проходит проверку качества.' @('Проверка качества','Проверка QA','QA')),
+ (Opt 'Заблокировано' 'RED' 'Есть причина, мешающая продолжить работу.' @('Заблокировано','Blocked')),
  (Opt 'Готово' 'GREEN' 'Работа завершена по правилам.' @('Готово','Done'))
 )
-EnsureSelect 'Gate' @(
- (Opt 'G0 — Project/Backlog Hygiene' 'GRAY' 'GitHub Control Plane и backlog.' @('G0 — Project/Backlog Hygiene','G0')),
- (Opt 'G1 — ТЗ и Architecture Baseline' 'BLUE' 'ТЗ и Architecture Baseline.' @('G1 — ТЗ и Architecture Baseline','G1')),
- (Opt 'G2 — Machine Contracts' 'PURPLE' 'Машинные контракты.' @('G2 — Machine Contracts','G2')),
- (Opt 'G3 — Runtime Foundation' 'ORANGE' 'Фундамент Runtime.' @('G3 — Runtime Foundation','G3')),
- (Opt 'G4 — Vertical v0.1' 'GREEN' 'Первая сквозная версия.' @('G4 — Vertical v0.1','G4')),
- (Opt 'G5 — после v0.1' 'YELLOW' 'После v0.1.' @('G5 — после v0.1','G5'))
+EnsureSelect 'Этап' @('Этап','Gate') @(
+ (Opt 'G0 — Порядок проекта и задач' 'GRAY' 'Порядок GitHub Project и списка задач.' @('G0 — Порядок проекта и задач','G0 — Project/Backlog Hygiene','G0')),
+ (Opt 'G1 — ТЗ и базовая архитектура' 'BLUE' 'ТЗ и принятая базовая архитектура.' @('G1 — ТЗ и базовая архитектура','G1 — ТЗ и Architecture Baseline','G1')),
+ (Opt 'G2 — Машинные контракты' 'PURPLE' 'Форматы и правила обмена данными между частями системы.' @('G2 — Машинные контракты','G2 — Machine Contracts','G2')),
+ (Opt 'G3 — Основа исполняемой системы' 'ORANGE' 'Фундамент исполняемой системы.' @('G3 — Основа исполняемой системы','G3 — Runtime Foundation','G3')),
+ (Opt 'G4 — Сквозная версия v0.1' 'GREEN' 'Первая сквозная рабочая версия.' @('G4 — Сквозная версия v0.1','G4 — Vertical v0.1','G4')),
+ (Opt 'G5 — После v0.1' 'YELLOW' 'Работы после первой версии.' @('G5 — После v0.1','G5 — после v0.1','G5'))
 )
-EnsureSelect 'Priority' @(
- (Opt 'P0' 'RED' 'Критично.' @('P0','Urgent')),(Opt 'P1' 'ORANGE' 'Важно.' @('P1','High')),(Opt 'P2' 'YELLOW' 'Полезно.' @('P2','Medium')),(Opt 'P3' 'GRAY' 'Позже.' @('P3','Low'))
+EnsureSelect 'Приоритет' @('Приоритет','Priority') @(
+ (Opt 'P0' 'RED' 'Критично.' @('P0','Urgent')),
+ (Opt 'P1' 'ORANGE' 'Важно.' @('P1','High')),
+ (Opt 'P2' 'YELLOW' 'Полезно.' @('P2','Medium')),
+ (Opt 'P3' 'GRAY' 'Можно позже.' @('P3','Low'))
 )
-EnsureSelect 'Work Type' @((Opt 'ТЗ/Architecture' 'BLUE' 'ТЗ и архитектура.'),(Opt 'Documentation' 'GRAY' 'Документация.'),(Opt 'Research' 'PURPLE' 'Исследование.'),(Opt 'Infrastructure' 'ORANGE' 'Инфраструктура.'),(Opt 'Contract' 'BLUE' 'Контракты.'),(Opt 'Runtime' 'GREEN' 'Runtime.'),(Opt 'Security' 'RED' 'Безопасность.'),(Opt 'QA/Eval' 'YELLOW' 'QA и evals.'))
-EnsureSelect 'Область' @((Opt 'Архитектура и документация' 'BLUE' 'SSoT и архитектура.'),(Opt 'Контекст и знания' 'PURPLE' 'Context и Knowledge.'),(Opt 'Исполнение и Workers' 'GREEN' 'Workers и execution.'),(Opt 'Безопасность и управление' 'RED' 'Security и governance.'),(Opt 'Интерфейс и визуализация' 'YELLOW' 'UI и UX.'),(Opt 'Инженерная инфраструктура' 'ORANGE' 'CI, GitHub и инструменты.'),(Opt 'Общее / не определено' 'GRAY' 'Ещё не классифицировано.'))
-EnsureSelect 'Размер' @((Opt 'XS — совсем маленькая' 'GRAY' 'Минимальная.' @('XS — совсем маленькая','XS')),(Opt 'S — маленькая' 'BLUE' 'Маленькая.' @('S — маленькая','S')),(Opt 'M — средняя' 'YELLOW' 'Средняя.' @('M — средняя','M')),(Opt 'L — большая' 'ORANGE' 'Большая.' @('L — большая','L')),(Opt 'XL — очень большая' 'RED' 'Нужна декомпозиция.' @('XL — очень большая','XL')))
-$workers=@((Opt 'ChatGPT' 'GREEN' 'ChatGPT.'),(Opt 'AGY' 'BLUE' 'AGY.'),(Opt 'Codex' 'PURPLE' 'Codex.'),(Opt 'Human' 'ORANGE' 'Человек.'),(Opt 'Другой' 'GRAY' 'Другой Worker.' @('Другой','Other')))
-EnsureSelect 'Implementation Worker' $workers
-EnsureSelect 'QA Worker' $workers
-EnsureSelect 'Claim' @((Opt 'UNCLAIMED' 'GRAY' 'Не заявлено.'),(Opt 'QUEUED' 'BLUE' 'Зарезервировано.'),(Opt 'ACTIVE' 'ORANGE' 'Активная работа.'),(Opt 'QA' 'PURPLE' 'На QA.'),(Opt 'BLOCKED' 'RED' 'Заблокировано.'),(Opt 'RELEASED' 'GREEN' 'Освобождено.'))
-EnsureSelect 'Target' @((Opt 'Architecture Baseline' 'BLUE' 'Architecture Baseline.'),(Opt 'v0.1' 'GREEN' 'v0.1.'),(Opt 'v0.2' 'PURPLE' 'v0.2.'),(Opt 'v1.0' 'ORANGE' 'v1.0.'),(Opt 'Later' 'GRAY' 'Позже.'))
-EnsureSelect 'Risk' @((Opt 'Critical' 'RED' 'Критический.'),(Opt 'High' 'ORANGE' 'Высокий.'),(Opt 'Medium' 'YELLOW' 'Средний.'),(Opt 'Low' 'GREEN' 'Низкий.'))
-EnsureSelect 'Evidence' @((Opt 'Missing' 'RED' 'Evidence отсутствует.'),(Opt 'Partial' 'YELLOW' 'Evidence частичный.'),(Opt 'CI PASS' 'BLUE' 'CI PASS на точной revision.'),(Opt 'QA PASS' 'GREEN' 'Независимый QA PASS на точной revision.'))
+EnsureSelect 'Тип' @('Тип','Тип работы','Work Type') @(
+ (Opt 'ТЗ / архитектура' 'BLUE' 'Требования и архитектура.' @('ТЗ / архитектура','ТЗ/Architecture')),
+ (Opt 'Документация' 'GRAY' 'Документация.' @('Документация','Documentation')),
+ (Opt 'Исследование' 'PURPLE' 'Исследование.' @('Исследование','Research')),
+ (Opt 'Инфраструктура' 'ORANGE' 'Инструменты, GitHub и автоматизация.' @('Инфраструктура','Infrastructure')),
+ (Opt 'Контракты' 'BLUE' 'Машинные контракты.' @('Контракты','Contract')),
+ (Opt 'Исполняемая система' 'GREEN' 'Рабочая логика системы.' @('Исполняемая система','Runtime')),
+ (Opt 'Безопасность' 'RED' 'Безопасность.' @('Безопасность','Security')),
+ (Opt 'Проверка качества / оценка' 'YELLOW' 'Проверка качества и измерение результата.' @('Проверка качества / оценка','QA/Eval'))
+)
+EnsureSelect 'Область' @('Область') @(
+ (Opt 'Архитектура и документация' 'BLUE' 'Архитектура и единый источник истины.'),
+ (Opt 'Контекст и знания' 'PURPLE' 'Контекст, память и знания.' @('Контекст и знания')),
+ (Opt 'Исполнение и исполнители' 'GREEN' 'Исполнение задач и исполнители.' @('Исполнение и исполнители','Исполнение и Workers')),
+ (Opt 'Безопасность и управление' 'RED' 'Безопасность и правила управления.'),
+ (Opt 'Интерфейс и визуализация' 'YELLOW' 'Интерфейс и отображение информации.'),
+ (Opt 'Инженерная инфраструктура' 'ORANGE' 'GitHub, CI и инструменты.'),
+ (Opt 'Общее / не определено' 'GRAY' 'Ещё не классифицировано.')
+)
+EnsureSelect 'Размер' @('Размер') @(
+ (Opt 'XS — совсем маленькая' 'GRAY' 'Совсем маленькая.' @('XS — совсем маленькая','XS')),
+ (Opt 'S — маленькая' 'BLUE' 'Маленькая.' @('S — маленькая','S')),
+ (Opt 'M — средняя' 'YELLOW' 'Средняя.' @('M — средняя','M')),
+ (Opt 'L — большая' 'ORANGE' 'Большая.' @('L — большая','L')),
+ (Opt 'XL — очень большая' 'RED' 'Нужно разбить на более мелкие задачи.' @('XL — очень большая','XL'))
+)
+$workers=@(
+ (Opt 'ChatGPT' 'GREEN' 'ChatGPT.'),
+ (Opt 'AGY' 'BLUE' 'AGY.'),
+ (Opt 'Codex' 'PURPLE' 'Codex.'),
+ (Opt 'Человек' 'ORANGE' 'Человек.' @('Человек','Human')),
+ (Opt 'Другой' 'GRAY' 'Другой исполнитель.' @('Другой','Other'))
+)
+EnsureSelect 'Исполнитель' @('Исполнитель','Implementation Worker') $workers
+EnsureSelect 'Проверяющий' @('Проверяющий','QA Worker') $workers
+EnsureSelect 'Исполнение' @('Исполнение','Состояние работы','Claim') @(
+ (Opt 'Свободно' 'GRAY' 'Никто не взял работу.' @('Свободно','UNCLAIMED')),
+ (Opt 'В очереди' 'BLUE' 'Работа зарезервирована.' @('В очереди','QUEUED')),
+ (Opt 'Активно' 'ORANGE' 'Исполнитель прямо сейчас работает над задачей.' @('Активно','В работе','ACTIVE')),
+ (Opt 'На проверке' 'PURPLE' 'Работа передана отдельному проверяющему.' @('На проверке','QA')),
+ (Opt 'Заблокировано' 'RED' 'Продолжение работы заблокировано.' @('Заблокировано','BLOCKED')),
+ (Opt 'Освобождено' 'GREEN' 'Исполнитель освободил задачу после завершения работы.' @('Освобождено','Завершено','RELEASED'))
+)
+EnsureSelect 'Цель' @('Цель','Target') @(
+ (Opt 'Базовая архитектура' 'BLUE' 'Базовая принятая архитектура.' @('Базовая архитектура','Architecture Baseline')),
+ (Opt 'v0.1' 'GREEN' 'Первая рабочая версия.'),
+ (Opt 'v0.2' 'PURPLE' 'Следующая версия.'),
+ (Opt 'v1.0' 'ORANGE' 'Первая стабильная версия.'),
+ (Opt 'Позже' 'GRAY' 'Не входит в ближайшие версии.' @('Позже','Later'))
+)
+EnsureSelect 'Риск' @('Риск','Risk') @(
+ (Opt 'Критический' 'RED' 'Критический риск.' @('Критический','Critical')),
+ (Opt 'Высокий' 'ORANGE' 'Высокий риск.' @('Высокий','High')),
+ (Opt 'Средний' 'YELLOW' 'Средний риск.' @('Средний','Medium')),
+ (Opt 'Низкий' 'GREEN' 'Низкий риск.' @('Низкий','Low'))
+)
+EnsureSelect 'Доказательство' @('Доказательство','Evidence') @(
+ (Opt 'Нет' 'RED' 'Подтверждения результата пока нет.' @('Нет','Missing')),
+ (Opt 'Частично' 'YELLOW' 'Есть только часть подтверждений.' @('Частично','Partial')),
+ (Opt 'Автопроверки пройдены' 'BLUE' 'Автоматические проверки пройдены на точной версии.' @('Автопроверки пройдены','CI PASS')),
+ (Opt 'Проверка качества пройдена' 'GREEN' 'Независимая проверка качества пройдена на точной версии.' @('Проверка качества пройдена','QA PASS'))
+)
 EnsureIteration
 EnsureItems
 EnsureViews
-Write-Host 'Project #2 настроен. Merge и QA PASS этот настройщик никогда не выполняет автоматически.'
+Write-Host 'Проект #2 настроен. Слияние, прохождение проверки качества и прохождение этапа этот настройщик никогда не выполняет автоматически.'
