@@ -18,18 +18,42 @@ jobs:
           script: |
             const issue = context.payload.issue;
             if (!issue) return;
+
             const title = issue.title || '';
             const body = issue.body || '';
-            const text = (title + '\n' + body).toLowerCase();
+            const normalizedTitle = title.trim().toLowerCase();
 
-            // 1. Определение типа обращения
+            // Служебные подсказки Issue Forms не должны влиять на классификацию.
+            const boilerplateMarkers = [
+              'не публикуйте токены',
+              'не публикуйте секреты',
+              'я не добавляю в issue токены',
+              'я проверил границы задачи и не добавляю секреты'
+            ];
+            const filteredBody = body
+              .split('\n')
+              .filter(line => !boilerplateMarkers.some(marker => line.toLowerCase().includes(marker)))
+              .join('\n');
+
+            const text = (title + '\n' + filteredBody).toLowerCase();
+
+            // 1. Определение типа обращения.
+            // Сначала используем явный префикс выбранной Issue Form.
             let issueType = 'Вопрос / Обсуждение';
             const labelsToAdd = [];
 
-            if (text.includes('сообщить об ошибке') || text.includes('баг') || text.includes('ошибка') || text.includes('crash') || text.includes('fail')) {
+            if (normalizedTitle.startsWith('[ошибка]')) {
               issueType = 'Ошибка (Bug)';
               labelsToAdd.push('bug');
-            } else if (text.includes('предложить идею') || text.includes('фича') || text.includes('feature') || text.includes('добавить')) {
+            } else if (normalizedTitle.startsWith('[функция]') || normalizedTitle.startsWith('[улучшение]')) {
+              issueType = 'Улучшение (Enhancement)';
+              labelsToAdd.push('enhancement');
+            } else if (normalizedTitle.startsWith('[техзадача]')) {
+              issueType = 'Техническая задача';
+            } else if (text.includes('сообщить об ошибке') || text.includes('баг') || text.includes('ошибка') || text.includes('crash') || text.includes('fail')) {
+              issueType = 'Ошибка (Bug)';
+              labelsToAdd.push('bug');
+            } else if (text.includes('предложить идею') || text.includes('фича') || text.includes('feature') || text.includes('добавить') || text.includes('функция') || text.includes('улучшение')) {
               issueType = 'Улучшение (Enhancement)';
               labelsToAdd.push('enhancement');
             } else if (text.includes('документация непонятна') || text.includes('документ') || text.includes('тз') || text.includes('словарь')) {
