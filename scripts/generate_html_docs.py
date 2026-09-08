@@ -131,10 +131,14 @@ def markdown_to_html_enhanced(text: str) -> str:
             level_attr = ""
             if "Очень просто:" in item_text:
                 level_attr = ' data-detail-level="simple"'
+            elif "Просто:" in item_text:
+                level_attr = ' data-detail-level="basic"'
             elif "Рабочий уровень:" in item_text or "Рабочее объяснение:" in item_text:
                 level_attr = ' data-detail-level="worker"'
             elif "Технический уровень:" in item_text or "Технически:" in item_text:
                 level_attr = ' data-detail-level="tech"'
+            elif "Максимум:" in item_text or "Крайние случаи:" in item_text:
+                level_attr = ' data-detail-level="all"'
 
             output.append(f'<li{level_attr}>{formatted_item}</li>')
             i += 1
@@ -213,6 +217,8 @@ def markdown_to_html_enhanced(text: str) -> str:
                 level_attr = ' data-detail-level="worker"'
             elif formatted_p.startswith("<strong>Технически:</strong>") or formatted_p.startswith("<strong>Технический уровень:</strong>"):
                 level_attr = ' data-detail-level="tech"'
+            elif formatted_p.startswith("<strong>Максимум:</strong>") or formatted_p.startswith("<strong>Крайние случаи:</strong>"):
+                level_attr = ' data-detail-level="all"'
 
             output.append(f'<p{level_attr}>{formatted_p}</p>')
 
@@ -247,6 +253,7 @@ def build_html_documentation():
                 "id": f"tz-{f.stem.lower()}",
                 "title": f"ТЗ: {f.stem}",
                 "badge": "Принятое ТЗ",
+                "level": "basic",
                 "html": markdown_to_html_enhanced(content)
             })
 
@@ -258,6 +265,7 @@ def build_html_documentation():
                 "id": f"spec-{f.stem.lower()}",
                 "title": f"Спецификация: {f.stem}",
                 "badge": "Каноническая спецификация",
+                "level": "tech",
                 "html": markdown_to_html_enhanced(content)
             })
 
@@ -271,6 +279,7 @@ def build_html_documentation():
                 "id": f"arch-{f.stem.lower()}",
                 "title": f"Архитектура: {f.stem}",
                 "badge": "Каноническая архитектура",
+                "level": "all",
                 "html": markdown_to_html_enhanced(content)
             })
 
@@ -284,6 +293,7 @@ def build_html_documentation():
                 "id": f"guide-{f.stem.lower()}",
                 "title": f"Руководство: {f.stem}",
                 "badge": "Руководство коворкера",
+                "level": "worker",
                 "html": markdown_to_html_enhanced(content)
             })
 
@@ -297,9 +307,9 @@ def build_html_documentation():
     nav_links = []
 
     for s in sections:
-        nav_links.append(f'<a href="#{s["id"]}">{s["title"]}</a>')
+        nav_links.append(f'<a href="#{s["id"]}" data-target-id="{s["id"]}">{s["title"]}</a>')
         sections_html.append(f"""
-    <section id="{s['id']}">
+    <section id="{s['id']}" data-section-level="{s.get('level', 'all')}">
       <div class="badge">{s['badge']}</div>
       {s['html']}
     </section>
@@ -508,37 +518,37 @@ def build_html_documentation():
 
   <nav class="quick-nav">
     <strong>Быстрая навигация:</strong>
-    <a href="#coworker-section">Коворкерам</a>
-    <a href="#mapping-section">Карта терминов</a>
-    <a href="#resp-section">Карта ответственности</a>
-    <a href="#glossary-section">Словарь</a>
+    <a href="#coworker-section" data-target-id="coworker-section">Коворкерам</a>
+    <a href="#mapping-section" data-target-id="mapping-section">Карта терминов</a>
+    <a href="#resp-section" data-target-id="resp-section">Карта ответственности</a>
+    <a href="#glossary-section" data-target-id="glossary-section">Словарь</a>
     {all_nav_rendered}
   </nav>
 
   <div id="firstTimeSection" style="display:none;">
-    <section>
+    <section data-section-level="simple">
       <div class="badge">Режим новичка</div>
       {markdown_to_html_enhanced(first_time_content)}
     </section>
   </div>
 
   <main id="mainContent">
-    <section id="coworker-section">
+    <section id="coworker-section" data-section-level="worker">
       <div class="badge">Обучение коворкеров</div>
       {markdown_to_html_enhanced(coworker_content)}
     </section>
 
-    <section id="mapping-section">
+    <section id="mapping-section" data-section-level="worker">
       <div class="badge">Карта соответствия</div>
       {markdown_to_html_enhanced(mapping_content)}
     </section>
 
-    <section id="resp-section">
+    <section id="resp-section" data-section-level="worker">
       <div class="badge">Карта ответственности</div>
       {markdown_to_html_enhanced(resp_content)}
     </section>
 
-    <section id="glossary-section">
+    <section id="glossary-section" data-section-level="simple">
       <div class="badge">Канонический словарь</div>
       {markdown_to_html_enhanced(glossary_content)}
     </section>
@@ -569,12 +579,6 @@ def build_html_documentation():
 
     function updateDetailLevel() {{
       const level = document.getElementById('detailLevel').value;
-      const elementsWithLevel = document.querySelectorAll('[data-detail-level]');
-
-      if (level === 'all') {{
-        elementsWithLevel.forEach(el => el.style.display = '');
-        return;
-      }}
 
       // Иерархия уровней: simple (1) -> basic (2) -> worker (3) -> tech (4) -> all (5)
       const levelRank = {{
@@ -587,17 +591,37 @@ def build_html_documentation():
 
       const currentRank = levelRank[level] || 5;
 
+      // 1. Фильтрация секций по data-section-level
+      const sections = document.querySelectorAll('section[data-section-level]');
+      sections.forEach(sec => {{
+        const secLevel = sec.getAttribute('data-section-level');
+        const secRank = levelRank[secLevel] || 5;
+        const isVisible = (secRank <= currentRank);
+        sec.style.display = isVisible ? '' : 'none';
+
+        const secId = sec.getAttribute('id');
+        if (secId) {{
+          const navLink = document.querySelector(`nav.quick-nav a[data-target-id="${{secId}}"]`);
+          if (navLink) {{
+            navLink.style.display = isVisible ? '' : 'none';
+          }}
+        }}
+      }});
+
+      // 2. Внутрисекционная фильтрация по data-detail-level
+      const elementsWithLevel = document.querySelectorAll('[data-detail-level]');
       elementsWithLevel.forEach(el => {{
         const elLevel = el.getAttribute('data-detail-level');
         const elRank = levelRank[elLevel] || 5;
 
-        // Если выбран простой уровень, показываем только соответствующий ранг
         if (level === 'simple') {{
           el.style.display = (elLevel === 'simple') ? '' : 'none';
         }} else if (level === 'basic') {{
-          el.style.display = (elLevel === 'simple' || elLevel === 'basic') ? '' : 'none';
+          el.style.display = (elRank <= 2) ? '' : 'none';
         }} else if (level === 'worker') {{
-          el.style.display = (elLevel !== 'tech') ? '' : 'none';
+          el.style.display = (elRank <= 3) ? '' : 'none';
+        }} else if (level === 'tech') {{
+          el.style.display = (elRank <= 4) ? '' : 'none';
         }} else {{
           el.style.display = '';
         }}
