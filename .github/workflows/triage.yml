@@ -18,25 +18,89 @@ jobs:
           script: |
             const issue = context.payload.issue;
             if (!issue) return;
+            const title = issue.title || '';
             const body = issue.body || '';
+            const text = (title + '\n' + body).toLowerCase();
+
+            // 1. Определение типа обращения
+            let issueType = 'Вопрос / Обсуждение';
             const labelsToAdd = [];
 
-            if (body.includes('Задать вопрос')) {
-              labelsToAdd.push('question');
-            } else if (body.includes('Предложить идею')) {
-              labelsToAdd.push('enhancement');
-            } else if (body.includes('Сообщить об ошибке')) {
+            if (text.includes('сообщить об ошибке') || text.includes('баг') || text.includes('ошибка') || text.includes('crash') || text.includes('fail')) {
+              issueType = 'Ошибка (Bug)';
               labelsToAdd.push('bug');
-            } else if (body.includes('Сказать, что документация непонятна')) {
+            } else if (text.includes('предложить идею') || text.includes('фича') || text.includes('feature') || text.includes('добавить')) {
+              issueType = 'Улучшение (Enhancement)';
+              labelsToAdd.push('enhancement');
+            } else if (text.includes('документация непонятна') || text.includes('документ') || text.includes('тз') || text.includes('словарь')) {
+              issueType = 'Документация';
               labelsToAdd.push('documentation');
+            } else {
+              labelsToAdd.push('question');
             }
 
-            if (body.toLowerCase().includes('документ') || body.toLowerCase().includes('тз') || body.toLowerCase().includes('словарь')) {
-              if (!labelsToAdd.includes('documentation')) {
-                labelsToAdd.push('documentation');
-              }
+            // 2. Определение предполагаемого Domain и модуля
+            let domainCandidate = 'Общий / Не определен';
+            let moduleCandidate = 'Core / Не определен';
+            let confidence = 'LOW';
+            let requiresManualReview = true;
+
+            const secKeys = ['security', 'безопасн', 'secret', 'секрет', 'парол', 'токен', 'grant', 'права доступа', 'уязвимост'];
+            const uiKeys = ['electron', 'ui', 'интерфейс', 'кнопк', 'html', 'отображени', 'виджет', 'css'];
+            const workerKeys = ['worker', 'коворкер', 'исполнител', 'lease', 'claim', 'heartbeat', 'задач'];
+            const ctxKeys = ['контекст', 'context', 'база знаний', 'knowledge', 'ресурс', 'resource'];
+            const infraKeys = ['ci', 'github actions', 'workflow', 'triage', 'quality', 'линтер', 'тест'];
+            const docsKeys = ['документ', 'тз', 'архитектур', 'словарь', 'раздел'];
+
+            if (secKeys.some(k => text.includes(k))) {
+              domainCandidate = 'Security & Governance';
+              moduleCandidate = 'Security / Secret Store';
+              confidence = 'HIGH';
+              requiresManualReview = false;
+            } else if (uiKeys.some(k => text.includes(k))) {
+              domainCandidate = 'User Experience & Visualization';
+              moduleCandidate = 'Desktop Shell (Electron) / Visualization';
+              confidence = 'HIGH';
+              requiresManualReview = false;
+            } else if (workerKeys.some(k => text.includes(k))) {
+              domainCandidate = 'Task Execution & Workers';
+              moduleCandidate = 'Coworker / Execution';
+              confidence = 'HIGH';
+              requiresManualReview = false;
+            } else if (ctxKeys.some(k => text.includes(k))) {
+              domainCandidate = 'Information & Context';
+              moduleCandidate = 'Context / Knowledge Base / Resources';
+              confidence = 'HIGH';
+              requiresManualReview = false;
+            } else if (infraKeys.some(k => text.includes(k))) {
+              domainCandidate = 'Engineering & Infrastructure';
+              moduleCandidate = 'QA / CI Infrastructure';
+              confidence = 'HIGH';
+              requiresManualReview = false;
+            } else if (docsKeys.some(k => text.includes(k))) {
+              domainCandidate = 'Architecture & Documentation';
+              moduleCandidate = 'Documentation / Specifications';
+              confidence = 'HIGH';
+              requiresManualReview = false;
             }
 
+            // 3. Приоритет-кандидат
+            let priorityCandidate = 'P2 (Стандартный кандидат)';
+            if (domainCandidate.includes('Security') || text.includes('секрет') || text.includes('уязвимост')) {
+              priorityCandidate = 'P0 (Критический кандидат)';
+            } else if (text.includes('ошибка') || text.includes('сломал') || text.includes('crash')) {
+              priorityCandidate = 'P1 (Важный кандидат)';
+            }
+
+            // 4. Уровень решения USER / ADMIN
+            let decisionLevel = 'Не требуется (стандартная работа)';
+            if (domainCandidate.includes('Security') || text.includes('admin') || text.includes('администратор') || text.includes('секрет') || text.includes('доступ')) {
+              decisionLevel = 'Требуется ADMIN Approval';
+            } else if (text.includes('выбор') || text.includes('согласован') || text.includes('user') || text.includes('пользовател')) {
+              decisionLevel = 'Требуется USER Decision';
+            }
+
+            // Добавление меток
             if (labelsToAdd.length > 0) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
@@ -46,17 +110,30 @@ jobs:
               });
             }
 
+            const reviewNotice = requiresManualReview
+              ? '⚠️ **Внимание:** уровень уверенности автоматического классификатора **LOW**. Требуется ручной разбор координатором проекта.'
+              : '✅ Предварительная классификация выполнена автоматически с высокой уверенностью (**HIGH**).';
+
             const commentBody = [
               'Приветствуем! Спасибо за обращение в KAT9I_OS.',
               '',
-              'Это обращение зарегистрировано в очереди первичного разбора (**triage**).',
+              'Это обращение зарегистрировано и обработано системой первичного автоматического разбора (**triage**):',
               '',
-              'Полезные ссылки для быстрого старта:',
-              `- [Режим «Я здесь впервые»](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/FIRST_TIME_GUIDE.md) — 8 шагов для новичков;`,
-              `- [Словарь терминов](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/GLOSSARY.md) — простые пояснения;`,
-              `- [GitHub для коворкеров](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/GITHUB_FOR_COWORKERS.md) — практическое обучение.`,
+              `- **Тип обращения:** ${issueType}`,
+              `- **Предполагаемый Domain (кандидат):** ${domainCandidate}`,
+              `- **Предполагаемый модуль (кандидат):** ${moduleCandidate}`,
+              `- **Рекомендуемый приоритет:** ${priorityCandidate}`,
+              `- **Уровень решения:** ${decisionLevel}`,
               '',
-              'Координатор проекта или ответственный за модуль проверит детали и при необходимости уточнит контекст.'
+              reviewNotice,
+              '',
+              '> [!NOTE]',
+              '> Данные оценки являются предварительными рекомендациями робота-помощника (DATA) и не наделяют процессами CONTROL или автоматическими правами.',
+              '',
+              '**Полезные материалы для старта:**',
+              `- [Режим «Я здесь впервые»](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/FIRST_TIME_GUIDE.md)`,
+              `- [Словарь терминов KAT9I_OS](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/GLOSSARY.md)`,
+              `- [GitHub для коворкеров](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/GITHUB_FOR_COWORKERS.md)`
             ].join('\n');
 
             await github.rest.issues.createComment({
