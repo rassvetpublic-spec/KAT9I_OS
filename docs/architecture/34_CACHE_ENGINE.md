@@ -133,7 +133,7 @@ CacheKey должен быть структурированным и затем 
 Минимальные группы метаданных:
 
 - identity: key, namespace;
-- source: source_ref, revision, hash;
+- source: source_ref, revision, hash (ровно 64 hex-символа), hash_algorithm (SHA-256 | BLAKE3);
 - transform: transform_id, transform_version;
 - payload: payload_ref (включает авторитетный checksum с явным алгоритмом, byte_size, storage_mode, локаторы);
 - lifecycle: created_at, last_access, expires_at при необходимости;

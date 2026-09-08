@@ -274,6 +274,7 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "source_ref": "src/core.rs",
             "revision": "rev-123",
             "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "hash_algorithm": "SHA-256",
             "transform_id": "tree_sitter_rust",
             "transform_version": "0.20.0",
             "payload_ref": valid_payload_ref,
@@ -299,6 +300,21 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         invalid_no_version = dict(valid_entry)
         del invalid_no_version["schema_version"]
         self.assertFalse(validator.is_valid(invalid_no_version))
+
+        # Нарушение: отсутствие hash_algorithm
+        invalid_no_hash_alg = dict(valid_entry)
+        del invalid_no_hash_alg["hash_algorithm"]
+        self.assertFalse(validator.is_valid(invalid_no_hash_alg))
+
+        # Нарушение: недопустимый hash_algorithm (например, MD5)
+        invalid_hash_alg = dict(valid_entry)
+        invalid_hash_alg["hash_algorithm"] = "MD5"
+        self.assertFalse(validator.is_valid(invalid_hash_alg))
+
+        # Нарушение: не 64-символьный хэш (например, 32-символьный md5 digest)
+        invalid_hash_len = dict(valid_entry)
+        invalid_hash_len["hash"] = "d41d8cd98f00b204e9800998ecf8427e"
+        self.assertFalse(validator.is_valid(invalid_hash_len))
 
         # Нарушение вложенного контракта: пустой payload_ref или отсутствующие required поля
         invalid_nested = dict(valid_entry)

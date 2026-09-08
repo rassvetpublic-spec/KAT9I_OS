@@ -12273,7 +12273,7 @@ Learning (самообучение)
 <p>Минимальные группы метаданных:</p>
 <ul>
 <li>identity: key, namespace;</li>
-<li>source: source_ref, revision, hash;</li>
+<li>source: source_ref, revision, hash (ровно 64 hex-символа), hash_algorithm (SHA-256 | BLAKE3);</li>
 <li>transform: transform_id, transform_version;</li>
 <li>payload: payload_ref (включает авторитетный checksum с явным алгоритмом, byte_size, storage_mode, локаторы);</li>
 <li>lifecycle: created_at, last_access, expires_at при необходимости;</li>

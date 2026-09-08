@@ -62,6 +62,7 @@
       "canonical_responsibility": "Политика формирования рабочего контекста, ContextPack и расчёт Context Budget",
       "provides_contracts": ["ContextRef", "ContextPack"],
       "requires_contracts": ["SystemEvent"],
+      "consumes_optional_contracts": ["CacheEntry", "PayloadRef"],
       "dependencies": ["Storage"],
       "capabilities": ["CONTEXT_PACKING", "CONTEXT_BUDGETING", "REFS_RESOLVER"],
       "health_interface": {
@@ -79,6 +80,7 @@
       "canonical_responsibility": "Управление паспортом TaskContract, координация жизненного цикла и модель TaskGraph",
       "provides_contracts": ["TaskContract", "TaskRuntimeState"],
       "requires_contracts": ["SecurityDecision", "CapabilityGrant", "SystemEvent"],
+      "consumes_optional_contracts": ["CacheEntry", "PayloadRef"],
       "dependencies": ["Storage", "Security", "Context"],
       "capabilities": ["TASK_LIFECYCLE", "TASK_GRAPH_SCHEDULING", "SYSTEM_COORDINATION"],
       "health_interface": {
@@ -96,6 +98,7 @@
       "canonical_responsibility": "Физическое изолированное выполнение разрешённых задач и фиксация артефактов с Evidence",
       "provides_contracts": ["TaskResult", "Evidence"],
       "requires_contracts": ["TaskContract", "CapabilityGrant", "SystemEvent"],
+      "consumes_optional_contracts": ["CacheEntry", "PayloadRef"],
       "dependencies": ["Core", "Security", "Storage"],
       "capabilities": ["PROCESS_ISOLATION", "ARTIFACT_COLLECTION", "EVIDENCE_RECORDING"],
       "health_interface": {

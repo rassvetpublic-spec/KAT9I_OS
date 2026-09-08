@@ -13,6 +13,7 @@
     "source_ref",
     "revision",
     "hash",
+    "hash_algorithm",
     "transform_id",
     "transform_version",
     "payload_ref",
@@ -56,8 +57,16 @@
     },
     "hash": {
       "type": "string",
-      "pattern": "^[a-fA-F0-9]{32,128}$",
-      "description": "Криптографический хэш исходного контента (например, SHA-256) для детерминированной инвалидации."
+      "pattern": "^[a-fA-F0-9]{64}$",
+      "description": "Криптографический хэш исходного контента (ровно 64 hex-символа) для детерминированной инвалидации."
+    },
+    "hash_algorithm": {
+      "type": "string",
+      "enum": [
+        "SHA-256",
+        "BLAKE3"
+      ],
+      "description": "Явный криптографический алгоритм вычисления хэша исходного контента (SHA-256 или BLAKE3)."
     },
     "transform_id": {
       "type": "string",
