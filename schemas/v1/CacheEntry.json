@@ -16,7 +16,6 @@
     "transform_id",
     "transform_version",
     "payload_ref",
-    "checksum",
     "created_at",
     "hit_count",
     "scope"
@@ -72,12 +71,7 @@
     },
     "payload_ref": {
       "$ref": "PayloadRef.json",
-      "description": "Строгая ссылка на материализованные данные полезной нагрузки по каноническому контракту PayloadRef."
-    },
-    "checksum": {
-      "type": "string",
-      "pattern": "^[a-fA-F0-9]{32,128}$",
-      "description": "Контрольная сумма полезной нагрузки (SHA-256 или BLAKE3) для верификации целостности."
+      "description": "Строгая ссылка на полезную нагрузку (PayloadRef), содержащая единую авторитетную контрольную сумму (checksum), режим и локатор размещения."
     },
     "created_at": {
       "type": "string",

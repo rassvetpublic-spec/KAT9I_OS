@@ -276,7 +276,6 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "transform_id": "tree_sitter_rust",
             "transform_version": "0.20.0",
             "payload_ref": valid_payload_ref,
-            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "created_at": "2026-09-08T10:00:00Z",
             "hit_count": 0,
             "scope": "SESSION_LOCAL"
@@ -297,6 +296,11 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         invalid_nested_mode = dict(valid_entry)
         invalid_nested_mode["payload_ref"] = dict(valid_payload_ref, storage_mode="INVALID_MODE")
         self.assertFalse(validator.is_valid(invalid_nested_mode))
+
+        # Нарушение: попытка передать дублирующий top-level checksum (additionalProperties: false)
+        invalid_dup_checksum = dict(valid_entry)
+        invalid_dup_checksum["checksum"] = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        self.assertFalse(validator.is_valid(invalid_dup_checksum))
 
         # Нарушение: недопустимый namespace
         invalid_entry = dict(valid_entry)
@@ -333,6 +337,29 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         invalid_spill_no_offset = dict(valid_payload)
         del invalid_spill_no_offset["offset"]
         self.assertFalse(validator.is_valid(invalid_spill_no_offset))
+
+        # Проверка MMAP с mmap_path
+        valid_mmap = {
+            "payload_id": "pay-004-mmap",
+            "storage_mode": "MMAP",
+            "byte_size": 2097152,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "mmap_path": "C:\\GIT\\KAT9I_OS\\data\\cache\\mapped.bin",
+            "offset": 0,
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertTrue(validator.is_valid(valid_mmap))
+
+        # Нарушение MMAP: отсутствует и mmap_path, и segment_id
+        invalid_mmap_no_target = {
+            "payload_id": "pay-004-mmap",
+            "storage_mode": "MMAP",
+            "byte_size": 2097152,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "offset": 0,
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertFalse(validator.is_valid(invalid_mmap_no_target))
 
         # Проверка RAM_REGION
         valid_ram = {

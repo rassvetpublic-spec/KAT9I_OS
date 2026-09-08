@@ -39,7 +39,7 @@
     "checksum": {
       "type": "string",
       "pattern": "^[a-fA-F0-9]{32,128}$",
-      "description": "Контрольная сумма полезной нагрузки (SHA-256 или BLAKE3)."
+      "description": "Авторитетная контрольная сумма полезной нагрузки (SHA-256 или BLAKE3)."
     },
     "segment_id": {
       "type": [
@@ -47,7 +47,7 @@
         "null"
       ],
       "pattern": "^(seg-[a-zA-Z0-9_-]{8,64})?$",
-      "description": "Идентификатор неизменяемого сегмента при storage_mode=SPILL_SEGMENT."
+      "description": "Идентификатор неизменяемого сегмента при storage_mode=SPILL_SEGMENT или MMAP."
     },
     "offset": {
       "type": [
@@ -55,7 +55,14 @@
         "null"
       ],
       "minimum": 0,
-      "description": "Байтовое смещение внутри сегмента при storage_mode=SPILL_SEGMENT или MMAP."
+      "description": "Байтовое смещение внутри сегмента или файла при storage_mode=SPILL_SEGMENT или MMAP."
+    },
+    "mmap_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Путь к проецируемому файлу при storage_mode=MMAP."
     },
     "shm_handle": {
       "type": [
@@ -101,6 +108,44 @@
             "minimum": 0
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "storage_mode": {
+            "const": "MMAP"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "offset"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "mmap_path"
+            ],
+            "properties": {
+              "mmap_path": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "required": [
+              "segment_id"
+            ],
+            "properties": {
+              "segment_id": {
+                "type": "string",
+                "pattern": "^seg-[a-zA-Z0-9_-]{8,64}$"
+              }
+            }
+          }
+        ]
       }
     },
     {
