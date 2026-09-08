@@ -31,8 +31,10 @@ jobs:
           test -f docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md
           test -f docs/guides/GITHUB_FOR_COWORKERS.md
           test -f docs/guides/GITHUB_KAT9I_MAPPING.md
+          test -f docs/guides/FIRST_TIME_GUIDE.md
           test -f docs/architecture/MODULE_RESPONSIBILITY_MAP.md
           test -f docs/GLOSSARY.md
+          test -f scripts/generate_html_docs.py
           test -f .github/ISSUE_TEMPLATE/feedback.yml
           test -f .github/PULL_REQUEST_TEMPLATE.md
           test -f .github/CODEOWNERS
@@ -51,6 +53,7 @@ jobs:
               Path('docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md'),
               Path('docs/guides/GITHUB_FOR_COWORKERS.md'),
               Path('docs/guides/GITHUB_KAT9I_MAPPING.md'),
+              Path('docs/guides/FIRST_TIME_GUIDE.md'),
               Path('docs/architecture/MODULE_RESPONSIBILITY_MAP.md'),
               Path('docs/GLOSSARY.md'),
               Path('.github/PULL_REQUEST_TEMPLATE.md'),
@@ -89,11 +92,12 @@ jobs:
           grep -q 'Revision для проверки:' .github/PULL_REQUEST_TEMPLATE.md
           grep -q 'Независимый QA' .github/PULL_REQUEST_TEMPLATE.md
 
-      - name: Проверить HTML-представление и зафиксировать статус
+      - name: Проверить генератор HTML и синхронизацию единого источника истины (SSOT)
         shell: bash
         run: |
           set -euo pipefail
+          python scripts/generate_html_docs.py
           test -s index.html
-          echo 'index.html проверен на непустоту.'
-          echo 'Канонический источник истины: Markdown в docs/.'
-          echo 'Автоматическая генерация отслеживается в Issue #2 и #6.'
+          grep -q 'Официальная каноническая документация' index.html
+          grep -q 'Режим «Я здесь впервые»' index.html
+          echo 'Генератор HTML и проверка синхронизации SSOT успешно пройдены.'
