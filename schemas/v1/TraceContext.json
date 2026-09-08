@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/TraceContext.json",
+  "title": "TraceContext",
+  "description": "Единый контекст сквозной трассировки выполнения задач, этапов и вызовов инструментов в KAT9I_OS v0.1.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "trace_id",
+    "span_id",
+    "task_id",
+    "correlation_id",
+    "name",
+    "span_kind",
+    "status",
+    "start_time_unix_nano"
+  ],
+  "properties": {
+    "trace_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{32}$",
+      "description": "Глобальный 16-байтный идентификатор трассы (32 hex-символа, совместим с W3C TraceContext и OpenTelemetry)."
+    },
+    "span_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{16}$",
+      "description": "Уникальный 8-байтный идентификатор текущего спана (16 hex-символов, W3C TraceContext)."
+    },
+    "parent_span_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{16}$",
+      "description": "Идентификатор родительского спана (null для корневого спана задачи)."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор связанной задачи KAT9I_OS."
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^corr-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Сквозной корреляционный идентификатор межпроцессного взаимодействия."
+    },
+    "operation_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^op-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Ключ идемпотентности изменяющей операции, если применимо."
+    },
+    "worker_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^id-[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор исполнителя/воркера."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Человекочитаемое имя этапа/спана (например, 'core.task_dispatch', 'tool.git_diff')."
+    },
+    "span_kind": {
+      "type": "string",
+      "enum": [
+        "CORE",
+        "SECURITY_DECISION",
+        "CONTEXT_PREPARATION",
+        "MODEL_CALL",
+        "TOOL_CALL",
+        "WORKER_EXECUTION",
+        "EXTERNAL_INTEGRATION",
+        "QA",
+        "STORAGE",
+        "RECOVERY"
+      ],
+      "description": "Канонический тип этапа выполнения в архитектуре KAT9I_OS."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "UNSET",
+        "OK",
+        "ERROR"
+      ],
+      "description": "Статус завершения спана (соответствует OpenTelemetry StatusCode)."
+    },
+    "status_message": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Сообщение об ошибке при status=ERROR (без раскрытия секретов)."
+    },
+    "attributes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
+      },
+      "description": "Атрибуты спана (строго без секретов и чувствительных токенов)."
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "time_unix_nano"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "time_unix_nano": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            }
+          }
+        }
+      },
+      "default": [],
+      "description": "События внутри жизненного цикла спана."
+    },
+    "evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Ссылка на артефакт доказательства Evidence, связанный с данным этапом."
+    },
+    "start_time_unix_nano": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Время старта спана в наносекундах эпохи Unix."
+    },
+    "end_time_unix_nano": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Время завершения спана в наносекундах эпохи Unix (null, если спан ещё активен)."
+    }
+  }
+}
