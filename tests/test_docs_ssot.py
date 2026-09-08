@@ -219,7 +219,9 @@ class TestDocumentationSSoT(unittest.TestCase):
             "SystemEvent.json",
             "ModuleRegistry.json",
             "Identity.json",
-            "ApprovalRecord.json"
+            "ApprovalRecord.json",
+            "JournalEvent.json",
+            "Checkpoint.json"
         ]
         for s in expected_schemas:
             p = schemas_dir / s

@@ -6413,18 +6413,67 @@ Learning (самообучение)
 <h2 id="21-2-каноническое-состояние-задачи">21.2. Каноническое состояние задачи</h2>
 <p>Для восстановления используются:</p>
 <ul>
-<li><code>TaskContract</code> — контракт задачи;</li>
-<li><code>TaskRuntimeState</code> — текущее состояние выполнения;</li>
+<li><code>TaskContract</code> — контракт задачи (<code>schemas/v1/TaskContract.json</code>);</li>
+<li><code>TaskRuntimeState</code> — текущее состояние выполнения (<code>schemas/v1/TaskRuntimeState.json</code>);</li>
 <li><code>TaskGraph</code> — граф связанных задач;</li>
-<li><code>ResultRef</code> — ссылка на результат;</li>
-<li><code>Evidence</code> — доказательства выполнения;</li>
-<li><code>Checkpoint</code> — контрольные точки;</li>
-<li>структурированный журнал событий.</li>
+<li><code>ResultRef</code> — ссылка на результат (<code>schemas/v1/TaskResult.json</code>);</li>
+<li><code>Evidence</code> — доказательства выполнения (<code>schemas/v1/Evidence.json</code>);</li>
+<li><code>Checkpoint</code> — контрольные точки (<code>schemas/v1/Checkpoint.json</code>);</li>
+<li><code>JournalEvent</code> — структурированный append-only журнал событий (<code>schemas/v1/JournalEvent.json</code>).</li>
 </ul>
 <p>Полный чат не является состоянием выполнения.</p>
-<h2 id="21-3-контрольные-точки">21.3. Контрольные точки</h2>
-<p>После значимых этапов создаются контрольные точки: контракт создан, контекст подготовлен, Worker назначен, рабочая область создана, реализация завершена, тесты пройдены, результат опубликован, QA выполнен.</p>
-<p>После перезапуска система продолжает работу с последней подтверждённой контрольной точки.</p>
+<h2 id="21-2a-машинный-контракт-append-only-event-journal">21.2a. Машинный контракт append-only Event Journal</h2>
+<p>Критический журнал событий фиксируется по схеме <code>schemas/v1/JournalEvent.json</code>:</p>
+<ol>
+<li><strong>Строгая монотонность</strong>: каждое событие имеет возрастающий <code>sequence_number</code> (минимальное значение 1).</li>
+<li><strong>Обязательные критические события v0.1</strong>:</li>
+</ol>
+<ul>
+<li>Жизненный цикл задачи: <code>TASK_CREATED</code>, <code>TASK_STATUS_CHANGED</code>, <code>TASK_COMPLETED</code>, <code>TASK_FAILED</code>, <code>TASK_CANCELLED</code>;</li>
+<li>Управление владением: <code>LEASE_ACQUIRED</code>, <code>LEASE_EXPIRED</code>, <code>LEASE_REVOKED</code>;</li>
+<li>Внешние действия с побочными эффектами: <code>SIDE_EFFECT_PLANNED</code>, <code>SIDE_EFFECT_EXECUTED</code>;</li>
+<li>Безопасность и мандаты: <code>SECURITY_VIOLATION_DETECTED</code>, <code>CAPABILITY_GRANTED</code>, <code>CAPABILITY_REVOKED</code>, <code>APPROVAL_RECORDED</code>;</li>
+<li>Контрольные точки: <code>CHECKPOINT_COMMITTED</code>.</li>
+</ul>
+<ol>
+<li><strong>Идемпотентность и Fencing</strong>:</li>
+</ol>
+<ul>
+<li>Каждая изменяющая операция обязана иметь уникальный <code>operation_id</code> (<code>op-...</code>);</li>
+<li>Каждое действие сопровождается текущим <code>lease_generation</code> (Fencing Token).</li>
+</ul>
+<h2 id="21-3-контрольные-точки-checkpoint">21.3. Контрольные точки (Checkpoint)</h2>
+<p>Контрольная точка фиксирует согласованное состояние по схеме <code>schemas/v1/Checkpoint.json</code>:</p>
+<ul>
+<li><code>checkpoint_id</code>: уникальный идентификатор (<code>chk-...</code>);</li>
+<li><code>task_id</code>: идентификатор задачи;</li>
+<li><code>last_sequence_number</code>: номер последнего учтенного события Event Journal, включенного в снимок;</li>
+<li><code>runtime_state</code>: снимок <code>TaskRuntimeState</code>;</li>
+<li><code>completed_operations</code>: массив выполненных <code>operation_id</code> для предотвращения дублирования действий;</li>
+<li><code>active_lease_generation</code>: поколение владения на момент фиксации;</li>
+<li><code>persisted_artifacts</code>: список подтвержденных путей к артефактам/файлам.</li>
+</ul>
+<p>После перезапуска система загружает последнюю подтвержденную контрольную точку и воспроизводит только последующие события журнала (<code>last_sequence_number + 1 .. latest</code>).</p>
+<h2 id="21-3a-политика-хранения-retention-уплотнение-compaction-и-резервирование">21.3a. Политика хранения (Retention), уплотнение (Compaction) и резервирование</h2>
+<ol>
+<li><strong>Retention (срок хранения)</strong>:</li>
+</ol>
+<ul>
+<li>События активных задач хранятся до полного завершения, прохождения QA и закрытия задачи.</li>
+<li>События завершенных задач хранятся в оперативном журнале минимум 30 суток для аудита, после чего архивируются в долговременное хранилище Storage.</li>
+</ul>
+<ol>
+<li><strong>Compaction (безопасное уплотнение)</strong>:</li>
+</ol>
+<ul>
+<li>Промежуточные события между подтвержденными Checkpoint&#x27;ами могут уплотняться после закрытия задачи при условии сохранения контрольных сумм и доказательств Evidence.</li>
+</ul>
+<ol>
+<li><strong>Резервное восстановление (Disaster Recovery)</strong>:</li>
+</ol>
+<ul>
+<li>Снимки Checkpoint и журнал событий зеркалируются в локальном каталоге хранилища <code>Storage</code>. Повреждение одного файла журнала локализуется без повреждения всей базы.</li>
+</ul>
 <h2 id="21-4-восстановление-только-по-фактам">21.4. Восстановление только по фактам</h2>
 <p>После аварии нельзя восстанавливать состояние из предположения модели. KAT9I_OS проверяет канонический источник, состояние Runtime, ResultRef и Evidence.</p>
 <p>Если фактическое состояние нельзя установить однозначно, задача получает <code>BLOCKED</code>.</p>
@@ -11050,6 +11099,32 @@ Learning (самообучение)
 <li>Запись обязана содержать <code>approval_id</code>, <code>approver_identity_id</code>, <code>approver_role</code>, <code>task_id</code>, <code>action_hash</code>, криптографический <code>nonce</code> (длиной не менее 16 символов), метки <code>issued_at</code> и <code>expires_at</code>;</li>
 <li>Воркеры (<code>WORKER</code>) или внешние сервисы не могут генерировать или подписывать Human Approval.</li>
 </ul>
+<h2 id="32-40d-adr-037-event-journal-checkpoint-и-правила-replay-recovery">32.40d. ADR-037 — Event Journal, Checkpoint и правила Replay Recovery</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <code>schemas/v1/JournalEvent.json</code>, <code>schemas/v1/Checkpoint.json</code>, <code>docs/architecture/21_RELIABILITY_AND_RECOVERY.md</code>, <code>tests/test_journal_recovery.py</code>, Issue #46).</p>
+<ol>
+<li><strong>Машинный контракт append-only Event Journal</strong>:</li>
+</ol>
+<ul>
+<li>Журнал критических событий является строго append-only и описывается схемой <code>schemas/v1/JournalEvent.json</code>;</li>
+<li>Каждое событие имеет строго монотонный <code>sequence_number</code> (начиная с 1);</li>
+<li>Обязательный перечень событий v0.1: переходы жизненного цикла задач (<code>TASK_CREATED</code>, <code>TASK_STATUS_CHANGED</code>, <code>TASK_COMPLETED</code>, <code>TASK_FAILED</code>, <code>TASK_CANCELLED</code>), управление Lease (<code>LEASE_ACQUIRED</code>, <code>LEASE_EXPIRED</code>, <code>LEASE_REVOKED</code>), внешние действия (<code>SIDE_EFFECT_PLANNED</code>, <code>SIDE_EFFECT_EXECUTED</code>), события безопасности (<code>SECURITY_VIOLATION_DETECTED</code>, <code>CAPABILITY_GRANTED</code>, <code>CAPABILITY_REVOKED</code>, <code>APPROVAL_RECORDED</code>) и фиксация контрольных точек (<code>CHECKPOINT_COMMITTED</code>).</li>
+</ul>
+<ol>
+<li><strong>Контрольные точки (Checkpoint)</strong>:</li>
+</ol>
+<ul>
+<li>Контрольная точка описывается схемой <code>schemas/v1/Checkpoint.json</code> и связывается с <code>last_sequence_number</code>;</li>
+<li>Включает моментальный снимок согласованного <code>runtime_state</code>, перечень выполненных <code>operation_id</code>, активное поколение владения <code>active_lease_generation</code> и ссылки на подтвержденные артефакты.</li>
+</ul>
+<ol>
+<li><strong>Replay Recovery и защита от дублирующих побочных действий</strong>:</li>
+</ol>
+<ul>
+<li>Восстановление после сбоя или перезапуска всегда стартует с последней подтвержденной контрольной точки Checkpoint с доигрыванием последующих событий журнала;</li>
+<li>Защита от повтора внешних изменяющих действий (идемпотентность): если <code>operation_id</code> уже зафиксирован в чекпоинте или журнале с подтвержденным Evidence, повторная отправка блокируется (<code>SKIP_ALREADY_EXECUTED</code>);</li>
+<li>Защита от зомби-воркеров (Fencing Token): события от устаревшего поколения владения (<code>lease_generation &lt; current_lease_generation</code>) безусловно отклоняются;</li>
+<li>Срок хранения (Retention): события активных задач хранятся непрерывно, завершенных — минимум 30 суток для аудита.</li>
+</ul>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
 <h2 id="32-42-реализация-ipc-electron">32.42. Реализация IPC Electron</h2>
@@ -11151,7 +11226,7 @@ Learning (самообучение)
 <li><strong>OQ-005</strong> — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47) — <strong>ACCEPTED</strong> (ADR-035, <code>modules_registry.json</code>).</li>
 <li><strong>OQ-006</strong> — каталог физических канонических схем (Issue #40) — <strong>ACCEPTED</strong> (ADR-034, <code>schemas/v1/</code>).</li>
 <li><strong>OQ-007</strong> — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44) — <strong>ACCEPTED</strong> (ADR-036, <code>schemas/v1/Identity.json</code>, <code>schemas/v1/ApprovalRecord.json</code>).</li>
-<li><strong>OQ-009</strong> — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).</li>
+<li><strong>OQ-009</strong> — формат Event Journal, Checkpoint и Replay Recovery (Issue #46) — <strong>ACCEPTED</strong> (ADR-037, <code>schemas/v1/JournalEvent.json</code>, <code>schemas/v1/Checkpoint.json</code>).</li>
 </ul>
 <h3 id="этап-g3-runtime-foundation-фундамент-исполняемой-системы">Этап G3 — Runtime Foundation (Фундамент исполняемой системы)</h3>
 <ul>
@@ -11273,15 +11348,32 @@ Learning (самообучение)
 <p>Статус:</p>
 <p><code>OPEN BEFORE v0.1</code>.</p>
 <h2 id="32-61-oq-009-формат-event-journal-и-checkpoint">32.61. OQ-009 — формат Event Journal и Checkpoint</h2>
-<p>Нужно определить:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-037, канонический источник: <a href="21_RELIABILITY_AND_RECOVERY.md">docs/architecture/21_RELIABILITY_AND_RECOVERY.md</a>, <code>schemas/v1/JournalEvent.json</code>, <code>schemas/v1/Checkpoint.json</code>, Issue #46).</div>
+<p>Решение формализовано:</p>
+<ol>
+<li><strong>Append-only Event Journal (<code>schemas/v1/JournalEvent.json</code>)</strong>:</li>
+</ol>
 <ul>
-<li>какие события обязательно append-only;</li>
-<li>какие данные входят в Checkpoint;</li>
-<li>как выполняется Replay Recovery;</li>
-<li>Retention.</li>
+<li>Строгая монотонность <code>sequence_number</code> (от 1);</li>
+<li>Обязательный перечень событий v0.1: жизненный цикл задач (<code>TASK_*</code>), управление Lease (<code>LEASE_*</code>), внешние действия (<code>SIDE_EFFECT_*</code>), события безопасности (<code>SECURITY_*</code>, <code>CAPABILITY_*</code>, <code>APPROVAL_RECORDED</code>) и чекпоинты (<code>CHECKPOINT_COMMITTED</code>);</li>
+<li>Идемпотентность побочных эффектов через уникальный <code>operation_id</code> (<code>op-...</code>);</li>
+<li>Защита от устаревших воркеров через <code>lease_generation</code> (Fencing Token).</li>
 </ul>
-<p>Статус:</p>
-<p><code>OPEN BEFORE v0.1</code>.</p>
+<ol>
+<li><strong>Контрольные точки (<code>schemas/v1/Checkpoint.json</code>)</strong>:</li>
+</ol>
+<ul>
+<li>Фиксация согласованного снимка <code>runtime_state</code>, перечня выполненных <code>operation_id</code> и ссылок на артефакты;</li>
+<li>Связка с <code>last_sequence_number</code>.</li>
+</ul>
+<ol>
+<li><strong>Replay Recovery</strong>:</li>
+</ol>
+<ul>
+<li>Старт с последнего Checkpoint с доигрыванием последующих событий;</li>
+<li>Защита от дублирующих побочных действий (<code>SKIP_ALREADY_EXECUTED</code>);</li>
+<li>Retention: минимум 30 суток для аудита.</li>
+</ul>
 <h2 id="32-62-oq-010-правила-завершения-core-при-закрытии-electron">32.62. OQ-010 — правила завершения Core при закрытии Electron</h2>
 <p>Нужно определить пользовательский UX:</p>
 <ul>
