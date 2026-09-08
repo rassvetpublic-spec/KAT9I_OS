@@ -167,5 +167,36 @@ class TestDocumentationSSoT(unittest.TestCase):
             f"Обнаружены нарушения языковой политики: заголовки без кириллицы ({len(violations)}):\n" + "\n".join(violations[:20])
         )
 
+    def test_detail_levels_filtering_semantics(self):
+        """
+        Проверяет семантику 5 уровней подробности согласно канонической спецификации 24.4 (Issue #36):
+        - Наличие глобального селектора со всеми 5 уровнями (simple, basic, worker, tech, all).
+        - Наличие разметки data-section-level для всех 5 уровней во фронтенде.
+        - Наличие атрибутов data-target-id в навигации quick-nav для синхронизации отображения ссылок.
+        - Наличие логики фильтрации секций по иерархическому рангу в updateDetailLevel.
+        """
+        index_file = REPO_ROOT / "index.html"
+        self.assertTrue(index_file.exists(), "index.html отсутствует")
+        content = index_file.read_text(encoding="utf-8")
+
+        # 1. Проверка селектора уровней
+        expected_levels = ["simple", "basic", "worker", "tech", "all"]
+        for lvl in expected_levels:
+            self.assertIn(f'value="{lvl}"', content, f"Уровень {lvl} отсутствует в селекторе detailLevel")
+
+        # 2. Проверка разметки data-section-level во всех 5 уровнях
+        for lvl in expected_levels:
+            pattern = f'data-section-level="{lvl}"'
+            self.assertIn(pattern, content, f"Разметка {pattern} отсутствует на секциях index.html")
+
+        # 3. Проверка связки быстрой навигации с секциями через data-target-id
+        self.assertIn('data-target-id="coworker-section"', content)
+        self.assertIn('data-target-id="glossary-section"', content)
+
+        # 4. Проверка реализации ранговой фильтрации в JS
+        self.assertIn("data-section-level", content)
+        self.assertIn("levelRank", content)
+        self.assertIn("nav.quick-nav", content)
+
 if __name__ == "__main__":
     unittest.main()
