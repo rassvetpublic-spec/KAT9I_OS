@@ -78,9 +78,10 @@ class TestDocumentationSSoT(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Генератор завершился с ошибкой")
 
         diff_res = subprocess.run(["git", "diff", "--exit-code", "index.html"], capture_output=True, cwd=str(REPO_ROOT))
+        diff_text = diff_res.stdout.decode("utf-8", errors="replace") if diff_res.stdout else ""
         self.assertEqual(
             diff_res.returncode, 0,
-            "Ошибка SSoT: производный файл index.html устарел относительно Markdown-документации! "
+            f"Ошибка SSoT: производный файл index.html устарел относительно Markdown-документации!\nDIFF:\n{diff_text[:2000]}\n"
             "Запустите `python scripts/generate_html_docs.py` и закоммитьте обновлённый index.html."
         )
 
