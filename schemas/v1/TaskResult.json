@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/TaskResult.json",
+  "title": "TaskResult",
+  "description": "Итоговый результат выполнения задачи в KAT9I_OS.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "verdict",
+    "artifacts",
+    "evidence_ref",
+    "completed_at",
+    "duration_ms"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор завершённой задачи."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "FAILURE",
+        "ABORTED",
+        "REJECTED_BY_QA"
+      ],
+      "description": "Итоговый вердикт выполнения задачи."
+    },
+    "summary": {
+      "type": "string",
+      "default": "",
+      "description": "Текстовое резюме проделанной работы."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "hash_sha256",
+          "size_bytes"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "hash_sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": {
+            "type": "string",
+            "default": ""
+          }
+        }
+      },
+      "description": "Список созданных или изменённых артефактов с хэш-суммами."
+    },
+    "evidence_ref": {
+      "type": "string",
+      "description": "Ссылка на запись аудита доказательств (Evidence)."
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка завершения в ISO 8601."
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Длительность исполнения в миллисекундах."
+    }
+  }
+}

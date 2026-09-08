@@ -10967,6 +10967,14 @@ Learning (самообучение)
 <p><strong>Статус:</strong> ACCEPTED.</p>
 <p>Каждая верхнеуровневая ответственность имеет одного канонического владельца.</p>
 <p>Несколько модулей могут участвовать в процессе, но не конкурируют за одну семантику.</p>
+<h2 id="32-40a-adr-034-канонический-формат-машинных-контрактов-и-каталог-схем">32.40a. ADR-034 — канонический формат машинных контрактов и каталог схем</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <a href="../../schemas/README.md">schemas/README.md</a>, <code>schemas/v1/</code>, Issue #40).</p>
+<ol>
+<li>В качестве канонического формата машинных контрактов KAT9I_OS принят <strong>JSON Schema (Draft 2020-12)</strong>.</li>
+<li>Единым физическим каталогом SSoT схем зафиксирован каталог <code>schemas/v1/</code>.</li>
+<li>Все контракты обязаны содержать инвариант безопасности <code>additionalProperties: false</code> (Fail-Closed).</li>
+<li>Версионирование схем осуществляется по SemVer 2.0.0; неизвестные мажорные версии вызывают немедленный отказ <code>INCOMPATIBLE_SCHEMA_VERSION</code>.</li>
+</ol>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
 <h2 id="32-42-реализация-ipc-electron">32.42. Реализация IPC Electron</h2>
@@ -11064,9 +11072,9 @@ Learning (самообучение)
 <p>В соответствии с Architecture Baseline Gate [Issue #62], до начала полномасштабного кодирования версии v0.1 зафиксирован закрытый исчерпывающий перечень архитектурных вопросов, распределённых по этапам Gate:</p>
 <h3 id="этап-g2-machine-contracts-машинные-контракты">Этап G2 — Machine Contracts (Машинные контракты)</h3>
 <ul>
-<li><strong>OQ-003</strong> — единый машинный формат системных контрактов (JSON Schema / Protobuf) и правила версий (Issue #40).</li>
+<li><strong>OQ-003</strong> — единый машинный формат системных контрактов (JSON Schema / Protobuf) и правила версий (Issue #40) — <strong>ACCEPTED</strong> (ADR-034).</li>
 <li><strong>OQ-005</strong> — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47).</li>
-<li><strong>OQ-006</strong> — каталог физических канонических схем (Issue #40).</li>
+<li><strong>OQ-006</strong> — каталог физических канонических схем (Issue #40) — <strong>ACCEPTED</strong> (ADR-034, <code>schemas/v1/</code>).</li>
 <li><strong>OQ-007</strong> — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44).</li>
 <li><strong>OQ-009</strong> — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).</li>
 </ul>
@@ -11110,17 +11118,15 @@ Learning (самообучение)
 </ul>
 <p>Но это ещё должно пройти сравнительный анализ и прототип.</p>
 <h2 id="32-55-oq-003-формат-системных-контрактов">32.55. OQ-003 — формат системных контрактов</h2>
-<p>Нужно выбрать один канонический способ описания:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-034, канонический источник: <a href="../../schemas/README.md">schemas/README.md</a>, <code>schemas/v1/</code>, Issue #40).</div>
+<p>В качестве канонического машинного формата системных контрактов KAT9I_OS для всех слоёв (Rust Core, TypeScript UI, Python Workers) принят <strong>JSON Schema (Draft 2020-12)</strong>.</p>
+<p>Обоснование:</p>
 <ul>
-<li>TaskContract;</li>
-<li>ResultRef;</li>
-<li>Evidence;</li>
-<li>Events;</li>
-<li>Worker Protocol.</li>
+<li>Нативная поддержка во всех трёх языках без обязательных бинарных компиляторов (protoc);</li>
+<li>Строгая проверка ограничений (<code>pattern</code>, <code>enum</code>, <code>minimum</code>, <code>maximum</code>, <code>required</code>);</li>
+<li>Строгий инвариант безопасности <code>additionalProperties: false</code> (Fail-Closed при неизвестных полях);</li>
+<li>Человекочитаемость и прозрачность в журналах аудита и отладке.</li>
 </ul>
-<p>Статус:</p>
-<p><code>OPEN</code>.</p>
-<p>Должен быть закрыт до активной реализации контрактов.</p>
 <h2 id="32-56-oq-004-внутренний-api-между-electron-и-core">32.56. OQ-004 — внутренний API между Electron и Core</h2>
 <p>Нужно выбрать минимальный механизм локальной коммуникации.</p>
 <p>Критерии:</p>
@@ -11150,12 +11156,19 @@ Learning (самообучение)
 <p>Статус:</p>
 <p><code>OPEN</code>.</p>
 <h2 id="32-58-oq-006-каталог-канонических-схем">32.58. OQ-006 — каталог канонических схем</h2>
-<p>Нужно определить физический SSoT для машинных контрактов.</p>
-<p>Например логически:</p>
-<p><code>schemas/</code></p>
-<p>Но точная структура будет принята при реализации.</p>
-<p>Статус:</p>
-<p><code>OPEN</code>.</p>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-034, канонический источник: <a href="../../schemas/README.md">schemas/README.md</a>, <code>schemas/v1/</code>, Issue #40).</div>
+<p>Физическим единым источником истины (SSoT) для канонических схем определён каталог:</p>
+<div class="note"><strong>Примечание:</strong> <code>schemas/v1/</code></div>
+<p>В каталоге зафиксирован минимальный набор схем первой вертикали v0.1:</p>
+<ul>
+<li><code>TaskContract.json</code> — паспорт и требования задачи;</li>
+<li><code>TaskRuntimeState.json</code> — состояние исполнения;</li>
+<li><code>TaskResult.json</code> — результат задачи;</li>
+<li><code>Evidence.json</code> — запись аудита и доказательства;</li>
+<li><code>SecurityDecision.json</code> — решение Scope Guard;</li>
+<li><code>CapabilityGrant.json</code> — мандат прав;</li>
+<li><code>SystemEvent.json</code> — универсальный конверт событий.</li>
+</ul>
 <h2 id="32-59-oq-007-минимальная-модель-identity">32.59. OQ-007 — минимальная модель Identity</h2>
 <p>Нужно окончательно определить:</p>
 <ul>

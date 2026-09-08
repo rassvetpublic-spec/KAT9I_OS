@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/TaskContract.json",
+  "title": "TaskContract",
+  "description": "Универсальный паспорт и спецификация требований к выполняемой задаче в KAT9I_OS.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "source",
+    "goal",
+    "workspace",
+    "domain",
+    "scope",
+    "output_contract",
+    "created_at"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Уникальный идентификатор задачи."
+    },
+    "parent_task_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор родительской задачи (null для корневой)."
+    },
+    "source": {
+      "type": "string",
+      "description": "Источник поступления задачи (user, system, github_issue, workflow)."
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Текстовое описание цели задачи."
+    },
+    "workspace": {
+      "type": "string",
+      "description": "Рабочее пространство задачи (путь к репозиторию или проекту)."
+    },
+    "domain": {
+      "type": "string",
+      "description": "Доменная область задачи (software_engineering, architecture, qa, security)."
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_paths"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "Целевой репозиторий."
+        },
+        "allowed_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Разрешённые пути к файлам и каталогам."
+        },
+        "denied_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Явно запрещённые пути."
+        },
+        "allowed_operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "read",
+            "write"
+          ],
+          "description": "Разрешённые операции (read, write, execute, network)."
+        },
+        "network_allowed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Флаг разрешения сетевого доступа."
+        }
+      }
+    },
+    "context_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Ссылки на источники контекста (документы, артефакты, память)."
+    },
+    "rules_ref": {
+      "type": "string",
+      "default": "canonical",
+      "description": "Ссылка на действующий набор правил (SSoT)."
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Требуемые возможности исполнителя (filesystem, git, rust_build, etc.)."
+    },
+    "output_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_artifacts"
+      ],
+      "properties": {
+        "expected_artifacts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ожидаемые артефакты выполнения."
+        },
+        "quality_gate_required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Требуется ли прохождение Quality Gate."
+        },
+        "independent_qa_required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Требуется ли независимый QA."
+        }
+      }
+    },
+    "result_sink": {
+      "type": "string",
+      "default": "local_workspace",
+      "description": "Место сохранения итоговых результатов."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка создания контракта в ISO 8601."
+    }
+  }
+}

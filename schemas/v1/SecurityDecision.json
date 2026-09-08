@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/SecurityDecision.json",
+  "title": "SecurityDecision",
+  "description": "Решение модуля безопасности (Scope Guard / Policy Engine) по запросу действия.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "decision_id",
+    "task_id",
+    "worker_id",
+    "action",
+    "verdict",
+    "decided_at"
+  ],
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "pattern": "^sec-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор решения безопасности."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор задачи."
+    },
+    "worker_id": {
+      "type": "string",
+      "description": "Исполнитель, запросивший действие."
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "target"
+      ],
+      "properties": {
+        "operation": {
+          "type": "string",
+          "enum": [
+            "READ_FILE",
+            "WRITE_FILE",
+            "EXECUTE_COMMAND",
+            "NETWORK_REQUEST",
+            "ACCESS_SECRET"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "description": "Путь к файлу, команда или URL."
+        }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "ALLOW",
+        "DENY",
+        "REQUIRE_HUMAN_CONFIRMATION"
+      ],
+      "description": "Вердикт безопасности: разрешить, запретить или запросить одобрение человека."
+    },
+    "reason": {
+      "type": "string",
+      "default": "",
+      "description": "Причина принятия решения или пункт нарушенной политики."
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка принятия решения в ISO 8601."
+    }
+  }
+}
