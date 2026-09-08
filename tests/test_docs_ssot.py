@@ -20,6 +20,18 @@ class TestDocumentationSSoT(unittest.TestCase):
         content = canonical_map.read_text(encoding="utf-8")
         self.assertIn("Реестр модулей и карта ответственности", content)
 
+    def test_external_systems_benchmark_exists(self):
+        """Проверяет наличие канонического документа внешнего бенчмарка (Issue #43)."""
+        benchmark_file = REPO_ROOT / "docs" / "architecture" / "33_EXTERNAL_SYSTEMS_BENCHMARK.md"
+        self.assertTrue(benchmark_file.exists(), "Канонический файл 33_EXTERNAL_SYSTEMS_BENCHMARK.md отсутствует")
+        content = benchmark_file.read_text(encoding="utf-8")
+        self.assertIn("Внешний сравнительный бенчмарк KAT9I_OS", content)
+        self.assertIn("IMPLEMENTED", content)
+        self.assertIn("SPECIFIED", content)
+        self.assertIn("ABSENT", content)
+        self.assertIn("Temporal", content)
+        self.assertIn("LangGraph", content)
+
     def test_no_competing_canonical_sources_for_responsibility_map(self):
         """Проверяет, что нет второго конкурирующего канонического источника карты ответственности."""
         arch_dir = REPO_ROOT / "docs" / "architecture"
@@ -131,6 +143,7 @@ class TestDocumentationSSoT(unittest.TestCase):
         strict_files = list((docs_root / "spec").glob("*.md")) + [
             docs_root / "architecture" / "KAT9I_OS_ARCHITECTURE_CONTEXT.md",
             docs_root / "architecture" / "27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md",
+            docs_root / "architecture" / "33_EXTERNAL_SYSTEMS_BENCHMARK.md",
             docs_root / "architecture" / "MODULE_RESPONSIBILITY_MAP.md",
             docs_root / "GLOSSARY.md",
         ]
