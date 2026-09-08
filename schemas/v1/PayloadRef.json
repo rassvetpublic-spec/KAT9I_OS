@@ -85,6 +85,8 @@
         "string",
         "null"
       ],
+      "format": "uri",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9+.-]*://\\S+$",
       "description": "Удалённый URI полезной нагрузки при storage_mode=REMOTE_REF."
     },
     "inline_data": {
@@ -218,7 +220,8 @@
         "properties": {
           "remote_uri": {
             "type": "string",
-            "minLength": 1
+            "format": "uri",
+            "pattern": "^[a-zA-Z][a-zA-Z0-9+.-]*://\\S+$"
           }
         }
       }

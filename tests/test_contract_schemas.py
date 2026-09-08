@@ -426,6 +426,30 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         }
         self.assertFalse(validator.is_valid(invalid_inline_no_data))
 
+        # Проверка REMOTE_REF с валидным URI
+        valid_remote = {
+            "payload_id": "pay-006-remote",
+            "storage_mode": "REMOTE_REF",
+            "byte_size": 4096,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
+            "remote_uri": "https://storage.kat9i.internal/cache/pay-006.bin",
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertTrue(validator.is_valid(valid_remote))
+
+        # Нарушение REMOTE_REF: невалидный URI (нет схемы)
+        invalid_remote_no_scheme = {
+            "payload_id": "pay-006-remote",
+            "storage_mode": "REMOTE_REF",
+            "byte_size": 4096,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
+            "remote_uri": "not-a-valid-uri-without-scheme",
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertFalse(validator.is_valid(invalid_remote_no_scheme))
+
         # Нарушение: недопустимый storage_mode (например, устаревший IN_RAM)
         invalid_mode = dict(valid_payload)
         invalid_mode["storage_mode"] = "IN_RAM"
