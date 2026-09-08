@@ -11,6 +11,7 @@
     "storage_mode",
     "byte_size",
     "checksum",
+    "checksum_algorithm",
     "created_at"
   ],
   "properties": {
@@ -38,8 +39,16 @@
     },
     "checksum": {
       "type": "string",
-      "pattern": "^[a-fA-F0-9]{32,128}$",
-      "description": "Авторитетная контрольная сумма полезной нагрузки (SHA-256 или BLAKE3)."
+      "pattern": "^[a-fA-F0-9]{64}$",
+      "description": "Авторитетная 256-битная контрольная сумма полезной нагрузки (ровно 64 hex-символа)."
+    },
+    "checksum_algorithm": {
+      "type": "string",
+      "enum": [
+        "SHA-256",
+        "BLAKE3"
+      ],
+      "description": "Явный криптографический алгоритм вычисления контрольной суммы полезной нагрузки."
     },
     "segment_id": {
       "type": [

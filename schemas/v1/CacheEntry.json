@@ -29,7 +29,7 @@
     "key": {
       "type": "string",
       "pattern": "^[a-zA-Z0-9_.:-]{8,256}$",
-      "description": "Детерминированный уникальный ключ записи кэша (namespace:source:rev:transform:ver:scope)."
+      "description": "Детерминированный уникальный ключ записи кэша (namespace:source:rev:transform:ver:scope:owner_id)."
     },
     "namespace": {
       "type": "string",
@@ -71,7 +71,7 @@
     },
     "payload_ref": {
       "$ref": "PayloadRef.json",
-      "description": "Строгая ссылка на полезную нагрузку (PayloadRef), содержащая единую авторитетную контрольную сумму (checksum), режим и локатор размещения."
+      "description": "Строгая ссылка на полезную нагрузку (PayloadRef), содержащая единую авторитетную контрольную сумму (checksum), алгоритм, режим и локатор размещения."
     },
     "created_at": {
       "type": "string",
@@ -109,6 +109,14 @@
       ],
       "description": "Область видимости и изоляции кэшированных данных (Security Domain)."
     },
+    "owner_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-zA-Z0-9_.-]{3,64}$",
+      "description": "Идентификатор конкретного владельца изоляции (session_id, task_id или workspace_id). Обязателен для всех scope кроме SYSTEM_GLOBAL."
+    },
     "build_cost_ms": {
       "type": [
         "integer",
@@ -117,5 +125,31 @@
       "minimum": 0,
       "description": "Оценка времени построения артефакта в миллисекундах для стоимостных политик вытеснения."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "enum": [
+              "SESSION_LOCAL",
+              "TASK_LOCAL",
+              "WORKSPACE_SHARED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "owner_id"
+        ],
+        "properties": {
+          "owner_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.-]{3,64}$"
+          }
+        }
+      }
+    }
+  ]
 }

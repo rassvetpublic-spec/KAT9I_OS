@@ -263,12 +263,13 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "storage_mode": "RAM_REGION",
             "byte_size": 2048,
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
             "created_at": "2026-09-08T10:00:00Z"
         }
 
         valid_entry = {
             "schema_version": "1.0.0",
-            "key": "AST_SYMBOL:core.rs:rev-123:parser:1.0.0:SESSION_LOCAL",
+            "key": "AST_SYMBOL:core.rs:rev-123:parser:1.0.0:SESSION_LOCAL:session-42",
             "namespace": "AST_SYMBOL",
             "source_ref": "src/core.rs",
             "revision": "rev-123",
@@ -278,9 +279,21 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "payload_ref": valid_payload_ref,
             "created_at": "2026-09-08T10:00:00Z",
             "hit_count": 0,
-            "scope": "SESSION_LOCAL"
+            "scope": "SESSION_LOCAL",
+            "owner_id": "session-42"
         }
         self.assertTrue(validator.is_valid(valid_entry))
+
+        # SYSTEM_GLOBAL без owner_id валиден
+        valid_global_entry = dict(valid_entry)
+        valid_global_entry["scope"] = "SYSTEM_GLOBAL"
+        valid_global_entry["owner_id"] = None
+        self.assertTrue(validator.is_valid(valid_global_entry))
+
+        # Нарушение: SESSION_LOCAL без owner_id
+        invalid_no_owner = dict(valid_entry)
+        del invalid_no_owner["owner_id"]
+        self.assertFalse(validator.is_valid(invalid_no_owner))
 
         # Нарушение: отсутствие schema_version
         invalid_no_version = dict(valid_entry)
@@ -322,11 +335,27 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "storage_mode": "SPILL_SEGMENT",
             "byte_size": 1048576,
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
             "segment_id": "seg-001-immutable",
             "offset": 4096,
             "created_at": "2026-09-08T10:00:00Z"
         }
         self.assertTrue(validator.is_valid(valid_payload))
+
+        # Проверка BLAKE3 алгоритма
+        valid_blake3 = dict(valid_payload)
+        valid_blake3["checksum_algorithm"] = "BLAKE3"
+        self.assertTrue(validator.is_valid(valid_blake3))
+
+        # Нарушение: невалидный алгоритм контрольной суммы
+        invalid_alg = dict(valid_payload)
+        invalid_alg["checksum_algorithm"] = "MD5"
+        self.assertFalse(validator.is_valid(invalid_alg))
+
+        # Нарушение: не 64-символьный хэш
+        invalid_hash_len = dict(valid_payload)
+        invalid_hash_len["checksum"] = "abcd1234"
+        self.assertFalse(validator.is_valid(invalid_hash_len))
 
         # Нарушение SPILL_SEGMENT: отсутствует segment_id
         invalid_spill_no_seg = dict(valid_payload)
@@ -344,6 +373,7 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "storage_mode": "MMAP",
             "byte_size": 2097152,
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
             "mmap_path": "C:\\GIT\\KAT9I_OS\\data\\cache\\mapped.bin",
             "offset": 0,
             "created_at": "2026-09-08T10:00:00Z"
@@ -356,6 +386,7 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "storage_mode": "MMAP",
             "byte_size": 2097152,
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
             "offset": 0,
             "created_at": "2026-09-08T10:00:00Z"
         }
@@ -367,6 +398,7 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             "storage_mode": "RAM_REGION",
             "byte_size": 1024,
             "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
             "created_at": "2026-09-08T10:00:00Z"
         }
         self.assertTrue(validator.is_valid(valid_ram))

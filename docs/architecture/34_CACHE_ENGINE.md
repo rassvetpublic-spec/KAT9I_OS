@@ -119,7 +119,10 @@ CacheKey должен быть структурированным и затем 
 - transformation id;
 - transformation version;
 - parameters hash;
-- security domain/scope.
+- security domain/scope и конкретный владелец изоляции (owner_id для SESSION_LOCAL, TASK_LOCAL, WORKSPACE_SHARED).
+
+Формат канонического строкового представления:
+`{namespace}:{source_ref}:{revision}:{transform_id}:{transform_version}:{scope}:{owner_id}`
 
 Свежесть по возможности определяется identity/revision/hash, а не догадкой по TTL.
 
@@ -132,12 +135,11 @@ CacheKey должен быть структурированным и затем 
 - identity: key, namespace;
 - source: source_ref, revision, hash;
 - transform: transform_id, transform_version;
-- payload: type, size, location;
+- payload: payload_ref (включает авторитетный checksum с явным алгоритмом, byte_size, storage_mode, локаторы);
 - lifecycle: created_at, last_access, expires_at при необходимости;
 - cost: build_cost/rebuild_cost;
 - policy: class/priority hints;
-- security: scope;
-- integrity: checksum;
+- security: scope, owner_id (конкретная привязка к сессии, задаче или рабочему пространству);
 - observability: hit_count;
 - compatibility: schema_version.
 

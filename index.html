@@ -12263,8 +12263,10 @@ Learning (самообучение)
 <li>transformation id;</li>
 <li>transformation version;</li>
 <li>parameters hash;</li>
-<li>security domain/scope.</li>
+<li>security domain/scope и конкретный владелец изоляции (owner_id для SESSION_LOCAL, TASK_LOCAL, WORKSPACE_SHARED).</li>
 </ul>
+<p>Формат канонического строкового представления:</p>
+<p><code>{namespace}:{source_ref}:{revision}:{transform_id}:{transform_version}:{scope}:{owner_id}</code></p>
 <p>Свежесть по возможности определяется identity/revision/hash, а не догадкой по TTL.</p>
 <h2 id="34-9-cacheentry">34.9. CacheEntry</h2>
 <p>Контракт CacheEntry с первой версии должен предусматривать совместимость будущего.</p>
@@ -12273,12 +12275,11 @@ Learning (самообучение)
 <li>identity: key, namespace;</li>
 <li>source: source_ref, revision, hash;</li>
 <li>transform: transform_id, transform_version;</li>
-<li>payload: type, size, location;</li>
+<li>payload: payload_ref (включает авторитетный checksum с явным алгоритмом, byte_size, storage_mode, локаторы);</li>
 <li>lifecycle: created_at, last_access, expires_at при необходимости;</li>
 <li>cost: build_cost/rebuild_cost;</li>
 <li>policy: class/priority hints;</li>
-<li>security: scope;</li>
-<li>integrity: checksum;</li>
+<li>security: scope, owner_id (конкретная привязка к сессии, задаче или рабочему пространству);</li>
 <li>observability: hit_count;</li>
 <li>compatibility: schema_version.</li>
 </ul>
