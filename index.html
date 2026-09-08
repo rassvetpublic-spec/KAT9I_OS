@@ -10975,6 +10975,15 @@ Learning (самообучение)
 <li>Все контракты обязаны содержать инвариант безопасности <code>additionalProperties: false</code> (Fail-Closed).</li>
 <li>Версионирование схем осуществляется по SemVer 2.0.0; неизвестные мажорные версии вызывают немедленный отказ <code>INCOMPATIBLE_SCHEMA_VERSION</code>.</li>
 </ol>
+<h2 id="32-40b-adr-035-машинная-структура-module-registry-и-правила-графа-зависимостей">32.40b. ADR-035 — машинная структура Module Registry и правила графа зависимостей</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <code>schemas/v1/ModuleRegistry.json</code>, <code>modules_registry.json</code>, <code>scripts/verify_module_registry.py</code>, Issue #47).</p>
+<ol>
+<li>Реестр модулей KAT9I_OS описывается строго машинно через каноническую схему <code>schemas/v1/ModuleRegistry.json</code> (JSON Schema Draft 2020-12).</li>
+<li>Реестр не дублирует текстовые архитектурные спецификации, а ссылается на канонический источник ответственности (<code>docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md</code>).</li>
+<li>Граф зависимостей между модулями обязан быть направленным ациклическим графом (DAG). Наличие циклов (<code>CIRCULAR_DEPENDENCY_DETECTED</code>) является фатальной ошибкой инициализации.</li>
+<li>Каждый модуль обязан иметь уникальную каноническую ответственность в соответствии с инвариантом ADR-032.</li>
+<li>Любой требуемый контракт (<code>requires_contracts</code>) должен обеспечиваться хотя бы одним зарегистрированным модулем (<code>provides_contracts</code>).</li>
+</ol>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
 <h2 id="32-42-реализация-ipc-electron">32.42. Реализация IPC Electron</h2>
@@ -11073,7 +11082,7 @@ Learning (самообучение)
 <h3 id="этап-g2-machine-contracts-машинные-контракты">Этап G2 — Machine Contracts (Машинные контракты)</h3>
 <ul>
 <li><strong>OQ-003</strong> — единый машинный формат системных контрактов (JSON Schema / Protobuf) и правила версий (Issue #40) — <strong>ACCEPTED</strong> (ADR-034).</li>
-<li><strong>OQ-005</strong> — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47).</li>
+<li><strong>OQ-005</strong> — машинно-читаемая структура Module Registry и граф зависимостей (Issue #47) — <strong>ACCEPTED</strong> (ADR-035, <code>modules_registry.json</code>).</li>
 <li><strong>OQ-006</strong> — каталог физических канонических схем (Issue #40) — <strong>ACCEPTED</strong> (ADR-034, <code>schemas/v1/</code>).</li>
 <li><strong>OQ-007</strong> — минимальная модель Identity и привязка пользователя Windows к ролям KAT9I_OS (Issue #44).</li>
 <li><strong>OQ-009</strong> — формат Event Journal, Checkpoint и Replay Recovery (Issue #46).</li>
@@ -11142,19 +11151,15 @@ Learning (самообучение)
 <p>Статус:</p>
 <p><code>OPEN</code>.</p>
 <h2 id="32-57-oq-005-структура-module-registry">32.57. OQ-005 — структура Module Registry</h2>
-<p>Нужно формально определить машинные поля:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-035, канонический источник: <code>schemas/v1/ModuleRegistry.json</code>, <code>modules_registry.json</code>, <code>scripts/verify_module_registry.py</code>, Issue #47).</div>
+<p>Машинная структура реестра модулей утверждена:</p>
 <ul>
-<li>module_id;</li>
-<li>version;</li>
-<li>owner;</li>
-<li>contracts;</li>
-<li>dependencies;</li>
-<li>health;</li>
-<li>documentation;</li>
-<li>capabilities.</li>
+<li>Формат: JSON Schema Draft 2020-12 (<code>schemas/v1/ModuleRegistry.json</code>);</li>
+<li>Физический реестр первой вертикали v0.1: <code>modules_registry.json</code>;</li>
+<li>Обязательные машинные поля: <code>module_id</code>, <code>name</code>, <code>version</code>, <code>tier</code>, <code>canonical_owner_ref</code>, <code>canonical_responsibility</code>, <code>provides_contracts</code>, <code>requires_contracts</code>, <code>dependencies</code>, <code>capabilities</code>, <code>health_interface</code>, <code>documentation_ref</code>;</li>
+<li>Автоматическая валидация и построение топологического порядка: <code>scripts/verify_module_registry.py</code>;</li>
+<li>Инварианты: ацикличность графа (DAG), уникальность ответственности (ADR-032) и полная связность контрактов.</li>
 </ul>
-<p>Статус:</p>
-<p><code>OPEN</code>.</p>
 <h2 id="32-58-oq-006-каталог-канонических-схем">32.58. OQ-006 — каталог канонических схем</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-034, канонический источник: <a href="../../schemas/README.md">schemas/README.md</a>, <code>schemas/v1/</code>, Issue #40).</div>
 <p>Физическим единым источником истины (SSoT) для канонических схем определён каталог:</p>
