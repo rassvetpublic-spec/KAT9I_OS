@@ -341,50 +341,79 @@ function EnsureViews{
   $uid=[string]$u.id
 
   $views=@(
-    @{n='00 — Центр управления';l='table';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
-    @{n='01 — Архитектура G1';l='table';f='is:open Этап:"G1 — ТЗ и базовая архитектура"';s=@(@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
-    @{n='02 — Готово к работе';l='table';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"';s=@(@($id['Приоритет'],'asc'))},
-    @{n='03 — Активные исполнители';l='board';f='is:open Исполнение:"Активно"';s=@(@($id['Приоритет'],'asc'));v=@($id['Исполнитель'])},
-    @{n='04 — Очередь проверки';l='board';f='is:open Статус:"Проверка качества"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
-    @{n='05 — Заблокировано';l='table';f='is:open Статус:"Заблокировано"';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'))},
-    @{n='06 — План v0.1';l='roadmap';f='is:open Цель:v0.1'},
-    @{n='07 — Безопасность';l='table';f='is:open Область:"Безопасность и управление"';s=@(@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
-    @{n='08 — Доказательства';l='table';f='is:open Приоритет:P0,P1 -Доказательство:"Проверка качества пройдена"';s=@(@($id['Приоритет'],'asc'),@($id['Этап'],'asc'))},
-    @{n='09 — Без классификации';l='table';f='is:open no:Этап no:Приоритет'}
+    @{n='00 — Все задачи';l='table';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
+    @{n='01 — Готово к работе';l='table';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"';s=@(@($id['Приоритет'],'asc'))},
+    @{n='02 — В работе';l='board';f='is:open Статус:"В работе"';s=@(@($id['Приоритет'],'asc'));v=@($id['Исполнитель'])},
+    @{n='03 — Проверка';l='board';f='is:open Статус:"Проверка качества"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
+    @{n='04 — Заблокировано';l='table';f='is:open Статус:"Заблокировано"';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'))}
   )
 
   $p=(Snapshot).user.projectV2
   foreach($v in $views){
-    $exists=@($p.views.nodes)|Where-Object{(Expand-Aliases @($v['n'])) -contains $_.name}|Select-Object -First 1
+    $exists=@($p.views.nodes)|Where-Object{$_.name -eq $v['n']}|Select-Object -First 1
     if($exists){continue}
 
     $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f']}
-    if($v['l'] -ne 'roadmap'){$b.visible_fields=$vid}
+    $b.visible_fields=$vid
     if($v.ContainsKey('s')){$b.sort_by=$v['s']}
     if($v.ContainsKey('v')){$b.vertical_group_by=$v['v']}
 
-    try {
-      $null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b
-      Write-Host "Создано представление: $($v['n'])"
-    } catch {
-      Write-Warning "Не удалось создать '$($v['n'])' через API: $($_.Exception.Message)"
-    }
+    $null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b
+    Write-Host "Создано представление: $($v['n'])"
   }
 
   $p=(Snapshot).user.projectV2
-  $hasCanonical=@($p.views.nodes)|Where-Object{Is-Alias $_.name @('00 — Центр управления')}|Select-Object -First 1
-  if($hasCanonical){
-    $blank=@($p.views.nodes)|Where-Object{$_.name -eq 'View 1' -and $_.layout -eq 'TABLE' -and [string]::IsNullOrWhiteSpace($_.filter)}|Select-Object -First 1
-    if($blank){
+  $canonicalNames=@($views|ForEach-Object{$_.n})
+  $missingCanonical=@()
+  foreach($name in $canonicalNames){
+    if(-not (@($p.views.nodes)|Where-Object{$_.name -eq $name}|Select-Object -First 1)){$missingCanonical+=$name}
+  }
+  if($missingCanonical.Count -gt 0){
+    throw "Не удалось создать обязательные представления: $(($missingCanonical)-join ', '). Старые представления не удалены."
+  }
+
+  $legacyViewNames=@(
+    '00 — Центр управления',
+    '01 — Архитектура G1',
+    '02 — Готово к работе',
+    '03 — Активные исполнители',
+    '04 — Очередь проверки',
+    '05 — Заблокировано',
+    '06 — План v0.1',
+    '07 — Безопасность',
+    '08 — Доказательства',
+    '09 — Без классификации'
+  )
+
+  foreach($legacy in @($p.views.nodes|Where-Object{$legacyViewNames -contains $_.name})){
 $q=@'
 mutation($input:DeleteProjectV2ViewInput!){
  deleteProjectV2View(input:$input){projectV2View{id}}
 }
 '@
-      $null=Gql $q @{input=@{viewId=$blank.id}}
-      Write-Host 'Удалено пустое представление View 1.'
-    }
+    $null=Gql $q @{input=@{viewId=$legacy.id}}
+    Write-Host "Удалено устаревшее представление: $($legacy.name)"
   }
+
+  $p=(Snapshot).user.projectV2
+  $blank=@($p.views.nodes)|Where-Object{$_.name -eq 'View 1' -and $_.layout -eq 'TABLE' -and [string]::IsNullOrWhiteSpace($_.filter)}|Select-Object -First 1
+  if($blank){
+$q=@'
+mutation($input:DeleteProjectV2ViewInput!){
+ deleteProjectV2View(input:$input){projectV2View{id}}
+}
+'@
+    $null=Gql $q @{input=@{viewId=$blank.id}}
+    Write-Host 'Удалено пустое представление View 1.'
+  }
+
+  $p=(Snapshot).user.projectV2
+  $unexpected=@($p.views.nodes|Where-Object{$canonicalNames -notcontains $_.name})
+  if($unexpected.Count -gt 0){
+    throw "Project содержит неизвестные дополнительные представления: $(($unexpected.name)-join ', '). Они не удалены автоматически; требуется ручной разбор."
+  }
+
+  Write-Host 'Проверено: в Project ровно 5 канонических рабочих представлений.'
 }
 
 if(-not(Get-Command gh -ErrorAction SilentlyContinue)){throw 'GitHub CLI (gh) не найден.'}
@@ -496,5 +525,5 @@ EnsureItems
 EnsureViews
 
 Write-Host ''
-Write-Host 'Готово: Project #2 приведён к русской схеме, итерация = 3 дня.'
+Write-Host 'Готово: Project #2 приведён к русской схеме, итерация = 3 дня, рабочих представлений = 5.'
 Write-Host 'Слияние, прохождение проверки качества и прохождение этапа автоматически не выполняются.'
