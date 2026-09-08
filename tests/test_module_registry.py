@@ -39,10 +39,11 @@ class TestModuleRegistry(unittest.TestCase):
         """Проверяет, что канонический файл modules_registry.json проходит все проверки."""
         verifier = ModuleRegistryVerifier()
         topo = verifier.run_full_verification()
-        self.assertEqual(len(topo), 7)
+        self.assertEqual(len(topo), 8)
         self.assertIn("Core", topo)
         self.assertIn("Storage", topo)
         self.assertIn("Security", topo)
+        self.assertIn("CacheEngine", topo)
 
     def test_detect_unknown_dependency(self):
         """Проверяет отклонение при наличии несуществующей зависимости."""

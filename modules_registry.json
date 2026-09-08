@@ -120,6 +120,23 @@
         "endpoint": "electron.renderer_ping"
       },
       "documentation_ref": "docs/architecture/29_ELECTRON_UI.md"
+    },
+    {
+      "module_id": "CacheEngine",
+      "name": "Высокопроизводительный кэш",
+      "version": "0.1.0",
+      "tier": "CORE_RUNTIME",
+      "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.11",
+      "canonical_responsibility": "Высокопроизводительное RAM-first кэширование производных данных, SingleFlight и batch spill на SSD при memory pressure",
+      "provides_contracts": ["CacheEntry", "PayloadRef"],
+      "requires_contracts": ["SystemEvent"],
+      "dependencies": ["Storage"],
+      "capabilities": ["RAM_CACHE", "SINGLE_FLIGHT", "IMMUTABLE_SPILL_SEGMENTS", "DEGRADED_MODE_FAIL_OPEN"],
+      "health_interface": {
+        "type": "INTERNAL_STATE_PROBE",
+        "endpoint": "cache_engine.health_check"
+      },
+      "documentation_ref": "docs/architecture/34_CACHE_ENGINE.md"
     }
   ]
 }

@@ -352,7 +352,7 @@ QA добавляется до масштабирования автономно
 - локальный AI;
 - внешний Provider;
 - token Metrics;
-- базовый Cache.
+- высокопроизводительный `CacheEngine` на Rust (RAM-first, SingleFlight, batch spill to SSD при memory pressure, без участия Electron в hot path).
 
 ## 31.35. Цель v0.2
 

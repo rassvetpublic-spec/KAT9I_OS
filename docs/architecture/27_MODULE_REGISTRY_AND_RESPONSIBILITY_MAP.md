@@ -102,13 +102,19 @@ ResourceRef не выдаёт Permission. Технический доступ к
 
 Каноническое владение: логическая модель ресурсов.
 
-## 27.11. Cache — кэш
+## 27.11. Cache — кэш (CacheEngine)
 
-Cache отвечает, можно ли безопасно повторно использовать ранее вычисленный результат. Учитываются revision, RulesRef, Context Drift, TTL, версия Skill/Workflow и Security.
+Cache (`CacheEngine`) отвечает на вопрос, можно ли безопасно повторно использовать ранее вычисленный результат, не обращаясь к дорогостоящим вычислениям или внешним источникам.
 
-Cache не является SSoT, Knowledge или Evidence.
+Принятые принципы CacheEngine (канонический раздел: [docs/architecture/34_CACHE_ENGINE.md](34_CACHE_ENGINE.md)):
+- **Отдельный процесс/модуль на Rust**: Electron категорически исключён из hot path (`GET`/`PUT`); UI взаимодействует с кешем только асинхронно через Core для мониторинга и телеметрии;
+- **RAM-first**: основной режим работы — оперативная память с минимальной задержкой, без паразитного износа SSD и write amplification;
+- **Batch spill на SSD только при memory pressure**: накопитель используется исключительно как резерв ёмкости при нехватке RAM крупными immutable-сегментами с контрольными суммами;
+- **Cache не является SSoT**: полная потеря кеша или удаление всех его файлов делает KAT9I_OS медленнее, но не нарушает корректность системы;
+- **Детерминированная изоляция**: учитываются revision, RulesRef, Context Drift, TTL, версия Skill/Workflow и Security;
+- **Вектор развития (Full architecture, minimal implementation)**: контракты первой версии (структурированный CacheKey, PayloadRef, SingleFlight, TTL, degraded mode) заранее совместимы с будущими расширениями (Shared Memory, Zero-Copy, mmap, compression, namespaces quotas) без ломки API.
 
-Каноническое владение: Cache Policy, Cache Registry и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.
+Каноническое владение: Cache Policy, Cache Registry, оперативный кэш (RAM/Spill) и состояния `FULL` / `PARTIAL` / `MISS` / `STALE` / `FORBIDDEN`.
 
 ## 27.12. Planning & Forecasting — планирование и прогнозирование
 
@@ -355,6 +361,7 @@ Domain знает, что нужен PR; Resources знает репозитор
 | Learning Proposal | Learning | владелец изменяемой функции |
 | Human Decision | Personal/Core | Security, Core, Workflow |
 | UI Command | Desktop Shell / Core boundary | Identity, Security, Core |
+| CacheEntry / PayloadRef | CacheEngine | Core, Context, Execution, Inference |
 
 ## 27.36. Матрица источников истины
 
@@ -378,6 +385,7 @@ Domain знает, что нужен PR; Resources знает репозитор
 | Прогноз | TaskEstimate |
 | Learning state | Learning Store |
 | Секрет | Secret Store |
+| Кэш (RAM / Spill) | производное состояние (CacheEngine), не является SSoT |
 | UI-состояние | производное представление системного состояния |
 | HTML-документация | производное представление Markdown |
 
