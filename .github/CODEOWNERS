@@ -1,5 +1,6 @@
-# CODEOWNERS — кто автоматически получает запрос на review (проверку изменений).
+﻿# CODEOWNERS — кто автоматически получает запрос на review (проверку изменений).
 # Это сервисный механизм маршрутизации review в GitHub, а не источник истины архитектурной ответственности.
-# Каноническая архитектурная карта: docs/architecture/MODULE_RESPONSIBILITY_MAP.md
+# Каноническая архитектурная карта ответственности: docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md
+# Навигационный индекс: docs/architecture/MODULE_RESPONSIBILITY_MAP.md
 
 * @rassvetpublic-spec
