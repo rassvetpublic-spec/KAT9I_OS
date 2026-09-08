@@ -1,20 +1,18 @@
-name: Автоматический triage входящих обращений
+name: triage
 
 on:
   issues:
     types: [opened]
-  workflow_dispatch:
 
 permissions:
   issues: write
 
 jobs:
   triage:
-    name: Классификация и первичная обработка
+    name: triage
     runs-on: ubuntu-latest
-    if: github.event_name == 'issues'
     steps:
-      - name: Анализ формы обратной связи и добавление меток
+      - name: process-issue
         uses: actions/github-script@v7
         with:
           script: |
@@ -23,7 +21,6 @@ jobs:
             const body = issue.body || '';
             const labelsToAdd = [];
 
-            // Определение типа обращения из формы feedback.yml
             if (body.includes('Задать вопрос')) {
               labelsToAdd.push('question');
             } else if (body.includes('Предложить идею')) {
@@ -34,14 +31,12 @@ jobs:
               labelsToAdd.push('documentation');
             }
 
-            // Проверка домена документации
             if (body.toLowerCase().includes('документ') || body.toLowerCase().includes('тз') || body.toLowerCase().includes('словарь')) {
               if (!labelsToAdd.includes('documentation')) {
                 labelsToAdd.push('documentation');
               }
             }
 
-            // Добавление меток
             if (labelsToAdd.length > 0) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
@@ -51,7 +46,6 @@ jobs:
               });
             }
 
-            // Приветственный комментарий с навигацией для новичков
             const commentBody = `Приветствуем! Спасибо за обращение в KAT9I_OS.
 
 Это обращение зарегистрировано в очереди первичного разбора (**triage**).
