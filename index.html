@@ -11157,6 +11157,32 @@ Learning (самообучение)
 <ul>
 <li>При перезапуске интерфейса или обрыве связи новый клиент Electron восстанавливает сессию и мгновенно считывает актуальное состояние ядра через <code>core.get_system_state</code>, возобновляя получение системных событий через <code>core.subscribe_events</code>.</li>
 </ul>
+<h2 id="32-40f-adr-039-реализация-windows-secret-store-и-модель-secretref">32.40f. ADR-039 — реализация Windows Secret Store и модель SecretRef</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <code>schemas/v1/SecretRef.json</code>, <code>scripts/windows_secret_store.py</code>, <code>tests/test_secret_store.py</code>, Issue #45).</p>
+<ol>
+<li><strong>Базовый криптографический механизм для Windows 11</strong>:</li>
+</ol>
+<ul>
+<li>В качестве базового механизма защиты секретов на Windows 11 утверждён <strong>Windows Data Protection API (DPAPI / CryptProtectData)</strong> с опциональной интеграцией Windows Credential Manager.</li>
+<li>Секреты шифруются с привязкой к учётной записи пользователя Windows (<code>USER_LOCAL</code>). Перенос зашифрованного файла на другую машину или запуск от другого пользователя делает расшифровку невозможной (<code>Fail-Closed</code>).</li>
+</ul>
+<ol>
+<li><strong>Модель SecretRef</strong>:</li>
+</ol>
+<ul>
+<li>Значения секретов категорически запрещены к размещению в TaskContract, Knowledge Base, журнале событий Event Journal, кэше или обычном состоянии;</li>
+<li>Задачи и модули оперируют только ссылкой <code>SecretRef</code> (<code>schemas/v1/SecretRef.json</code>, поля: <code>secret_id</code>, <code>name</code>, <code>provider</code>, <code>scope</code>, <code>created_at</code>);</li>
+<li>Доступ к значению секрета разрешён строго в момент выполнения операции и только при наличии действующего мандата <code>CapabilityGrant</code> с возможностью <code>SECRET_READ_SCOPED</code>.</li>
+</ul>
+<ol>
+<li><strong>Безопасность и предотвращение утечек</strong>:</li>
+</ol>
+<ul>
+<li>Неавторизованные исполнители или сторонние процессы получают немедленный отказ <code>PermissionError</code> (Security Scope Guard);</li>
+<li>Индексы и метаданные хранилища не содержат секретных значений;</li>
+<li>Предусмотрена процедура мгновенного отзыва (<code>revoke_secret</code>) с безопасной перезаписью блоба нулями;</li>
+<li>Резервное копирование (Backup) секретов: ключи шифруются аппаратно или привязываются к мастер-паролю пользователя, перенос в незашифрованном виде запрещён.</li>
+</ul>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
 <h2 id="32-42-реализация-ipc-electron">32.42. Реализация IPC Electron</h2>
@@ -11264,7 +11290,7 @@ Learning (самообучение)
 <ul>
 <li><strong>OQ-002</strong> — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41) — <strong>ACCEPTED</strong> (ADR-038).</li>
 <li><strong>OQ-004</strong> — минимальный безопасный внутренний API между Electron и Core (Issue #41) — <strong>ACCEPTED</strong> (ADR-038, <code>schemas/v1/CoreIpcMessage.json</code>).</li>
-<li><strong>OQ-008</strong> — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45).</li>
+<li><strong>OQ-008</strong> — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45) — <strong>ACCEPTED</strong> (ADR-039, <code>schemas/v1/SecretRef.json</code>).</li>
 <li><strong>OQ-010</strong> — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).</li>
 </ul>
 <p>Остальные вопросы не входят в список <code>OPEN BEFORE v0.1</code> выше и откладываются строго по своим детальным статусам: OQ-011 — <code>DEFERRED UNTIL PRE-RELEASE</code>, OQ-012 и OQ-013 — <code>DEFERRED UNTIL v0.2</code>; будущие OQ получают собственный явный этап. Они не должны считаться закрытыми или переноситься на другой срок только из-за этой сводки.</p>
@@ -11362,9 +11388,30 @@ Learning (самообучение)
 <li>Worker не может выступать автором Human Approval.</li>
 </ul>
 <h2 id="32-60-oq-008-минимальный-secret-store">32.60. OQ-008 — минимальный Secret Store</h2>
-<p>Нужно выбрать первую Windows-реализацию SecretRef.</p>
-<p>Статус:</p>
-<p><code>OPEN BEFORE v0.1</code>.</p>
+<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-039, канонический источник: <code>schemas/v1/SecretRef.json</code>, <code>scripts/windows_secret_store.py</code>, <code>tests/test_secret_store.py</code>, Issue #45).</div>
+<p>Решение формализовано:</p>
+<ol>
+<li><strong>Криптографический механизм Windows 11</strong>:</li>
+</ol>
+<ul>
+<li>Выбран <strong>Windows Data Protection API (DPAPI)</strong> с привязкой к текущей учётной записи пользователя (<code>USER_LOCAL</code>).</li>
+<li>Исключена утечка ключей на другие машины или учётные записи.</li>
+</ul>
+<ol>
+<li><strong>Модель SecretRef</strong>:</li>
+</ol>
+<ul>
+<li>Контракт <code>schemas/v1/SecretRef.json</code> содержит только идентификатор и метаданные;</li>
+<li>Значение секрета отсутствует в TaskContract, журналах Event Journal, Knowledge Base и обычном состоянии;</li>
+<li>Доступ предоставляется только при наличии действующего <code>CapabilityGrant</code> (&quot;SECRET_READ_SCOPED&quot;).</li>
+</ul>
+<ol>
+<li><strong>Отзыв и безопасность</strong>:</li>
+</ol>
+<ul>
+<li>Процедура немедленного отзыва (<code>revoke_secret</code>) с затиранием нулями;</li>
+<li>Проверка существования секрета без раскрытия значения (<code>check_exists</code>).</li>
+</ul>
 <h2 id="32-61-oq-009-формат-event-journal-и-checkpoint">32.61. OQ-009 — формат Event Journal и Checkpoint</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-037, канонический источник: <a href="21_RELIABILITY_AND_RECOVERY.md">docs/architecture/21_RELIABILITY_AND_RECOVERY.md</a>, <code>schemas/v1/JournalEvent.json</code>, <code>schemas/v1/Checkpoint.json</code>, Issue #46).</div>
 <p>Решение формализовано:</p>
