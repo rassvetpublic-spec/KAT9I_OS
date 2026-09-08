@@ -28,7 +28,7 @@ body:
     attributes:
       label: Что вы пытались сделать?
       description: Одного-двух предложений достаточно.
-      placeholder: Например: я хотел понять, как взять задачу в работу.
+      placeholder: "Например: я хотел понять, как взять задачу в работу."
     validations:
       required: true
 

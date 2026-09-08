@@ -92,6 +92,22 @@ jobs:
           grep -q 'Revision для проверки:' .github/PULL_REQUEST_TEMPLATE.md
           grep -q 'Независимый QA' .github/PULL_REQUEST_TEMPLATE.md
 
+      - name: Проверить синтаксис всех YAML файлов
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import yaml
+          from pathlib import Path
+
+          yaml_files = list(Path('.github').rglob('*.yml')) + list(Path('.github').rglob('*.yaml'))
+          for yf in yaml_files:
+              with open(yf, 'r', encoding='utf-8') as f:
+                  yaml.safe_load(f)
+              print(f"OK: {yf}")
+          print(f"Успешно проверено {len(yaml_files)} YAML-файлов.")
+          PY
+
       - name: Проверить генератор HTML и синхронизацию единого источника истины (SSOT)
         shell: bash
         run: |
@@ -101,3 +117,4 @@ jobs:
           grep -q 'Официальная каноническая документация' index.html
           grep -q 'Режим «Я здесь впервые»' index.html
           echo 'Генератор HTML и проверка синхронизации SSOT успешно пройдены.'
+

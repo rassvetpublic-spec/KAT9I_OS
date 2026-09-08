@@ -46,16 +46,18 @@ jobs:
               });
             }
 
-            const commentBody = `Приветствуем! Спасибо за обращение в KAT9I_OS.
-
-Это обращение зарегистрировано в очереди первичного разбора (**triage**).
-
-Полезные ссылки для быстрого старта:
-- [Режим «Я здесь впервые»](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/FIRST_TIME_GUIDE.md) — 8 шагов для новичков;
-- [Словарь терминов](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/GLOSSARY.md) — простые пояснения;
-- [GitHub для коворкеров](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/GITHUB_FOR_COWORKERS.md) — практическое обучение.
-
-Координатор проекта или ответственный за модуль проверит детали и при необходимости уточнит контекст.`;
+            const commentBody = [
+              'Приветствуем! Спасибо за обращение в KAT9I_OS.',
+              '',
+              'Это обращение зарегистрировано в очереди первичного разбора (**triage**).',
+              '',
+              'Полезные ссылки для быстрого старта:',
+              `- [Режим «Я здесь впервые»](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/FIRST_TIME_GUIDE.md) — 8 шагов для новичков;`,
+              `- [Словарь терминов](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/GLOSSARY.md) — простые пояснения;`,
+              `- [GitHub для коворкеров](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/GITHUB_FOR_COWORKERS.md) — практическое обучение.`,
+              '',
+              'Координатор проекта или ответственный за модуль проверит детали и при необходимости уточнит контекст.'
+            ].join('\n');
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
