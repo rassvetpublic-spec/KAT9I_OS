@@ -159,7 +159,7 @@
         "required": [
           "offset"
         ],
-        "anyOf": [
+        "oneOf": [
           {
             "required": [
               "mmap_path"

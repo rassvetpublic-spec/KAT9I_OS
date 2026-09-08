@@ -380,6 +380,33 @@ class TestCanonicalContractSchemas(unittest.TestCase):
         }
         self.assertTrue(validator.is_valid(valid_mmap))
 
+        # Проверка MMAP с segment_id (альтернативный взаимно исключающий локатор)
+        valid_mmap_seg = {
+            "payload_id": "pay-004-mmap-seg",
+            "storage_mode": "MMAP",
+            "byte_size": 2097152,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
+            "segment_id": "seg-002-mapped",
+            "offset": 0,
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertTrue(validator.is_valid(valid_mmap_seg))
+
+        # Нарушение MMAP: одновременно переданы и mmap_path, и segment_id (oneOf)
+        invalid_mmap_both = {
+            "payload_id": "pay-004-mmap-both",
+            "storage_mode": "MMAP",
+            "byte_size": 2097152,
+            "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "checksum_algorithm": "SHA-256",
+            "mmap_path": "C:\\GIT\\KAT9I_OS\\data\\cache\\mapped.bin",
+            "segment_id": "seg-002-mapped",
+            "offset": 0,
+            "created_at": "2026-09-08T10:00:00Z"
+        }
+        self.assertFalse(validator.is_valid(invalid_mmap_both))
+
         # Нарушение MMAP: отсутствует и mmap_path, и segment_id
         invalid_mmap_no_target = {
             "payload_id": "pay-004-mmap",
