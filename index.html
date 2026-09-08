@@ -6515,6 +6515,24 @@ Learning (самообучение)
 <ul>
 <li>Снимки Checkpoint и журнал событий зеркалируются в локальном каталоге хранилища <code>Storage</code>. Повреждение одного файла журнала локализуется без повреждения всей базы.</li>
 </ul>
+<h2 id="21-3b-снимок-семантического-окружения-execution-semantic-snapshot-и-семантическая-изоляция">21.3b. Снимок семантического окружения (Execution Semantic Snapshot) и семантическая изоляция</h2>
+<p>В соответствии с концепцией семантической изоляции длительных AI-процессов (<code>BEGIN AI TRANSACTION: Semantic Isolation for Durable AI Workflows</code>), для AI-workflow недостаточно сохранять только значения переменных и runtime-статус.</p>
+<p>Перед постановкой задачи на паузу или при фиксации Checkpoint создаётся снимок семантического окружения по схеме <code>schemas/v1/SemanticSnapshot.json</code>:</p>
+<ul>
+<li><code>rules_ref</code> — точная ревизия системных правил;</li>
+<li><code>model_route</code> — провайдер, уровень псевдонима (alias), температура, ревизия системного промпта и точная разрешённая версия модели (<code>resolved_model_version</code>);</li>
+<li><code>context_manifest_ref</code> — ревизия манифеста контекста и индекса базы знаний;</li>
+<li><code>skill_revisions</code> — ревизии задействованных навыков (Skills);</li>
+<li><code>tool_definitions</code> — схемы и версии используемых инструментов и MCP серверов;</li>
+<li><code>config_revision</code> и <code>contract_versions</code>.</li>
+</ul>
+<h3 id="правила-проверки-перед-возобновлением-resume-preflight">Правила проверки перед возобновлением (Resume Preflight)</h3>
+<p>Перед продолжением выполнения Recovery Manager сравнивает базовый <code>SemanticSnapshot</code> с текущим семантическим окружением (<code>SemanticIsolationGuard</code>):</p>
+<ol>
+<li><strong>Полное совпадение (<code>RESUME_ALLOWED</code>)</strong>: продолжение задачи разрешено.</li>
+<li><strong>Совместимый дрейф (<code>RESUME_WITH_AUDIT</code>)</strong>: неразрушающие патчи навыков или вспомогательных компонентов, продолжение разрешено с фиксацией изменений в журнале.</li>
+<li><strong>Критический дрейф (<code>RESUME_BLOCKED</code> / <code>SemanticDriftError</code>)</strong>: смена провайдера или точной ревизии модели (alias drift), изменение системных правил <code>RulesRef</code>, дрейф сигнатур инструментов или манифеста базы знаний. В соответствии с принципом <code>Fail-Closed</code> автоматическое возобновление блокируется; задача переводится в статус <code>BLOCKED</code> с требованием повторного планирования (<code>REQUIRE_REPLANNING</code>) или подтверждения оператором.</li>
+</ol>
 <h2 id="21-4-восстановление-только-по-фактам">21.4. Восстановление только по фактам</h2>
 <p>После аварии нельзя восстанавливать состояние из предположения модели. KAT9I_OS проверяет канонический источник, состояние Runtime, ResultRef и Evidence.</p>
 <p>Если фактическое состояние нельзя установить однозначно, задача получает <code>BLOCKED</code>.</p>
@@ -11252,6 +11270,35 @@ Learning (самообучение)
 </ol>
 <ul>
 <li>Накладные расходы на формирование, атрибутирование и закрытие одного спана составляют единицы миллисекунд (&lt; 1.5 мс с полной валидацией по схеме и &lt; 0.05 мс в памяти), что не создает заметной нагрузки на runtime.</li>
+</ul>
+<h2 id="32-40h-adr-041-снимок-семантического-окружения-выполнения-execution-semantic-snapshot-и-семантическая-изоляция-возобновления">32.40h. ADR-041 — снимок семантического окружения выполнения (Execution Semantic Snapshot) и семантическая изоляция возобновления</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <a href="21_RELIABILITY_AND_RECOVERY.md">docs/architecture/21_RELIABILITY_AND_RECOVERY.md</a>, <code>schemas/v1/SemanticSnapshot.json</code>, <code>scripts/semantic_isolation.py</code>, <code>tests/test_semantic_isolation.py</code>, Issue #42).</p>
+<ol>
+<li><strong>Проблема неявного семантического дрейфа</strong>:</li>
+</ol>
+<ul>
+<li>Традиционные контрольные точки (Checkpoint) сохраняют только переменные и статус задачи, что недостаточно для длительных AI-workflow.</li>
+<li>Изменение версии модели (тихий alias drift), системного промпта, системных правил (<code>RulesRef</code>), схем инструментов или индекса контекста между началом, паузой и возобновлением приводит к скрытой потере воспроизводимости.</li>
+</ul>
+<ol>
+<li><strong>Модель Execution Semantic Snapshot (<code>schemas/v1/SemanticSnapshot.json</code>)</strong>:</li>
+</ol>
+<ul>
+<li>В соответствии с принципом <code>Reference-first</code> снимок фиксирует идентификаторы, версии и хэши значимых ресурсов (без дублирования тяжелых данных):</li>
+<li><code>rules_ref</code>;</li>
+<li><code>model_route</code> (<code>provider</code>, <code>model_alias</code>, <code>resolved_model_version</code>, <code>prompt_template_revision</code>);</li>
+<li><code>context_manifest_ref</code>;</li>
+<li><code>skill_revisions</code>;</li>
+<li><code>tool_definitions</code> (схемы инструментов / MCP серверов);</li>
+<li><code>config_revision</code> и <code>contract_versions</code>.</li>
+</ul>
+<ol>
+<li><strong>Политика Resume Preflight и Fail-Closed защита</strong>:</li>
+</ol>
+<ul>
+<li>Перед возобновлением задачи компонент <code>SemanticIsolationGuard</code> сопоставляет базовый снимок с текущим окружением.</li>
+<li>Критический дрейф (<code>BREAKING_DRIFT</code>: смена версии модели, изменение <code>RulesRef</code>, удаление/изменение схем инструментов) блокирует продолжение задачи (<code>RESUME_BLOCKED</code> / <code>SemanticDriftError</code>), предотвращая скрытые искажения результатов.</li>
+<li>Задача переводится в статус <code>BLOCKED</code> с требованием повторного планирования или ручного подтверждения оператором.</li>
 </ul>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
