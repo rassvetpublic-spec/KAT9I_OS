@@ -3951,7 +3951,7 @@ Learning (самообучение)
 <p>Если нет — KAT9I_OS материализует только необходимую часть контекста, а не весь источник.</p>
 <h2 id="7-6-executable-first-при-подготовке-контекста">7.6. Executable-first при подготовке контекста</h2>
 <p>Большая часть подготовки контекста не требует ИИ.</p>
-<p>Сначала используются поиск по файлам, Git, индексы, AST (структурное представление кода), поиск символов, граф зависимостей, полнотекстовый поиск, хэши, фильтры, метаданные, SQL и локальный кэш.</p>
+<p>Сначала используются поиск по файлам, Git, индексы, AST (структурное представление кода), поиск символов, граф зависимостей, полнотекстовый поиск, хэши, фильтры, метаданные, SQL и отдельный CacheEngine.</p>
 <p>ИИ не должен читать весь репозиторий только для того, чтобы определить, где находится функция.</p>
 <h2 id="7-7-local-first-при-обработке-контекста">7.7. Local-first при обработке контекста</h2>
 <p>Если после обычного кода требуется интеллектуальная фильтрация, локальный ИИ имеет первый приоритет, если его качества достаточно.</p>
@@ -6633,7 +6633,7 @@ Learning (самообучение)
 <li>локальный код;</li>
 <li>локальный Git;</li>
 <li>локальные индексы;</li>
-<li>разрешённый Cache;</li>
+<li>доступный CacheEngine;</li>
 <li>локальная База знаний;</li>
 <li>локальный ИИ;</li>
 <li>локальные Workers;</li>
@@ -6644,9 +6644,9 @@ Learning (самообучение)
 <p>Если работа выполнена локально, но внешний ResultSink недоступен, используется состояние <code>WAITING_EXTERNAL_PUBLISH</code> — ожидание внешней публикации. После восстановления связи повторяется только необходимый этап, а не вся задача.</p>
 <h2 id="21-17-актуальность-после-восстановления-связи">21.17. Актуальность после восстановления связи</h2>
 <p>Перед публикацией после outage (перерыва связи) необходимо проверить Freshness (актуальность) внешнего состояния. Если внешний ресурс изменился, выполняется синхронизация и разрешение конфликта.</p>
-<h2 id="21-18-повреждение-или-потеря-кэша">21.18. Повреждение или потеря кэша</h2>
-<p>Cache не является источником истины. Повреждённая запись удаляется или помечается INVALID и пересчитывается из первичного источника.</p>
-<p>Полная потеря кэша должна сделать систему только медленнее или дороже, но не некорректной.</p>
+<h2 id="21-18-повреждение-потеря-или-недоступность-cacheengine">21.18. Повреждение, потеря или недоступность CacheEngine</h2>
+<p>CacheEngine не является источником истины. Повреждённая запись удаляется или получает состояние <code>STALE</code> и пересчитывается из первичного источника. Несовместимый Security scope даёт <code>FORBIDDEN</code>.</p>
+<p>Полная потеря содержимого CacheEngine должна сделать систему только медленнее или дороже, но не некорректной. Недоступность самого процесса CacheEngine переводит клиентов в <code>CACHE_DEGRADED</code>: они обходят кэш и продолжают работу через первичные источники, если это разрешено Rules/Security.</p>
 <h2 id="21-19-критические-данные">21.19. Критические данные</h2>
 <p>Rules, Security Policy, Task state и подтверждённые Knowledge Records важнее Cache. Для них требуются проверка целостности, версии, Provenance и резервное восстановление.</p>
 <p>Если критические Rules или Security Policy невозможно подтвердить, опасные действия блокируются.</p>
@@ -6696,7 +6696,7 @@ Learning (самообучение)
 <li>необходимые Metrics;</li>
 <li>пользовательские настройки.</li>
 </ol>
-<p>Cache имеет меньший приоритет и может быть пересчитан.</p>
+<p>Данные CacheEngine не требуют обычного Backup: они имеют меньший приоритет и могут быть пересчитаны.</p>
 <h2 id="21-31-проверка-восстановления">21.31. Проверка восстановления</h2>
 <p>Наличие backup-файла не считается доказательством. Система должна периодически проверять возможность реального восстановления.</p>
 <h2 id="21-32-обновление-kat9i_os">21.32. Обновление KAT9I_OS</h2>
@@ -7294,6 +7294,7 @@ Learning (самообучение)
 <li>безопасную передачу заданий специализированным Worker.</li>
 </ul>
 <p>Rust Core является границей, через которую должны проходить критические операции с состоянием и системными ресурсами.</p>
+<p>Отдельный <code>CacheEngine</code> также реализуется на Rust, но имеет собственный процесс и жизненный цикл. Он является runtime-ускорителем, а не частью Electron и не владельцем канонического состояния Core. Взаимодействие с ним идёт через версионированный локальный контракт и допускает fail-open работу без кэша.</p>
 <p>Высокоуровневый Worker не должен обходить эту границу только потому, что ему технически доступна файловая система, shell или внешний API.</p>
 <h2 id="23-5-python-ai-ml-worker-слой">23.5. Python — AI/ML Worker-слой</h2>
 <p>Python используется не как системное ядро KAT9I_OS, а как специализированная среда выполнения для задач, где его экосистема даёт практическое преимущество.</p>
@@ -7464,13 +7465,13 @@ Learning (самообучение)
 <li>Metrics;</li>
 <li>Learning State;</li>
 <li>Forecast history;</li>
-<li>Cache Registry;</li>
 <li>Checkpoints;</li>
 <li>Event Journal metadata;</li>
 <li>Security Events metadata;</li>
 <li>Integration Registry;</li>
 <li>Workspace Registry.</li>
 </ul>
+<p>Runtime <code>Cache Registry</code> CacheEngine не относится к этому списку: это пересоздаваемый индекс ускорителя, а не каноническое состояние SQLite. В SQLite могут храниться только канонические настройки или агрегированные Metrics CacheEngine, если они нужны системе.</p>
 <h2 id="25-8-что-не-надо-хранить-прямо-в-sqlite">25.8. Что не надо хранить прямо в SQLite</h2>
 <p>Не следует помещать туда без необходимости большие бинарные файлы, Git-репозитории, видео, аудио, большие PDF, модели, огромные логи, полные копии внешних документов и секреты открытым текстом.</p>
 <p>Для них используются ссылки и специализированные хранилища.</p>
@@ -7510,7 +7511,7 @@ Learning (самообучение)
 <h2 id="25-22-секрет-не-должен-попадать-в-обычные-данные">25.22. Секрет не должен попадать в обычные данные</h2>
 <p>Запрещено автоматически сохранять секрет в TaskContract, Logs, Metrics, Knowledge, Cache, ResultRef, Git, HTML или Telegram. Если секрет случайно обнаружен, Security создаёт событие и ограничивает дальнейшее распространение.</p>
 <h2 id="25-23-кэш">25.23. Кэш</h2>
-<p>Cache физически отделён от канонического состояния. Он может содержать результаты поиска, materialized context, индексы, embeddings, промежуточные вычисления и безопасно повторно используемые результаты. Кэш можно удалить, система должна остаться корректной.</p>
+<p>CacheEngine физически и логически отделён от канонического состояния. Его нормальный режим — RAM-first; локальный диск используется только для редкого batch spill при memory pressure. CacheEngine может содержать результаты поиска, materialized context, индексы, embeddings, промежуточные вычисления и безопасно повторно используемые результаты. Содержимое CacheEngine и его runtime Cache Registry можно удалить полностью: система должна остаться корректной и пересоздать данные из источников.</p>
 <h2 id="25-24-индексы">25.24. Индексы</h2>
 <p>Поисковые индексы являются производными данными: полнотекстовый индекс, векторный индекс, индекс символов кода, dependency index. При повреждении они пересоздаются из источника.</p>
 <h2 id="25-25-векторные-представления">25.25. Векторные представления</h2>
@@ -7590,7 +7591,7 @@ Learning (самообучение)
 <h2 id="25-62-визуализация-хранения">25.62. Визуализация хранения</h2>
 <p>В браузерном интерфейсе можно показывать размер основной базы, Cache, Logs, Evidence, Artifacts, Backups, состояние хранилищ, последние Backup, ошибки целостности и рост по времени.</p>
 <h2 id="25-63-режим-рентген-kat9i_os">25.63. Режим «Рентген KAT9I_OS»</h2>
-<p>В режиме диагностики должно быть видно, какой объект где физически хранится. Например: Task State — SQLite, исходник — GitHub, Context Cache — локальный диск, Artifact — Drive, Evidence — локальный Evidence Store, ResultRef — GitHub PR.</p>
+<p>В режиме диагностики должно быть видно, какой объект где физически хранится. Например: Task State — SQLite, исходник — GitHub, Context Cache — RAM CacheEngine, при memory pressure дорогая холодная запись — immutable spill segment на локальном диске, Artifact — Drive, Evidence — локальный Evidence Store, ResultRef — GitHub PR.</p>
 <h2 id="25-64-проверка-целостности">25.64. Проверка целостности</h2>
 <p>Нужно периодически проверять SQLite, ResourceRef, Cache metadata, Evidence, Backup, индексы и версию схемы. Проверки по возможности выполняются локально обычным кодом.</p>
 <h2 id="25-65-повреждение-основного-хранилища">25.65. Повреждение основного хранилища</h2>
@@ -8525,7 +8526,7 @@ Learning (самообучение)
 <p>Раздел 27 является канонической картой владения ответственностью: он показывает владельца функции, но не дублирует полную спецификацию каждого модуля.</p>
 <p>Если обнаружено противоречие между этой картой и профильным разделом, оно должно быть устранено в исходной спецификации при кросс-анализе, а не скрыто ещё одной формулировкой.</p>
 <h2 id="27-3-общая-карта-модулей">27.3. Общая карта модулей</h2>
-<div class="table-container"><table class="doc-table"><thead><tr><th>Модуль</th><th>Главный вопрос</th></tr></thead><tbody><tr><td>Core — ядро управления</td><td>Что должна организовать система?</td></tr><tr><td>Rule Manager — менеджер правил</td><td>Какие обязательные правила применимы?</td></tr><tr><td>Security — безопасность</td><td>Разрешено ли действие?</td></tr><tr><td>Domain — предметная область</td><td>Что означает задача в данной области?</td></tr><tr><td>Context — контекст</td><td>Что исполнителю нужно знать сейчас?</td></tr><tr><td>Knowledge — знания</td><td>Что система уже знает как проверенное знание?</td></tr><tr><td>Resources — ресурсы</td><td>Где находится нужный объект?</td></tr><tr><td>Cache — кэш</td><td>Что можно безопасно не вычислять повторно?</td></tr><tr><td>Planning &amp; Forecasting — планирование и прогнозирование</td><td>Сколько ресурсов вероятно потребуется?</td></tr><tr><td>Inference — выбор вычислительного интеллекта</td><td>Какой уровень интеллекта и маршрут вычисления нужен?</td></tr><tr><td>Coworker — исполнители</td><td>Кто конкретно выполнит работу?</td></tr><tr><td>Execution — исполнение</td><td>Как физически выполнить разрешённое действие?</td></tr><tr><td>Integrations — интеграции</td><td>Как технически обратиться к внешней системе?</td></tr><tr><td>QA — независимая проверка</td><td>Соответствует ли результат требованиям?</td></tr><tr><td>Recovery — восстановление</td><td>Как продолжить после отказа?</td></tr><tr><td>Telemetry — телеметрия</td><td>Что произошло?</td></tr><tr><td>Metrics — метрики</td><td>Насколько хорошо это произошло?</td></tr><tr><td>Learning — самообучение</td><td>Что следует улучшить?</td></tr><tr><td>Personal Layer — персональный слой</td><td>Что относится именно к конкретному пользователю?</td></tr><tr><td>Visualization — визуализация</td><td>Как человеку увидеть работу системы?</td></tr><tr><td>Desktop Shell — настольная оболочка Electron</td><td>Как пользователь взаимодействует с KAT9I_OS как с приложением?</td></tr><tr><td>Configuration — конфигурация</td><td>Как система настроена в этой установке?</td></tr><tr><td>Storage — хранение</td><td>Где физически хранится состояние?</td></tr></tbody></table></div>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Модуль</th><th>Главный вопрос</th></tr></thead><tbody><tr><td>Core — ядро управления</td><td>Что должна организовать система?</td></tr><tr><td>Rule Manager — менеджер правил</td><td>Какие обязательные правила применимы?</td></tr><tr><td>Security — безопасность</td><td>Разрешено ли действие?</td></tr><tr><td>Domain — предметная область</td><td>Что означает задача в данной области?</td></tr><tr><td>Context — контекст</td><td>Что исполнителю нужно знать сейчас?</td></tr><tr><td>Knowledge — знания</td><td>Что система уже знает как проверенное знание?</td></tr><tr><td>Resources — ресурсы</td><td>Где находится нужный объект?</td></tr><tr><td>CacheEngine — движок кэша</td><td>Что можно безопасно не вычислять повторно и как это быстро переиспользовать?</td></tr><tr><td>Planning &amp; Forecasting — планирование и прогнозирование</td><td>Сколько ресурсов вероятно потребуется?</td></tr><tr><td>Inference — выбор вычислительного интеллекта</td><td>Какой уровень интеллекта и маршрут вычисления нужен?</td></tr><tr><td>Coworker — исполнители</td><td>Кто конкретно выполнит работу?</td></tr><tr><td>Execution — исполнение</td><td>Как физически выполнить разрешённое действие?</td></tr><tr><td>Integrations — интеграции</td><td>Как технически обратиться к внешней системе?</td></tr><tr><td>QA — независимая проверка</td><td>Соответствует ли результат требованиям?</td></tr><tr><td>Recovery — восстановление</td><td>Как продолжить после отказа?</td></tr><tr><td>Telemetry — телеметрия</td><td>Что произошло?</td></tr><tr><td>Metrics — метрики</td><td>Насколько хорошо это произошло?</td></tr><tr><td>Learning — самообучение</td><td>Что следует улучшить?</td></tr><tr><td>Personal Layer — персональный слой</td><td>Что относится именно к конкретному пользователю?</td></tr><tr><td>Visualization — визуализация</td><td>Как человеку увидеть работу системы?</td></tr><tr><td>Desktop Shell — настольная оболочка Electron</td><td>Как пользователь взаимодействует с KAT9I_OS как с приложением?</td></tr><tr><td>Configuration — конфигурация</td><td>Как система настроена в этой установке?</td></tr><tr><td>Storage — хранение</td><td>Где физически хранится состояние?</td></tr></tbody></table></div>
 <h2 id="27-4-core-ядро-управления">27.4. Core — ядро управления</h2>
 <p>Core создаёт и поддерживает общесистемные контракты задачи, координирует жизненный цикл, связывает модули через формальные интерфейсы и управляет TaskContract и TaskGraph.</p>
 <p>Core не выполняет Shell-команды, не выбирает конкретную модель вместо Inference, не выбирает конкретного Worker вместо Coworker, не хранит всю Базу знаний, не реализует GitHub и не забирает предметную логику Domain.</p>
@@ -8555,10 +8556,13 @@ Learning (самообучение)
 <p>Resources отвечает, что это за объект и где он логически находится. Управляет ResourceRef, Resource Registry, revision, Resolver hints и дедупликацией логических ресурсов.</p>
 <p>ResourceRef не выдаёт Permission. Технический доступ к внешнему ресурсу реализуют Integrations после проверки Security.</p>
 <p>Каноническое владение: логическая модель ресурсов.</p>
-<h2 id="27-11-cache-кэш">27.11. Cache — кэш</h2>
-<p>Cache отвечает, можно ли безопасно повторно использовать ранее вычисленный результат. Учитываются revision, RulesRef, Context Drift, TTL, версия Skill/Workflow и Security.</p>
-<p>Cache не является SSoT, Knowledge или Evidence.</p>
-<p>Каноническое владение: Cache Policy, Cache Registry и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.</p>
+<h2 id="27-11-cacheengine-движок-кэша">27.11. CacheEngine — движок кэша</h2>
+<p>CacheEngine является единственным каноническим владельцем кэширования KAT9I_OS и реализуется отдельным Rust-модулем согласно <code>docs/architecture/34_CACHE_ENGINE.md</code>.</p>
+<p>Он одновременно отвечает за логическую Cache Policy — можно ли безопасно повторно использовать ранее вычисленный результат — и за высокопроизводительное RAM-first размещение производных данных. При проверке валидности учитываются revision/hash, RulesRef / Effective Ruleset, значимый Context Drift, версия Skill/Workflow/transformation, параметры, Security scope и TTL там, где нет более сильной revision-модели.</p>
+<p>Состояния <code>FULL</code>, <code>PARTIAL</code>, <code>MISS</code>, <code>STALE</code>, <code>FORBIDDEN</code> являются единым словарём результата Cache Policy. Они не означают конкретный backend хранения.</p>
+<p>Runtime Cache Registry является внутренним пересоздаваемым индексом CacheEngine. Он не является канонической SQLite-сущностью Storage и может быть полностью удалён вместе с кэшем.</p>
+<p>CacheEngine не является SSoT, Knowledge, Evidence или Storage. Потеря CacheEngine влияет только на производительность и стоимость, но не на корректность системы.</p>
+<p>Каноническое владение: Cache Policy, runtime Cache Registry, CacheKey/CacheEntry/PayloadRef и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.</p>
 <h2 id="27-12-planning-amp-forecasting-планирование-и-прогнозирование">27.12. Planning &amp; Forecasting — планирование и прогнозирование</h2>
 <p>Модуль прогнозирует токены, время, стоимость, вероятность Cache Hit, Retry, HIGH escalation, Local Share и First Pass Success.</p>
 <p>Поддерживаются предварительный, уточнённый и текущий пересчитываемый прогнозы.</p>
@@ -8658,7 +8662,7 @@ Learning (самообучение)
 <h2 id="27-29-storage-физическое-хранение">27.29. Storage — физическое хранение</h2>
 <p>Storage отвечает, где физически и каким механизмом хранится системное состояние. Предоставляет SQLite, файловые хранилища, Event Journal, backup, migrations и integrity checks.</p>
 <p>Storage не определяет предметную семантику Knowledge или Rules и не даёт модулям бесконтрольно читать внутренние таблицы друг друга.</p>
-<p>Каноническое владение: физические механизмы хранения.</p>
+<p>Каноническое владение: физические механизмы хранения канонического и долговечного состояния. Runtime RAM-кэш, spill-сегменты и пересоздаваемый Cache Registry принадлежат CacheEngine и не входят в ответственность Storage.</p>
 <h2 id="27-30-secret-store-хранилище-секретов">27.30. Secret Store — хранилище секретов</h2>
 <p>Secret Store является специализированной инфраструктурной возможностью Security/Storage и хранит токены, API-ключи, пароли и приватные ключи.</p>
 <p>Остальные модули преимущественно работают через SecretRef.</p>
@@ -8693,7 +8697,7 @@ Learning (самообучение)
 <h2 id="27-35-матрица-ключевых-контрактов">27.35. Матрица ключевых контрактов</h2>
 <div class="table-container"><table class="doc-table"><thead><tr><th>Контракт</th><th>Канонический владелец</th><th>Основные потребители</th></tr></thead><tbody><tr><td>TaskContract</td><td>Core</td><td>Domain, Context, Coworker, Execution, QA</td></tr><tr><td>TaskRuntimeState</td><td>Core / состояние задач</td><td>Coworker, Execution, Recovery, Visualization</td></tr><tr><td>TaskGraph</td><td>Core</td><td>Coworker, Execution, Visualization</td></tr><tr><td>Effective Ruleset</td><td>Rule Manager</td><td>Core, Security, Execution</td></tr><tr><td>Security Decision</td><td>Security</td><td>Core, Execution, Integrations</td></tr><tr><td>Capability Grant</td><td>Security</td><td>Coworker, Execution, Integrations</td></tr><tr><td>Context Pack</td><td>Context</td><td>Worker, Inference</td></tr><tr><td>ResourceRef</td><td>Resources</td><td>Context, Execution, Integrations</td></tr><tr><td>KnowledgeRef</td><td>Knowledge</td><td>Context, Domain, Learning</td></tr><tr><td>TaskEstimate</td><td>Planning</td><td>Inference, Coworker, Visualization</td></tr><tr><td>Provider Route</td><td>Inference</td><td>Coworker, Execution</td></tr><tr><td>Claim / Lease</td><td>Coworker</td><td>Execution, Recovery</td></tr><tr><td>Integration Request</td><td>Integrations</td><td>Execution</td></tr><tr><td>EvidenceRef</td><td>Execution</td><td>QA, Core, Learning</td></tr><tr><td>ResultRef</td><td>Execution</td><td>Core, QA, следующий Worker</td></tr><tr><td>QA Result</td><td>QA</td><td>Core, Learning</td></tr><tr><td>Telemetry Event</td><td>Telemetry</td><td>Metrics, Visualization</td></tr><tr><td>MetricsSnapshot</td><td>Metrics</td><td>Learning, Planning, Visualization</td></tr><tr><td>Learning Proposal</td><td>Learning</td><td>владелец изменяемой функции</td></tr><tr><td>Human Decision</td><td>Personal/Core</td><td>Security, Core, Workflow</td></tr><tr><td>UI Command</td><td>Desktop Shell / Core boundary</td><td>Identity, Security, Core</td></tr></tbody></table></div>
 <h2 id="27-36-матрица-источников-истины">27.36. Матрица источников истины</h2>
-<div class="table-container"><table class="doc-table"><thead><tr><th>Сущность</th><th>Источник истины</th></tr></thead><tbody><tr><td>Архитектура</td><td>канонические Markdown-документы</td></tr><tr><td>Схема контракта</td><td>канонический каталог схем</td></tr><tr><td>Код</td><td>Git</td></tr><tr><td>GitHub-задача</td><td>GitHub Issue</td></tr><tr><td>Внутреннее исполнение задачи</td><td>TaskRuntimeState</td></tr><tr><td>Обязательные правила</td><td>Rule Manager</td></tr><tr><td>Проверенные знания</td><td>Knowledge Base</td></tr><tr><td>Ресурс</td><td>исходная система + ResourceRef</td></tr><tr><td>Worker registration</td><td>Worker Registry</td></tr><tr><td>Lease</td><td>Coworker</td></tr><tr><td>Безопасность действия</td><td>Security Decision</td></tr><tr><td>Фактическое выполнение</td><td>Evidence</td></tr><tr><td>QA</td><td>QA Result точной revision</td></tr><tr><td>Сырые события</td><td>Telemetry</td></tr><tr><td>Числовые показатели</td><td>Metrics</td></tr><tr><td>Прогноз</td><td>TaskEstimate</td></tr><tr><td>Learning state</td><td>Learning Store</td></tr><tr><td>Секрет</td><td>Secret Store</td></tr><tr><td>UI-состояние</td><td>производное представление системного состояния</td></tr><tr><td>HTML-документация</td><td>производное представление Markdown</td></tr></tbody></table></div>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Сущность</th><th>Источник истины</th></tr></thead><tbody><tr><td>Архитектура</td><td>канонические Markdown-документы</td></tr><tr><td>Схема контракта</td><td>канонический каталог схем</td></tr><tr><td>Код</td><td>Git</td></tr><tr><td>GitHub-задача</td><td>GitHub Issue</td></tr><tr><td>Внутреннее исполнение задачи</td><td>TaskRuntimeState</td></tr><tr><td>Обязательные правила</td><td>Rule Manager</td></tr><tr><td>Проверенные знания</td><td>Knowledge Base</td></tr><tr><td>Ресурс</td><td>исходная система + ResourceRef</td></tr><tr><td>Решение о повторном использовании и runtime-кэш</td><td>CacheEngine</td></tr><tr><td>Worker registration</td><td>Worker Registry</td></tr><tr><td>Lease</td><td>Coworker</td></tr><tr><td>Безопасность действия</td><td>Security Decision</td></tr><tr><td>Фактическое выполнение</td><td>Evidence</td></tr><tr><td>QA</td><td>QA Result точной revision</td></tr><tr><td>Сырые события</td><td>Telemetry</td></tr><tr><td>Числовые показатели</td><td>Metrics</td></tr><tr><td>Прогноз</td><td>TaskEstimate</td></tr><tr><td>Learning state</td><td>Learning Store</td></tr><tr><td>Секрет</td><td>Secret Store</td></tr><tr><td>UI-состояние</td><td>производное представление системного состояния</td></tr><tr><td>HTML-документация</td><td>производное представление Markdown</td></tr></tbody></table></div>
 <h2 id="27-37-порядок-ключевых-решений">27.37. Порядок ключевых решений</h2>
 <p>Рекомендуемый базовый порядок:</p>
 <ol>
@@ -8704,7 +8708,7 @@ Learning (самообучение)
 <li>TaskContract;</li>
 <li>предварительный Planning;</li>
 <li>Context / Knowledge / Resources;</li>
-<li>Cache;</li>
+<li>CacheEngine;</li>
 <li>уточнённый Planning;</li>
 <li>Inference;</li>
 <li>Coworker;</li>
@@ -8728,7 +8732,7 @@ Learning (самообучение)
 <p>Новый модуль не создаётся только ради красивого названия.</p>
 <h2 id="27-40-executable-first-внутри-модулей">27.40. Executable-first внутри модулей</h2>
 <p>В каждом модуле отдельно ищется возможность перехода <code>MODEL → HYBRID → CODE</code>.</p>
-<p>Особенно это касается валидации контрактов, Security checks, Cache, Planning calculations, Worker state, Lease, Git operations, Metrics, Recovery, Storage и UI-агрегации.</p>
+<p>Особенно это касается валидации контрактов, Security checks, CacheEngine, Planning calculations, Worker state, Lease, Git operations, Metrics, Recovery, Storage и UI-агрегации.</p>
 <p>ИИ остаётся там, где действительно нужна содержательная интерпретация.</p>
 <h2 id="27-41-module-registry-машинно-читаемый-реестр-модулей">27.41. Module Registry — машинно-читаемый реестр модулей</h2>
 <p>В реализации эта карта должна иметь машинно-читаемое представление с полями:</p>
@@ -8738,7 +8742,9 @@ Learning (самообучение)
 <li>responsibility;</li>
 <li>owned contracts;</li>
 <li>consumed contracts;</li>
-<li>dependencies;</li>
+<li>optional contracts;</li>
+<li>required dependencies;</li>
+<li>optional dependencies;</li>
 <li>health;</li>
 <li>capabilities;</li>
 <li>owner/team;</li>
@@ -10393,7 +10399,7 @@ Learning (самообучение)
 <li>локальный AI;</li>
 <li>внешний Provider;</li>
 <li>token Metrics;</li>
-<li>базовый Cache.</li>
+<li>базовый CacheEngine: Rust, RAM-first, SingleFlight и безопасный batch spill;</li>
 </ul>
 <h2 id="31-35-цель-v0-2">31.35. Цель v0.2</h2>
 <p>Показать: KAT9I_OS умеет решить, где достаточно кода, а где действительно нужен ИИ.</p>
@@ -10539,7 +10545,7 @@ Learning (самообучение)
 <li>Electron P0;</li>
 <li>Resources;</li>
 <li>Context;</li>
-<li>Cache;</li>
+<li>CacheEngine;</li>
 <li>Inference;</li>
 <li>Coworker;</li>
 <li>GitHub Domain;</li>
@@ -12187,6 +12193,8 @@ Learning (самообучение)
 <li>других данных, потеря которых нарушает корректность системы.</li>
 </ul>
 <p>CacheEngine хранит только производные, повторно получаемые или повторно вычисляемые данные.</p>
+<p>CacheEngine является единственным каноническим владельцем Cache Policy и runtime Cache Registry KAT9I_OS. Под Cache Registry понимается внутренний пересоздаваемый индекс и метаданные кэша, а не каноническая сущность SQLite модуля Storage. Физическое размещение RAM-кэша и spill-сегментов принадлежит CacheEngine; Storage не становится владельцем содержимого кэша.</p>
+<p>Каноническая карта ответственности CacheEngine находится в <code>docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md</code>, раздел 27.11.</p>
 <h2 id="34-7-примеры-допустимых-данных">34.7. Примеры допустимых данных</h2>
 <p>Допустимо кэшировать:</p>
 <ul>
@@ -12202,7 +12210,7 @@ Learning (самообучение)
 <li>преобразованные документы;</li>
 <li>промежуточные результаты локального анализа.</li>
 </ul>
-<h2 id="34-8-детерминированный-cachekey">34.8. Детерминированный CacheKey</h2>
+<h2 id="34-8-детерминированный-cachekey-и-инвалидация">34.8. Детерминированный CacheKey и инвалидация</h2>
 <p>CacheKey должен быть структурированным и затем может преобразовываться в компактный binary/hash key.</p>
 <p>Логически он включает:</p>
 <ul>
@@ -12212,9 +12220,14 @@ Learning (самообучение)
 <li>transformation id;</li>
 <li>transformation version;</li>
 <li>parameters hash;</li>
-<li>security domain/scope.</li>
+<li>security domain/scope;</li>
+<li>отпечаток RulesRef / Effective Ruleset, если результат зависит от активных правил;</li>
+<li>отпечаток значимой части Context / Context Drift basis, если результат зависит от рабочего контекста;</li>
+<li>версию Skill / Workflow, если она влияет на семантику результата.</li>
 </ul>
-<p>Свежесть по возможности определяется identity/revision/hash, а не догадкой по TTL.</p>
+<p><code>parameters hash</code> может агрегировать эти зависимые отпечатки, но контракт обязан однозначно фиксировать, какие входы влияют на валидность конкретного типа записи.</p>
+<p>Изменение любого значимого входа должно приводить к новому ключу либо к состоянию <code>STALE</code>. Несовместимый Security scope должен давать <code>FORBIDDEN</code>, а не Cache Hit.</p>
+<p>TTL используется только как дополнительная политика для источников без надёжной revision/hash или для заведомо временных данных. TTL не может переопределить обнаруженное несовпадение revision, RulesRef, Context или Security scope.</p>
 <h2 id="34-9-cacheentry">34.9. CacheEntry</h2>
 <p>Контракт CacheEntry с первой версии должен предусматривать совместимость будущего.</p>
 <p>Минимальные группы метаданных:</p>
@@ -12232,6 +12245,7 @@ Learning (самообучение)
 <li>compatibility: schema_version.</li>
 </ul>
 <p>Не все поля обязаны активно участвовать в политике первой версии.</p>
+<p>Результат проверки повторного использования использует единый словарь состояний: <code>FULL</code>, <code>PARTIAL</code>, <code>MISS</code>, <code>STALE</code>, <code>FORBIDDEN</code>. Эти состояния описывают решение Cache Policy и не зависят от того, находится payload в RAM, spill segment или будущем backend.</p>
 <h2 id="34-10-версионированный-протокол">34.10. Версионированный протокол</h2>
 <p>Взаимодействие клиентов с CacheEngine строится через versioned protocol.</p>
 <p>Клиент и CacheEngine должны уметь согласовать:</p>

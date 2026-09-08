@@ -352,7 +352,7 @@ QA добавляется до масштабирования автономно
 - локальный AI;
 - внешний Provider;
 - token Metrics;
-- базовый Cache.
+- базовый CacheEngine: Rust, RAM-first, SingleFlight и безопасный batch spill;
 
 ## 31.35. Цель v0.2
 
@@ -518,7 +518,7 @@ KAT9I_OS использует проверенное прошлое знание
 9. Electron P0;
 10. Resources;
 11. Context;
-12. Cache;
+12. CacheEngine;
 13. Inference;
 14. Coworker;
 15. GitHub Domain;
