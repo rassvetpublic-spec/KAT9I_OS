@@ -15,13 +15,13 @@ concurrency:
 
 jobs:
   quality:
-    name: Базовые проверки
+    name: Базовые проверки качества и целостности
     runs-on: ubuntu-latest
     steps:
       - name: Получить репозиторий
         uses: actions/checkout@v4
 
-      - name: Проверить обязательную структуру
+      - name: Проверить обязательную структуру репозитория
         shell: bash
         run: |
           set -euo pipefail
@@ -30,22 +30,28 @@ jobs:
           test -f docs/spec/00_LANGUAGE_AND_TERMINOLOGY_POLICY.md
           test -f docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md
           test -f docs/guides/GITHUB_FOR_COWORKERS.md
+          test -f docs/guides/GITHUB_KAT9I_MAPPING.md
+          test -f docs/architecture/MODULE_RESPONSIBILITY_MAP.md
           test -f docs/GLOSSARY.md
           test -f .github/ISSUE_TEMPLATE/feedback.yml
           test -f .github/PULL_REQUEST_TEMPLATE.md
           test -f .github/CODEOWNERS
           test -f index.html
 
-      - name: Проверить UTF-8 и русские входные документы
+      - name: Проверить UTF-8, обязательные документы и русские пояснения
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
+          import re
           from pathlib import Path
 
           required_russian = [
+              Path('docs/spec/00_LANGUAGE_AND_TERMINOLOGY_POLICY.md'),
               Path('docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md'),
               Path('docs/guides/GITHUB_FOR_COWORKERS.md'),
+              Path('docs/guides/GITHUB_KAT9I_MAPPING.md'),
+              Path('docs/architecture/MODULE_RESPONSIBILITY_MAP.md'),
               Path('docs/GLOSSARY.md'),
               Path('.github/PULL_REQUEST_TEMPLATE.md'),
               Path('.github/ISSUE_TEMPLATE/feedback.yml'),
@@ -56,25 +62,38 @@ jobs:
               if not text.strip():
                   raise SystemExit(f'Пустой обязательный файл: {path}')
               if not any(('А' <= c <= 'я') or c in 'Ёё' for c in text):
-                  raise SystemExit(f'Нет русского пояснения: {path}')
+                  raise SystemExit(f'Нет русского текста: {path}')
 
           for path in Path('docs').rglob('*.md'):
               path.read_text(encoding='utf-8')
 
-          print('Базовые проверки документации пройдены.')
+          # Проверка новых спецификаций (docs/spec/ и docs/guides/) на запрещённое сокращение KAT
+          for path in list(Path('docs/spec').glob('*.md')) + list(Path('docs/guides').glob('*.md')):
+              text = path.read_text(encoding='utf-8')
+              for line_no, line in enumerate(text.splitlines(), start=1):
+                  if re.search(r'(?<![A-Za-z0-9_])KAT(?![A-Za-z0-9_9])', line):
+                      if 'сокращение' in line.lower() or 'не используется' in line.lower():
+                          continue
+                      raise SystemExit(f'Обнаружено запрещённое сокращение KAT в {path}:{line_no}: {line}')
+
+          print('Все проверки документации, кодировки и терминологии успешно пройдены.')
           PY
 
-      - name: Проверить форму обратной связи
+      - name: Проверить форму обратной связи и шаблоны
         shell: bash
         run: |
           set -euo pipefail
           grep -q '^name: Обратная связь' .github/ISSUE_TEMPLATE/feedback.yml
           grep -q 'Что вы пытались сделать' .github/ISSUE_TEMPLATE/feedback.yml
           grep -q 'не добавил.*секрет' .github/ISSUE_TEMPLATE/feedback.yml
+          grep -q 'Revision для проверки:' .github/PULL_REQUEST_TEMPLATE.md
+          grep -q 'Независимый QA' .github/PULL_REQUEST_TEMPLATE.md
 
-      - name: Зафиксировать известное ограничение HTML
+      - name: Проверить HTML-представление и зафиксировать статус
         shell: bash
         run: |
-          echo 'index.html пока является временным ручным представлением.'
+          set -euo pipefail
+          test -s index.html
+          echo 'index.html проверен на непустоту.'
           echo 'Канонический источник истины: Markdown в docs/.'
-          echo 'Переход на генерацию отслеживается в Issue #2 и #6.'
+          echo 'Автоматическая генерация отслеживается в Issue #2 и #6.'
