@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/SemanticSnapshot.json",
+  "title": "SemanticSnapshot",
+  "description": "Снимок семантического окружения выполнения (Execution Semantic Snapshot) для контроля воспроизводимости, изоляции транзакций и валидации возобновления (Resume / Recovery).",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_id",
+    "task_id",
+    "rules_ref",
+    "model_route",
+    "context_manifest_ref",
+    "skill_revisions",
+    "tool_definitions",
+    "config_revision",
+    "contract_versions",
+    "created_at"
+  ],
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^sem-[a-zA-Z0-9_-]{8,64}$",
+      "description": "Уникальный идентификатор семантического снимка."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор связанной задачи."
+    },
+    "step_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Идентификатор шага/этапа, если снимок привязан к конкретному этапу."
+    },
+    "rules_ref": {
+      "type": "string",
+      "description": "Идентификатор и хэш/версия действующих канонических правил (RulesRef)."
+    },
+    "model_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model_alias",
+        "resolved_model_version"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Поставщик модели (anthropic, openai, gemini, local_llama, etc.)."
+        },
+        "model_alias": {
+          "type": "string",
+          "description": "Псевдоним уровня модели (HIGH, NORMAL, LOW)."
+        },
+        "resolved_model_version": {
+          "type": "string",
+          "description": "Точная разрешённая версия и чексумма модели на момент фиксации."
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "prompt_template_revision": {
+          "type": "string",
+          "description": "Хэш ревизии системного промпта/шаблона."
+        }
+      }
+    },
+    "context_manifest_ref": {
+      "type": "string",
+      "description": "Ссылка или хэш манифеста контекста и индекса знаний (Knowledge/Context Manifest Revision)."
+    },
+    "skill_revisions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Словарь версий/хэшей используемых навыков (skill_id -> revision_hash)."
+    },
+    "tool_definitions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Словарь используемых инструментов и серверов MCP с их хэшами схем (tool_name -> schema_hash)."
+    },
+    "config_revision": {
+      "type": "string",
+      "description": "Хэш ревизии конфигурации системы и окружения выполнения."
+    },
+    "contract_versions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Словарь версий используемых машинных схем и контрактов."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Временная метка фиксации семантического снимка в ISO 8601."
+    }
+  }
+}
