@@ -49,13 +49,17 @@ SSD не является обычным рабочим уровнем кэша.
 
 Политика первой версии:
 
-1. дешёвые для повторного построения холодные записи удаляются;
-2. дорогие для повторного построения холодные записи собираются в batch;
-3. batch записывается одной крупной последовательной операцией в immutable spill segment;
-4. RAM освобождается;
-5. при последующем запросе нужный объект лениво возвращается в RAM.
+1. `NO_CACHE` вообще не принимается в CacheEngine;
+2. дешёвые для повторного построения холодные записи удаляются;
+3. дорогая запись сначала проходит `SpillPolicy` и Security-проверку места хранения, срока жизни, Scope и обязательного шифрования;
+4. `CACHE_SESSION_ONLY` в v1 не записывается на диск: при нехватке RAM такая запись остаётся в допустимой памяти либо удаляется и пересчитывается;
+5. `CACHE_LIMITED` допускается к spill только если политика явно разрешает локальный диск и все требования к шифрованию, расположению и retention выполнены; если требуемая защита не реализована или недоступна, запись не spill'ится;
+6. разрешённые дорогие холодные записи собираются в batch;
+7. batch записывается одной крупной последовательной операцией в immutable spill segment;
+8. RAM освобождается;
+9. при последующем запросе нужный объект лениво возвращается в RAM.
 
-SSD используется как резерв ёмкости, а не как обязательное постоянное хранилище.
+SSD используется как резерв ёмкости, а не как обязательное постоянное хранилище. Memory pressure никогда не ослабляет Cache Policy или Security: безопаснее удалить пересоздаваемую запись, чем сохранить её в запрещённом месте.
 
 ## 34.5. Immutable spill segments
 
@@ -146,15 +150,15 @@ TTL используется только как дополнительная п
 - payload: type, size, location;
 - lifecycle: created_at, last_access, expires_at при необходимости;
 - cost: build_cost/rebuild_cost;
-- policy: class/priority hints;
-- security: scope;
+- policy: cache_class (`CACHE_ALLOWED`, `CACHE_LIMITED`, `CACHE_SESSION_ONLY`), class/priority hints, spill_allowed, retention/session binding;
+- security: scope, storage/location restrictions, encryption_required;
 - integrity: checksum;
 - observability: hit_count;
 - compatibility: schema_version.
 
 Не все поля обязаны активно участвовать в политике первой версии.
 
-Результат проверки повторного использования использует единый словарь состояний: `FULL`, `PARTIAL`, `MISS`, `STALE`, `FORBIDDEN`. Эти состояния описывают решение Cache Policy и не зависят от того, находится payload в RAM, spill segment или будущем backend.
+Результат проверки повторного использования использует единый словарь состояний: `FULL_HIT`, `PARTIAL_HIT`, `MISS`, `STALE`, `FORBIDDEN`. Эти состояния описывают решение Cache Policy и не зависят от того, находится payload в RAM, spill segment или будущем backend.
 
 ## 34.10. Версионированный протокол
 
@@ -248,7 +252,7 @@ CacheEngine разделяет публичный API и физическое р
 - простой eviction;
 - базовые memory thresholds;
 - SingleFlight;
-- batch spill;
+- batch spill только после Cache Policy / Security gate;
 - immutable segments;
 - checksum;
 - lazy restore;
@@ -308,7 +312,8 @@ CacheEngine не должен требовать сложного восстан
 - spill index повреждён → пересоздать или удалить;
 - segment повреждён → удалить;
 - весь cache storage повреждён → удалить и построить заново;
-- незавершённый temporary segment → удалить при старте.
+- незавершённый temporary segment → удалить при старте;
+- завершение задачи/сессии → гарантированно очистить все `CACHE_SESSION_ONLY` записи и связанные временные области.
 
 Никакая из этих операций не должна затрагивать SSoT.
 

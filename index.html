@@ -1519,6 +1519,15 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li><code>NO_CACHE</code> — сохранение запрещено.</li>
 </ul>
 <p>Запрет кэширования имеет приоритет над разрешением.</p>
+<h2 id="размещение-и-spill">Размещение и spill</h2>
+<p>Класс кэширования определяет не только возможность повторного использования, но и допустимое физическое размещение записи. Memory pressure не может ослаблять эти ограничения.</p>
+<ul>
+<li><code>NO_CACHE</code> не принимается в CacheEngine;</li>
+<li><code>CACHE_SESSION_ONLY</code> в первой реализации хранится только в допустимой оперативной памяти и полностью удаляется при завершении задачи/сессии;</li>
+<li><code>CACHE_LIMITED</code> может попасть на диск только при явном разрешении политики и выполнении всех требований по Scope, месту хранения, TTL/retention и шифрованию;</li>
+<li><code>CACHE_ALLOWED</code> может использовать RAM и разрешённый spill, если Security не задаёт более строгих ограничений.</li>
+</ul>
+<p>Если запись нельзя безопасно spill&#x27;ить, CacheEngine удаляет её и при необходимости пересчитывает позже. Производительность не имеет приоритета над Security.</p>
 <h2 id="явная-очистка">Явная очистка</h2>
 <p>KAT9I_OS должна поддерживать команду пользователя/администратора «очистить кэш» с указанным Scope: весь кэш, проект, Context, Resource, модель, текущая задача и т. п. Очистка выполняется локальным детерминированным кодом.</p>
 <p>Команда очистки кэша не удаляет канонические KnowledgeRecord, Rules, Metrics history, Task state, документы и другие источники истины. Удаляются только восстанавливаемые производные данные.</p>
@@ -1575,7 +1584,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <h2 id="границы-модулей">Границы модулей</h2>
 <ul>
 <li>Context использует кэш retrieval, summaries, rankings, Context Packs и индексов;</li>
-<li>Resources отвечает за физическое хранение, source revision, resolver cache и локальные копии;</li>
+<li>Resources владеет ResourceRef, source revision и правилами разрешения источника; физическим размещением runtime cache и spill владеет CacheEngine;</li>
 <li>KnowledgeRecord не является кэшем, но его индексы/embeddings/summaries могут кэшироваться;</li>
 <li>Inference может кэшировать capability matrix, availability и routing statistics с отдельной Freshness Policy;</li>
 <li>Execution может использовать build/test/dependency cache, если это разрешено Domain/QA Policy, и отражает использование кэша в Evidence.</li>
@@ -8559,10 +8568,10 @@ Learning (самообучение)
 <h2 id="27-11-cacheengine-движок-кэша">27.11. CacheEngine — движок кэша</h2>
 <p>CacheEngine является единственным каноническим владельцем кэширования KAT9I_OS и реализуется отдельным Rust-модулем согласно <code>docs/architecture/34_CACHE_ENGINE.md</code>.</p>
 <p>Он одновременно отвечает за логическую Cache Policy — можно ли безопасно повторно использовать ранее вычисленный результат — и за высокопроизводительное RAM-first размещение производных данных. При проверке валидности учитываются revision/hash, RulesRef / Effective Ruleset, значимый Context Drift, версия Skill/Workflow/transformation, параметры, Security scope и TTL там, где нет более сильной revision-модели.</p>
-<p>Состояния <code>FULL</code>, <code>PARTIAL</code>, <code>MISS</code>, <code>STALE</code>, <code>FORBIDDEN</code> являются единым словарём результата Cache Policy. Они не означают конкретный backend хранения.</p>
+<p>Состояния <code>FULL_HIT</code>, <code>PARTIAL_HIT</code>, <code>MISS</code>, <code>STALE</code>, <code>FORBIDDEN</code> являются единым словарём результата Cache Policy. Они не означают конкретный backend хранения.</p>
 <p>Runtime Cache Registry является внутренним пересоздаваемым индексом CacheEngine. Он не является канонической SQLite-сущностью Storage и может быть полностью удалён вместе с кэшем.</p>
 <p>CacheEngine не является SSoT, Knowledge, Evidence или Storage. Потеря CacheEngine влияет только на производительность и стоимость, но не на корректность системы.</p>
-<p>Каноническое владение: Cache Policy, runtime Cache Registry, CacheKey/CacheEntry/PayloadRef и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.</p>
+<p>Каноническое владение: Cache Policy, runtime Cache Registry, CacheKey/CacheEntry/PayloadRef и состояния FULL_HIT/PARTIAL_HIT/MISS/STALE/FORBIDDEN.</p>
 <h2 id="27-12-planning-amp-forecasting-планирование-и-прогнозирование">27.12. Planning &amp; Forecasting — планирование и прогнозирование</h2>
 <p>Модуль прогнозирует токены, время, стоимость, вероятность Cache Hit, Retry, HIGH escalation, Local Share и First Pass Success.</p>
 <p>Поддерживаются предварительный, уточнённый и текущий пересчитываемый прогнозы.</p>
@@ -12158,13 +12167,17 @@ Learning (самообучение)
 <p>При достижении порогов memory pressure CacheEngine освобождает RAM.</p>
 <p>Политика первой версии:</p>
 <ol>
+<li><code>NO_CACHE</code> вообще не принимается в CacheEngine;</li>
 <li>дешёвые для повторного построения холодные записи удаляются;</li>
-<li>дорогие для повторного построения холодные записи собираются в batch;</li>
+<li>дорогая запись сначала проходит <code>SpillPolicy</code> и Security-проверку места хранения, срока жизни, Scope и обязательного шифрования;</li>
+<li><code>CACHE_SESSION_ONLY</code> в v1 не записывается на диск: при нехватке RAM такая запись остаётся в допустимой памяти либо удаляется и пересчитывается;</li>
+<li><code>CACHE_LIMITED</code> допускается к spill только если политика явно разрешает локальный диск и все требования к шифрованию, расположению и retention выполнены; если требуемая защита не реализована или недоступна, запись не spill&#x27;ится;</li>
+<li>разрешённые дорогие холодные записи собираются в batch;</li>
 <li>batch записывается одной крупной последовательной операцией в immutable spill segment;</li>
 <li>RAM освобождается;</li>
 <li>при последующем запросе нужный объект лениво возвращается в RAM.</li>
 </ol>
-<p>SSD используется как резерв ёмкости, а не как обязательное постоянное хранилище.</p>
+<p>SSD используется как резерв ёмкости, а не как обязательное постоянное хранилище. Memory pressure никогда не ослабляет Cache Policy или Security: безопаснее удалить пересоздаваемую запись, чем сохранить её в запрещённом месте.</p>
 <h2 id="34-5-immutable-spill-segments">34.5. Immutable spill segments</h2>
 <p>Spill-сегмент после успешной записи не изменяется.</p>
 <p>Минимально формат должен предусматривать:</p>
@@ -12238,14 +12251,14 @@ Learning (самообучение)
 <li>payload: type, size, location;</li>
 <li>lifecycle: created_at, last_access, expires_at при необходимости;</li>
 <li>cost: build_cost/rebuild_cost;</li>
-<li>policy: class/priority hints;</li>
-<li>security: scope;</li>
+<li>policy: cache_class (<code>CACHE_ALLOWED</code>, <code>CACHE_LIMITED</code>, <code>CACHE_SESSION_ONLY</code>), class/priority hints, spill_allowed, retention/session binding;</li>
+<li>security: scope, storage/location restrictions, encryption_required;</li>
 <li>integrity: checksum;</li>
 <li>observability: hit_count;</li>
 <li>compatibility: schema_version.</li>
 </ul>
 <p>Не все поля обязаны активно участвовать в политике первой версии.</p>
-<p>Результат проверки повторного использования использует единый словарь состояний: <code>FULL</code>, <code>PARTIAL</code>, <code>MISS</code>, <code>STALE</code>, <code>FORBIDDEN</code>. Эти состояния описывают решение Cache Policy и не зависят от того, находится payload в RAM, spill segment или будущем backend.</p>
+<p>Результат проверки повторного использования использует единый словарь состояний: <code>FULL_HIT</code>, <code>PARTIAL_HIT</code>, <code>MISS</code>, <code>STALE</code>, <code>FORBIDDEN</code>. Эти состояния описывают решение Cache Policy и не зависят от того, находится payload в RAM, spill segment или будущем backend.</p>
 <h2 id="34-10-версионированный-протокол">34.10. Версионированный протокол</h2>
 <p>Взаимодействие клиентов с CacheEngine строится через versioned protocol.</p>
 <p>Клиент и CacheEngine должны уметь согласовать:</p>
@@ -12318,7 +12331,7 @@ Learning (самообучение)
 <li>простой eviction;</li>
 <li>базовые memory thresholds;</li>
 <li>SingleFlight;</li>
-<li>batch spill;</li>
+<li>batch spill только после Cache Policy / Security gate;</li>
 <li>immutable segments;</li>
 <li>checksum;</li>
 <li>lazy restore;</li>
@@ -12362,7 +12375,8 @@ Learning (самообучение)
 <li>spill index повреждён → пересоздать или удалить;</li>
 <li>segment повреждён → удалить;</li>
 <li>весь cache storage повреждён → удалить и построить заново;</li>
-<li>незавершённый temporary segment → удалить при старте.</li>
+<li>незавершённый temporary segment → удалить при старте;</li>
+<li>завершение задачи/сессии → гарантированно очистить все <code>CACHE_SESSION_ONLY</code> записи и связанные временные области.</li>
 </ul>
 <p>Никакая из этих операций не должна затрагивать SSoT.</p>
 <h2 id="34-22-метрики">34.22. Метрики</h2>

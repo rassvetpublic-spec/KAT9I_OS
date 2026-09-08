@@ -108,13 +108,13 @@ CacheEngine является единственным каноническим �
 
 Он одновременно отвечает за логическую Cache Policy — можно ли безопасно повторно использовать ранее вычисленный результат — и за высокопроизводительное RAM-first размещение производных данных. При проверке валидности учитываются revision/hash, RulesRef / Effective Ruleset, значимый Context Drift, версия Skill/Workflow/transformation, параметры, Security scope и TTL там, где нет более сильной revision-модели.
 
-Состояния `FULL`, `PARTIAL`, `MISS`, `STALE`, `FORBIDDEN` являются единым словарём результата Cache Policy. Они не означают конкретный backend хранения.
+Состояния `FULL_HIT`, `PARTIAL_HIT`, `MISS`, `STALE`, `FORBIDDEN` являются единым словарём результата Cache Policy. Они не означают конкретный backend хранения.
 
 Runtime Cache Registry является внутренним пересоздаваемым индексом CacheEngine. Он не является канонической SQLite-сущностью Storage и может быть полностью удалён вместе с кэшем.
 
 CacheEngine не является SSoT, Knowledge, Evidence или Storage. Потеря CacheEngine влияет только на производительность и стоимость, но не на корректность системы.
 
-Каноническое владение: Cache Policy, runtime Cache Registry, CacheKey/CacheEntry/PayloadRef и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.
+Каноническое владение: Cache Policy, runtime Cache Registry, CacheKey/CacheEntry/PayloadRef и состояния FULL_HIT/PARTIAL_HIT/MISS/STALE/FORBIDDEN.
 
 ## 27.12. Planning & Forecasting — планирование и прогнозирование
 
