@@ -1,0 +1,58 @@
+name: Новая функция
+description: Предложить новую возможность KAT9I_OS, которой сейчас нет
+title: "[Функция] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опишите задачу простыми словами. Не публикуйте токены, пароли, ключи и другие секреты.
+  - type: textarea
+    id: result
+    attributes:
+      label: Что хотим получить?
+      description: Как должен выглядеть готовый результат?
+      placeholder: После выполнения пользователь сможет...
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Зачем это нужно?
+      description: Какую реальную проблему или потребность решает функция?
+    validations:
+      required: true
+  - type: textarea
+    id: work
+    attributes:
+      label: Что, по вашему мнению, нужно сделать?
+      description: Можно перечислить основные шаги. Технические детали знать не обязательно.
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Что точно не входит в эту задачу?
+      description: Если знаете границы работы, укажите их. Если не знаете — напишите «не знаю».
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Как проверить результат?
+      description: Что нужно сделать или увидеть, чтобы убедиться, что функция работает?
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Когда задачу считать готовой?
+      description: Перечислите проверяемые признаки готовности.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Проверка перед отправкой
+      options:
+        - label: Я не добавляю в Issue токены, пароли, приватные ключи и другие секреты.
+          required: true
