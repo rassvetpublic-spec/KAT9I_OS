@@ -210,7 +210,7 @@ Context должен передавать уровень доверия к ис�
 
 ## 7.22. Context Cache и CacheEngine
 
-Повторно используемый контекст должен кэшироваться через отдельный системный `CacheEngine`, определённый в `docs/architecture/32_CACHE_ENGINE.md`.
+Повторно используемый контекст должен кэшироваться через отдельный системный `CacheEngine`, определённый в `docs/architecture/34_CACHE_ENGINE.md`.
 
 Context является клиентом CacheEngine и не владеет физическим кэшем.
 
