@@ -3,6 +3,7 @@ name: Автоматический triage входящих обращений
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
 
 permissions:
   issues: write
@@ -11,12 +12,14 @@ jobs:
   triage:
     name: Классификация и первичная обработка
     runs-on: ubuntu-latest
+    if: github.event_name == 'issues'
     steps:
       - name: Анализ формы обратной связи и добавление меток
         uses: actions/github-script@v7
         with:
           script: |
             const issue = context.payload.issue;
+            if (!issue) return;
             const body = issue.body || '';
             const labelsToAdd = [];
 
