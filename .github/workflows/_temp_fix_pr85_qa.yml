@@ -1,0 +1,306 @@
+name: TEMP PR85 QA fixes
+
+on:
+  push:
+    branches: [docs/p0-cache-engine-architecture]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/p0-cache-engine-architecture
+          fetch-depth: 0
+      - name: Применить архитектурные исправления QA
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: ожидалось 1 совпадение, найдено {count}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Context: только отдельный CacheEngine, без абстрактного локального кэша.
+          replace_exact(
+              'docs/architecture/07_CONTEXT.md',
+              'Сначала используются поиск по файлам, Git, индексы, AST (структурное представление кода), поиск символов, граф зависимостей, полнотекстовый поиск, хэши, фильтры, метаданные, SQL и локальный кэш.',
+              'Сначала используются поиск по файлам, Git, индексы, AST (структурное представление кода), поиск символов, граф зависимостей, полнотекстовый поиск, хэши, фильтры, метаданные, SQL и отдельный CacheEngine.'
+          )
+
+          # CacheEngine: единый владелец, внутренний пересоздаваемый Cache Registry.
+          replace_exact(
+              'docs/architecture/34_CACHE_ENGINE.md',
+              'CacheEngine хранит только производные, повторно получаемые или повторно вычисляемые данные.\n\n## 34.7. Примеры допустимых данных',
+              'CacheEngine хранит только производные, повторно получаемые или повторно вычисляемые данные.\n\nCacheEngine является единственным каноническим владельцем Cache Policy и runtime Cache Registry KAT9I_OS. Под Cache Registry понимается внутренний пересоздаваемый индекс и метаданные кэша, а не каноническая сущность SQLite модуля Storage. Физическое размещение RAM-кэша и spill-сегментов принадлежит CacheEngine; Storage не становится владельцем содержимого кэша.\n\nКаноническая карта ответственности CacheEngine находится в `docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md`, раздел 27.11.\n\n## 34.7. Примеры допустимых данных'
+          )
+
+          replace_exact(
+              'docs/architecture/34_CACHE_ENGINE.md',
+              '''## 34.8. Детерминированный CacheKey
+
+CacheKey должен быть структурированным и затем может преобразовываться в компактный binary/hash key.
+
+Логически он включает:
+
+- namespace;
+- identity источника;
+- revision/hash источника;
+- transformation id;
+- transformation version;
+- parameters hash;
+- security domain/scope.
+
+Свежесть по возможности определяется identity/revision/hash, а не догадкой по TTL.
+''',
+              '''## 34.8. Детерминированный CacheKey и инвалидация
+
+CacheKey должен быть структурированным и затем может преобразовываться в компактный binary/hash key.
+
+Логически он включает:
+
+- namespace;
+- identity источника;
+- revision/hash источника;
+- transformation id;
+- transformation version;
+- parameters hash;
+- security domain/scope;
+- отпечаток RulesRef / Effective Ruleset, если результат зависит от активных правил;
+- отпечаток значимой части Context / Context Drift basis, если результат зависит от рабочего контекста;
+- версию Skill / Workflow, если она влияет на семантику результата.
+
+`parameters hash` может агрегировать эти зависимые отпечатки, но контракт обязан однозначно фиксировать, какие входы влияют на валидность конкретного типа записи.
+
+Изменение любого значимого входа должно приводить к новому ключу либо к состоянию `STALE`. Несовместимый Security scope должен давать `FORBIDDEN`, а не Cache Hit.
+
+TTL используется только как дополнительная политика для источников без надёжной revision/hash или для заведомо временных данных. TTL не может переопределить обнаруженное несовпадение revision, RulesRef, Context или Security scope.
+'''
+          )
+
+          replace_exact(
+              'docs/architecture/34_CACHE_ENGINE.md',
+              'Не все поля обязаны активно участвовать в политике первой версии.\n\n## 34.10. Версионированный протокол',
+              'Не все поля обязаны активно участвовать в политике первой версии.\n\nРезультат проверки повторного использования использует единый словарь состояний: `FULL`, `PARTIAL`, `MISS`, `STALE`, `FORBIDDEN`. Эти состояния описывают решение Cache Policy и не зависят от того, находится payload в RAM, spill segment или будущем backend.\n\n## 34.10. Версионированный протокол'
+          )
+
+          # Каноническая карта: Cache заменён единым CacheEngine.
+          replace_exact(
+              'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md',
+              '| Cache — кэш | Что можно безопасно не вычислять повторно? |',
+              '| CacheEngine — движок кэша | Что можно безопасно не вычислять повторно и как это быстро переиспользовать? |'
+          )
+          replace_exact(
+              'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md',
+              '''## 27.11. Cache — кэш
+
+Cache отвечает, можно ли безопасно повторно использовать ранее вычисленный результат. Учитываются revision, RulesRef, Context Drift, TTL, версия Skill/Workflow и Security.
+
+Cache не является SSoT, Knowledge или Evidence.
+
+Каноническое владение: Cache Policy, Cache Registry и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.
+''',
+              '''## 27.11. CacheEngine — движок кэша
+
+CacheEngine является единственным каноническим владельцем кэширования KAT9I_OS и реализуется отдельным Rust-модулем согласно `docs/architecture/34_CACHE_ENGINE.md`.
+
+Он одновременно отвечает за логическую Cache Policy — можно ли безопасно повторно использовать ранее вычисленный результат — и за высокопроизводительное RAM-first размещение производных данных. При проверке валидности учитываются revision/hash, RulesRef / Effective Ruleset, значимый Context Drift, версия Skill/Workflow/transformation, параметры, Security scope и TTL там, где нет более сильной revision-модели.
+
+Состояния `FULL`, `PARTIAL`, `MISS`, `STALE`, `FORBIDDEN` являются единым словарём результата Cache Policy. Они не означают конкретный backend хранения.
+
+Runtime Cache Registry является внутренним пересоздаваемым индексом CacheEngine. Он не является канонической SQLite-сущностью Storage и может быть полностью удалён вместе с кэшем.
+
+CacheEngine не является SSoT, Knowledge, Evidence или Storage. Потеря CacheEngine влияет только на производительность и стоимость, но не на корректность системы.
+
+Каноническое владение: Cache Policy, runtime Cache Registry, CacheKey/CacheEntry/PayloadRef и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.
+'''
+          )
+          replace_exact(
+              'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md',
+              '7. Context / Knowledge / Resources;\n8. Cache;\n9. уточнённый Planning;',
+              '7. Context / Knowledge / Resources;\n8. CacheEngine;\n9. уточнённый Planning;'
+          )
+          replace_exact(
+              'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md',
+              'Особенно это касается валидации контрактов, Security checks, Cache, Planning calculations, Worker state, Lease, Git operations, Metrics, Recovery, Storage и UI-агрегации.',
+              'Особенно это касается валидации контрактов, Security checks, CacheEngine, Planning calculations, Worker state, Lease, Git operations, Metrics, Recovery, Storage и UI-агрегации.'
+          )
+          replace_exact(
+              'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md',
+              '- consumed contracts;\n- dependencies;\n- health;',
+              '- consumed contracts;\n- optional contracts;\n- required dependencies;\n- optional dependencies;\n- health;'
+          )
+          replace_exact(
+              'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md',
+              '| Ресурс | исходная система + ResourceRef |\n| Worker registration | Worker Registry |',
+              '| Ресурс | исходная система + ResourceRef |\n| Решение о повторном использовании и runtime-кэш | CacheEngine |\n| Worker registration | Worker Registry |'
+          )
+          replace_exact(
+              'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md',
+              'Каноническое владение: физические механизмы хранения.\n\n## 27.30. Secret Store',
+              'Каноническое владение: физические механизмы хранения канонического и долговечного состояния. Runtime RAM-кэш, spill-сегменты и пересоздаваемый Cache Registry принадлежат CacheEngine и не входят в ответственность Storage.\n\n## 27.30. Secret Store'
+          )
+
+          # Storage: убрать конкурирующий Cache Registry и зафиксировать RAM-first CacheEngine.
+          replace_exact('docs/architecture/25_DATA_STORAGE.md', '- Cache Registry;\n', '')
+          replace_exact(
+              'docs/architecture/25_DATA_STORAGE.md',
+              '- Workspace Registry.\n\n## 25.8. Что не надо хранить прямо в SQLite',
+              '- Workspace Registry.\n\nRuntime `Cache Registry` CacheEngine не относится к этому списку: это пересоздаваемый индекс ускорителя, а не каноническое состояние SQLite. В SQLite могут храниться только канонические настройки или агрегированные Metrics CacheEngine, если они нужны системе.\n\n## 25.8. Что не надо хранить прямо в SQLite'
+          )
+          replace_exact(
+              'docs/architecture/25_DATA_STORAGE.md',
+              'Cache физически отделён от канонического состояния. Он может содержать результаты поиска, materialized context, индексы, embeddings, промежуточные вычисления и безопасно повторно используемые результаты. Кэш можно удалить, система должна остаться корректной.',
+              'CacheEngine физически и логически отделён от канонического состояния. Его нормальный режим — RAM-first; локальный диск используется только для редкого batch spill при memory pressure. CacheEngine может содержать результаты поиска, materialized context, индексы, embeddings, промежуточные вычисления и безопасно повторно используемые результаты. Содержимое CacheEngine и его runtime Cache Registry можно удалить полностью: система должна остаться корректной и пересоздать данные из источников.'
+          )
+          replace_exact(
+              'docs/architecture/25_DATA_STORAGE.md',
+              'В режиме диагностики должно быть видно, какой объект где физически хранится. Например: Task State — SQLite, исходник — GitHub, Context Cache — локальный диск, Artifact — Drive, Evidence — локальный Evidence Store, ResultRef — GitHub PR.',
+              'В режиме диагностики должно быть видно, какой объект где физически хранится. Например: Task State — SQLite, исходник — GitHub, Context Cache — RAM CacheEngine, при memory pressure дорогая холодная запись — immutable spill segment на локальном диске, Artifact — Drive, Evidence — локальный Evidence Store, ResultRef — GitHub PR.'
+          )
+
+          # Roadmap: единое имя модуля.
+          replace_exact(
+              'docs/architecture/31_ROADMAP_AND_FIRST_WORKING_VERSION.md',
+              '- базовый Cache.',
+              '- базовый CacheEngine: Rust, RAM-first, SingleFlight и безопасный batch spill;'
+          )
+          replace_exact(
+              'docs/architecture/31_ROADMAP_AND_FIRST_WORKING_VERSION.md',
+              '11. Context;\n12. Cache;\n13. Inference;',
+              '11. Context;\n12. CacheEngine;\n13. Inference;'
+          )
+
+          # Reliability: CacheEngine fail-open как конкретный модуль.
+          replace_exact(
+              'docs/architecture/21_RELIABILITY_AND_RECOVERY.md',
+              '- разрешённый Cache;',
+              '- доступный CacheEngine;'
+          )
+          replace_exact(
+              'docs/architecture/21_RELIABILITY_AND_RECOVERY.md',
+              '''## 21.18. Повреждение или потеря кэша
+
+Cache не является источником истины. Повреждённая запись удаляется или помечается INVALID и пересчитывается из первичного источника.
+
+Полная потеря кэша должна сделать систему только медленнее или дороже, но не некорректной.
+''',
+              '''## 21.18. Повреждение, потеря или недоступность CacheEngine
+
+CacheEngine не является источником истины. Повреждённая запись удаляется или получает состояние `STALE` и пересчитывается из первичного источника. Несовместимый Security scope даёт `FORBIDDEN`.
+
+Полная потеря содержимого CacheEngine должна сделать систему только медленнее или дороже, но не некорректной. Недоступность самого процесса CacheEngine переводит клиентов в `CACHE_DEGRADED`: они обходят кэш и продолжают работу через первичные источники, если это разрешено Rules/Security.
+'''
+          )
+          replace_exact(
+              'docs/architecture/21_RELIABILITY_AND_RECOVERY.md',
+              'Cache имеет меньший приоритет и может быть пересчитан.',
+              'Данные CacheEngine не требуют обычного Backup: они имеют меньший приоритет и могут быть пересчитаны.'
+          )
+
+          # Technology stack: CacheEngine — отдельный Rust-процесс, не часть Electron.
+          replace_exact(
+              'docs/architecture/23_TECHNOLOGY_STACK_AND_RUNTIME.md',
+              'Rust Core является границей, через которую должны проходить критические операции с состоянием и системными ресурсами.\n\nВысокоуровневый Worker не должен обходить эту границу только потому, что ему технически доступна файловая система, shell или внешний API.',
+              'Rust Core является границей, через которую должны проходить критические операции с состоянием и системными ресурсами.\n\nОтдельный `CacheEngine` также реализуется на Rust, но имеет собственный процесс и жизненный цикл. Он является runtime-ускорителем, а не частью Electron и не владельцем канонического состояния Core. Взаимодействие с ним идёт через версионированный локальный контракт и допускает fail-open работу без кэша.\n\nВысокоуровневый Worker не должен обходить эту границу только потому, что ему технически доступна файловая система, shell или внешний API.'
+          )
+
+          # Module Registry schema: фактически используемые tier/health + мягкие зависимости/контракты.
+          replace_exact(
+              'schemas/v1/ModuleRegistry.json',
+              '"DESKTOP_UI"\n            ],',
+              '"DESKTOP_UI",\n              "RUNTIME_ACCELERATION"\n            ],'
+          )
+          replace_exact(
+              'schemas/v1/ModuleRegistry.json',
+              '''          "requires_contracts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Список контрактов/схем, требуемых модулю для штатной работы."
+          },
+          "dependencies": {''',
+              '''          "requires_contracts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Список контрактов/схем, без которых штатная работа модуля невозможна."
+          },
+          "optional_contracts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Контракты ускорителей или расширений, отсутствие которых допускает degraded/fallback работу."
+          },
+          "dependencies": {'''
+          )
+          replace_exact(
+              'schemas/v1/ModuleRegistry.json',
+              '''          "dependencies": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Список module_id модулей, необходимых для инициализации и работы данного модуля."
+          },
+          "capabilities": {''',
+              '''          "dependencies": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Список module_id модулей, необходимых для инициализации и корректной работы данного модуля."
+          },
+          "optional_dependencies": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Необязательные module_id: их отсутствие допускает degraded/fallback режим без потери корректности."
+          },
+          "capabilities": {'''
+          )
+          replace_exact(
+              'schemas/v1/ModuleRegistry.json',
+              '"enum": ["INTERNAL_STATE_PROBE", "IPC_PING", "FILE_WATCHER", "IN_PROCESS"]',
+              '"enum": ["INTERNAL_STATE_PROBE", "IPC_PING", "FILE_WATCHER", "IN_PROCESS", "LOCAL_IPC"]'
+          )
+
+          # Машинный реестр.
+          p = Path('modules_registry.json')
+          registry = json.loads(p.read_text(encoding='utf-8'))
+          registry['registry_version'] = '1.2.0'
+          registry['updated_at'] = '2026-09-08T18:05:00Z'
+          by_id = {m['module_id']: m for m in registry['modules']}
+
+          by_id['Storage']['canonical_owner_ref'] = 'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.29'
+
+          cache = by_id['CacheEngine']
+          cache['canonical_owner_ref'] = 'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.11'
+          cache['canonical_responsibility'] = 'Единое владение Cache Policy и высокопроизводительным RAM-first runtime cache на Rust, включая пересоздаваемый Cache Registry, SingleFlight и редкий batch spill без владения SSoT'
+
+          context = by_id['Context']
+          context['requires_contracts'] = ['SystemEvent']
+          context['optional_contracts'] = ['CacheKey', 'PayloadRef']
+          context['dependencies'] = ['Storage']
+          context['optional_dependencies'] = ['CacheEngine']
+
+          by_id['DesktopShell']['canonical_owner_ref'] = 'docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.24'
+
+          p.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+
+          python scripts/generate_html_docs.py
+          rm .github/workflows/_temp_fix_pr85_qa.yml
+
+          git diff --check
+          python tests/test_docs_ssot.py
+          python -m unittest tests/test_triage_helper.py
+      - name: Зафиксировать исправления и удалить временный workflow
+        shell: bash
+        run: |
+          git config user.name "rassvetpublic"
+          git config user.email "rassvetpublic@gmail.com"
+          git add docs schemas modules_registry.json index.html .github/workflows/_temp_fix_pr85_qa.yml
+          git commit -m "docs: устранить замечания независимого QA CacheEngine (#84)"
+          git push origin HEAD:docs/p0-cache-engine-architecture
