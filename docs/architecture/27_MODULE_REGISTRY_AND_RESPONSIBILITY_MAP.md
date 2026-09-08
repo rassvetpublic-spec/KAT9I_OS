@@ -27,7 +27,7 @@
 | Context — контекст | Что исполнителю нужно знать сейчас? |
 | Knowledge — знания | Что система уже знает как проверенное знание? |
 | Resources — ресурсы | Где находится нужный объект? |
-| Cache — кэш | Что можно безопасно не вычислять повторно? |
+| CacheEngine — движок кэша | Что можно безопасно не вычислять повторно и как это быстро переиспользовать? |
 | Planning & Forecasting — планирование и прогнозирование | Сколько ресурсов вероятно потребуется? |
 | Inference — выбор вычислительного интеллекта | Какой уровень интеллекта и маршрут вычисления нужен? |
 | Coworker — исполнители | Кто конкретно выполнит работу? |
@@ -102,13 +102,19 @@ ResourceRef не выдаёт Permission. Технический доступ к
 
 Каноническое владение: логическая модель ресурсов.
 
-## 27.11. Cache — кэш
+## 27.11. CacheEngine — движок кэша
 
-Cache отвечает, можно ли безопасно повторно использовать ранее вычисленный результат. Учитываются revision, RulesRef, Context Drift, TTL, версия Skill/Workflow и Security.
+CacheEngine является единственным каноническим владельцем кэширования KAT9I_OS и реализуется отдельным Rust-модулем согласно `docs/architecture/34_CACHE_ENGINE.md`.
 
-Cache не является SSoT, Knowledge или Evidence.
+Он одновременно отвечает за логическую Cache Policy — можно ли безопасно повторно использовать ранее вычисленный результат — и за высокопроизводительное RAM-first размещение производных данных. При проверке валидности учитываются revision/hash, RulesRef / Effective Ruleset, значимый Context Drift, версия Skill/Workflow/transformation, параметры, Security scope и TTL там, где нет более сильной revision-модели.
 
-Каноническое владение: Cache Policy, Cache Registry и состояния FULL/PARTIAL/MISS/STALE/FORBIDDEN.
+Состояния `FULL_HIT`, `PARTIAL_HIT`, `MISS`, `STALE`, `FORBIDDEN` являются единым словарём результата Cache Policy. Они не означают конкретный backend хранения.
+
+Runtime Cache Registry является внутренним пересоздаваемым индексом CacheEngine. Он не является канонической SQLite-сущностью Storage и может быть полностью удалён вместе с кэшем.
+
+CacheEngine не является SSoT, Knowledge, Evidence или Storage. Потеря CacheEngine влияет только на производительность и стоимость, но не на корректность системы.
+
+Каноническое владение: Cache Policy, runtime Cache Registry, CacheKey/CacheEntry/PayloadRef и состояния FULL_HIT/PARTIAL_HIT/MISS/STALE/FORBIDDEN.
 
 ## 27.12. Planning & Forecasting — планирование и прогнозирование
 
@@ -284,7 +290,7 @@ Storage отвечает, где физически и каким механиз
 
 Storage не определяет предметную семантику Knowledge или Rules и не даёт модулям бесконтрольно читать внутренние таблицы друг друга.
 
-Каноническое владение: физические механизмы хранения.
+Каноническое владение: физические механизмы хранения канонического и долговечного состояния. Runtime RAM-кэш, spill-сегменты и пересоздаваемый Cache Registry принадлежат CacheEngine и не входят в ответственность Storage.
 
 ## 27.30. Secret Store — хранилище секретов
 
@@ -368,6 +374,7 @@ Domain знает, что нужен PR; Resources знает репозитор
 | Обязательные правила | Rule Manager |
 | Проверенные знания | Knowledge Base |
 | Ресурс | исходная система + ResourceRef |
+| Решение о повторном использовании и runtime-кэш | CacheEngine |
 | Worker registration | Worker Registry |
 | Lease | Coworker |
 | Безопасность действия | Security Decision |
@@ -392,7 +399,7 @@ Domain знает, что нужен PR; Resources знает репозитор
 5. TaskContract;
 6. предварительный Planning;
 7. Context / Knowledge / Resources;
-8. Cache;
+8. CacheEngine;
 9. уточнённый Planning;
 10. Inference;
 11. Coworker;
@@ -426,7 +433,7 @@ Domain знает, что нужен PR; Resources знает репозитор
 
 В каждом модуле отдельно ищется возможность перехода `MODEL → HYBRID → CODE`.
 
-Особенно это касается валидации контрактов, Security checks, Cache, Planning calculations, Worker state, Lease, Git operations, Metrics, Recovery, Storage и UI-агрегации.
+Особенно это касается валидации контрактов, Security checks, CacheEngine, Planning calculations, Worker state, Lease, Git operations, Metrics, Recovery, Storage и UI-агрегации.
 
 ИИ остаётся там, где действительно нужна содержательная интерпретация.
 
@@ -439,7 +446,9 @@ Domain знает, что нужен PR; Resources знает репозитор
 - responsibility;
 - owned contracts;
 - consumed contracts;
-- dependencies;
+- optional contracts;
+- required dependencies;
+- optional dependencies;
 - health;
 - capabilities;
 - owner/team;

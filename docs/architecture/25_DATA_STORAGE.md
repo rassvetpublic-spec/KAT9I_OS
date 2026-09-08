@@ -100,12 +100,13 @@ SQLite не становится архитектурным контрактом
 - Metrics;
 - Learning State;
 - Forecast history;
-- Cache Registry;
 - Checkpoints;
 - Event Journal metadata;
 - Security Events metadata;
 - Integration Registry;
 - Workspace Registry.
+
+Runtime `Cache Registry` CacheEngine не относится к этому списку: это пересоздаваемый индекс ускорителя, а не каноническое состояние SQLite. В SQLite могут храниться только канонические настройки или агрегированные Metrics CacheEngine, если они нужны системе.
 
 ## 25.8. Что не надо хранить прямо в SQLite
 
@@ -185,7 +186,7 @@ Obsidian можно использовать как пользовательск
 
 ## 25.23. Кэш
 
-Cache физически отделён от канонического состояния. Он может содержать результаты поиска, materialized context, индексы, embeddings, промежуточные вычисления и безопасно повторно используемые результаты. Кэш можно удалить, система должна остаться корректной.
+CacheEngine физически и логически отделён от канонического состояния. Его нормальный режим — RAM-first; локальный диск используется только для редкого batch spill при memory pressure. CacheEngine может содержать результаты поиска, materialized context, индексы, embeddings, промежуточные вычисления и безопасно повторно используемые результаты. Содержимое CacheEngine и его runtime Cache Registry можно удалить полностью: система должна остаться корректной и пересоздать данные из источников.
 
 ## 25.24. Индексы
 
@@ -345,7 +346,7 @@ Learning может обнаруживать редко используемый
 
 ## 25.63. Режим «Рентген KAT9I_OS»
 
-В режиме диагностики должно быть видно, какой объект где физически хранится. Например: Task State — SQLite, исходник — GitHub, Context Cache — локальный диск, Artifact — Drive, Evidence — локальный Evidence Store, ResultRef — GitHub PR.
+В режиме диагностики должно быть видно, какой объект где физически хранится. Например: Task State — SQLite, исходник — GitHub, Context Cache — RAM CacheEngine, при memory pressure дорогая холодная запись — immutable spill segment на локальном диске, Artifact — Drive, Evidence — локальный Evidence Store, ResultRef — GitHub PR.
 
 ## 25.64. Проверка целостности
 
