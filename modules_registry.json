@@ -1,6 +1,6 @@
 {
-  "registry_version": "1.0.0",
-  "updated_at": "2026-09-08T10:20:00Z",
+  "registry_version": "1.1.0",
+  "updated_at": "2026-09-08T15:40:00Z",
   "modules": [
     {
       "module_id": "Storage",
@@ -18,6 +18,23 @@
         "endpoint": "storage.health_check"
       },
       "documentation_ref": "docs/architecture/25_DATA_STORAGE.md"
+    },
+    {
+      "module_id": "CacheEngine",
+      "name": "Высокопроизводительный движок кэша",
+      "version": "0.1.0",
+      "tier": "RUNTIME_ACCELERATION",
+      "canonical_owner_ref": "docs/architecture/32_CACHE_ENGINE.md",
+      "canonical_responsibility": "RAM-first хранение только производных и безопасно пересоздаваемых данных, SingleFlight и редкий batch spill на SSD без владения каноническим состоянием",
+      "provides_contracts": ["CacheKey", "CacheEntry", "PayloadRef", "CacheCapabilities"],
+      "requires_contracts": [],
+      "dependencies": [],
+      "capabilities": ["CACHE_GET", "CACHE_PUT", "CACHE_INVALIDATE", "CACHE_SINGLEFLIGHT", "CACHE_BATCH_SPILL", "CACHE_HEALTH"],
+      "health_interface": {
+        "type": "LOCAL_IPC",
+        "endpoint": "cache.health"
+      },
+      "documentation_ref": "docs/architecture/32_CACHE_ENGINE.md"
     },
     {
       "module_id": "RuleManager",
@@ -61,8 +78,8 @@
       "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.8",
       "canonical_responsibility": "Политика формирования рабочего контекста, ContextPack и расчёт Context Budget",
       "provides_contracts": ["ContextRef", "ContextPack"],
-      "requires_contracts": ["SystemEvent"],
-      "dependencies": ["Storage"],
+      "requires_contracts": ["SystemEvent", "CacheKey", "PayloadRef"],
+      "dependencies": ["Storage", "CacheEngine"],
       "capabilities": ["CONTEXT_PACKING", "CONTEXT_BUDGETING", "REFS_RESOLVER"],
       "health_interface": {
         "type": "INTERNAL_STATE_PROBE",
