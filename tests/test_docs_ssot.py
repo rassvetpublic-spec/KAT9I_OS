@@ -96,5 +96,63 @@ class TestDocumentationSSoT(unittest.TestCase):
         finally:
             index_file.write_bytes(original_bytes)
 
+    def test_russian_language_policy_and_headings(self):
+        """
+        Проверяет соблюдение языковой политики (Issue #53, spec/00_LANGUAGE_AND_TERMINOLOGY_POLICY.md):
+        - Заголовки в канонической документации (spec, architecture, tz, guides) должны содержать русский текст (кириллицу),
+          за исключением явно разрешённых технических идентификаторов/контрактов.
+        """
+        import re
+
+        # Список разрешённых чисто технических заголовков (идентификаторы перечислений, контрактов, ADR, аббревиатуры)
+        allowed_exact_headings = {
+            "MANUAL", "NOTIFY", "SAFE_AUTO", "CONTROLLED_AUTO",
+            "CONTROL", "DATA",
+            "CRITICAL", "HIGH", "NORMAL", "LOW",
+            "P0", "P1", "P2", "P3",
+            "DRAINING",
+            "Primary Node", "Remote Worker Runtime",
+            "28.61. GitHub Pages",
+            "25.18. Obsidian",
+            "25.21. Windows Credential Manager",
+            "31.76. Good First Issue",
+        }
+
+        docs_root = REPO_ROOT / "docs"
+        dirs_to_check = [
+            docs_root / "spec",
+            docs_root / "architecture",
+            docs_root / "tz",
+            docs_root / "guides",
+        ]
+
+        # Для существующих файлов architecture с историческими англоязычными номерами подразделов
+        # проверяем, что в spec/ и KAT9I_OS_ARCHITECTURE_CONTEXT.md нет ни одного чисто английского заголовка
+        strict_files = list((docs_root / "spec").glob("*.md")) + [
+            docs_root / "architecture" / "KAT9I_OS_ARCHITECTURE_CONTEXT.md",
+            docs_root / "architecture" / "27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md",
+            docs_root / "architecture" / "MODULE_RESPONSIBILITY_MAP.md",
+            docs_root / "GLOSSARY.md",
+        ]
+
+        violations = []
+        for file_path in strict_files:
+            if not file_path.exists():
+                continue
+            text = file_path.read_text(encoding="utf-8")
+            for line_no, line in enumerate(text.splitlines(), start=1):
+                if line.startswith("#"):
+                    raw_h = re.sub(r"^#+\s*", "", line).strip()
+                    if raw_h in allowed_exact_headings:
+                        continue
+                    # Заголовок должен содержать хотя бы одну русскую букву
+                    if not re.search(r"[\u0400-\u04FF]", raw_h):
+                        violations.append(f"{file_path.relative_to(REPO_ROOT)}:{line_no} -> {line}")
+
+        self.assertEqual(
+            violations, [],
+            f"Обнаружены нарушения языковой политики: заголовки без кириллицы ({len(violations)}):\n" + "\n".join(violations[:20])
+        )
+
 if __name__ == "__main__":
     unittest.main()

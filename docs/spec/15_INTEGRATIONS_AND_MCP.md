@@ -167,7 +167,7 @@ Task capability requirement (требование к возможности за
 → MCP Server
 → DATA result.
 
-## 15.16. MCP Server KAT9I_OS
+## 15.16. Собственный сервер MCP (MCP Server KAT9I_OS)
 
 KAT9I_OS может предоставлять ограниченный набор возможностей внешним агентам через собственный MCP Server.
 

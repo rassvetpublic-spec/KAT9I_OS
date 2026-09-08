@@ -1197,20 +1197,20 @@ NORMAL → HIGH</code></pre>
 <p>Показывает, какую часть работы удалось выполнить обычными инструментами без LLM.</p>
 <h2 id="5-6-основные-kpi">5.6. Основные KPI</h2>
 <p>KAT9I_OS не должна иметь один универсальный KPI (ключевой показатель эффективности). Используется набор независимых показателей.</p>
-<h3 id="qa-pass-rate">QA Pass Rate</h3>
+<h3 id="доля-успешных-проверок-качества-qa-pass-rate">Доля успешных проверок качества (QA Pass Rate)</h3>
 <p>Процент задач, успешно прошедших независимую проверку.</p>
-<h3 id="cost-per-successful-task">Cost per Successful Task</h3>
+<h3 id="стоимость-успешной-задачи-cost-per-successful-task">Стоимость успешной задачи (Cost per Successful Task)</h3>
 <p>Стоимость одной успешно завершённой задачи.</p>
-<h3 id="median-task-lead-time">Median Task Lead Time</h3>
+<h3 id="медианное-время-выполнения-задачи-median-task-lead-time">Медианное время выполнения задачи (Median Task Lead Time)</h3>
 <p>Медианное полное время выполнения задачи.</p>
-<h3 id="successful-completion-rate">Successful Completion Rate</h3>
+<h3 id="доля-успешного-завершения-задач-successful-completion-rate">Доля успешного завершения задач (Successful Completion Rate)</h3>
 <p>Процент задач, завершившихся реальным подтверждённым результатом.</p>
-<h3 id="human-intervention-rate">Human Intervention Rate</h3>
+<h3 id="доля-вмешательства-человека-human-intervention-rate">Доля вмешательства человека (Human Intervention Rate)</h3>
 <p>Доля задач, для которых потребовалось ручное вмешательство пользователя.</p>
 <p>Связанный показатель:</p>
-<h3 id="autonomous-completion-rate">Autonomous Completion Rate</h3>
+<h3 id="доля-автономного-завершения-задач-autonomous-completion-rate">Доля автономного завершения задач (Autonomous Completion Rate)</h3>
 <p>Процент задач, полностью завершённых без вмешательства пользователя.</p>
-<h3 id="routing-efficiency">Routing Efficiency</h3>
+<h3 id="эффективность-маршрутизации-routing-efficiency">Эффективность маршрутизации (Routing Efficiency)</h3>
 <p>Качество выбора Worker, модели и провайдера.</p>
 <p>Пример успешной маршрутизации:</p>
 <pre><code class="language-text">NORMAL
@@ -1228,9 +1228,9 @@ HIGH → PASS</code></pre>
 <pre><code class="language-text">QA Pass до изменения Skill: 71%
 QA Pass после изменения Skill: 86%
 Learning Gain: +15 п.п.</code></pre>
-<h3 id="proposal-acceptance-rate">Proposal Acceptance Rate</h3>
+<h3 id="доля-принятых-предложений-proposal-acceptance-rate">Доля принятых предложений (Proposal Acceptance Rate)</h3>
 <p>Доля предложений системы самообучения, которые были приняты и признаны полезными.</p>
-<h3 id="regression-rate">Regression Rate</h3>
+<h3 id="доля-регрессий-regression-rate">Доля регрессий (Regression Rate)</h3>
 <p>Доля изменений, после которых качество системы ухудшилось или появились новые ошибки.</p>
 <p>Самообучение не считается успешным только потому, что изменение было внесено. Оно считается полезным только при доказанном улучшении метрик без недопустимых регрессий.</p>
 <h2 id="5-8-метрики-skills-навыков">5.8. Метрики Skills (навыков)</h2>
@@ -1332,7 +1332,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li>дополнительное время выполнения.</li>
 </ul>
 <p>Ключевой KPI:</p>
-<h3 id="metrics-llm-overhead">Metrics LLM Overhead</h3>
+<h3 id="накладные-расходы-llm-на-метрики-metrics-llm-overhead">Накладные расходы LLM на метрики (Metrics LLM Overhead)</h3>
 <p>Доля токенов, потраченных только на анализ метрик, относительно общего расхода.</p>
 <p>В обычном Runtime (рабочем цикле) целевое значение:</p>
 <pre><code class="language-text">≈ 0%</code></pre>
@@ -1386,58 +1386,58 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <h2 id="основной-поток">Основной поток</h2>
 <p>TaskContract → Coworker → Capability Grant → Execution Plan → Preflight → Workspace Isolation → Executable-first → Runtime → Scope Guard → Validation → Evidence → ResultSink → ResultRef → QA.</p>
 <p>При критической неопределённости выполнение переходит в <code>BLOCKED</code> или <code>FAILED</code>, после чего выполняется безопасная очистка и сохраняются Evidence.</p>
-<h2 id="execution-plan">Execution Plan</h2>
+<h2 id="план-исполнения-execution-plan">План исполнения (Execution Plan)</h2>
 <p>Перед запуском формируется структурированный план исполнения с Worker, Runtime, Workspace, разрешёнными действиями, ResourceRef, ожидаемыми результатами, тайм-аутами, проверками, ResultSink и требованиями к Evidence. Полная история обсуждения в него не включается.</p>
-<h2 id="preflight">Preflight</h2>
+<h2 id="предварительные-проверки-preflight">Предварительные проверки (Preflight)</h2>
 <p>До изменения проверяются Lease, Capability Grant, RulesRef, целевая revision, Scope, Runtime, инструменты, актуальность источников и чистота рабочего окружения. Если обязательную проверку выполнить нельзя, запуск запрещён.</p>
-<h2 id="evidence-first">Evidence-first</h2>
+<h2 id="приоритет-доказательств-evidence-first">Приоритет доказательств (Evidence-first)</h2>
 <p>Заявление ИИ не является доказательством выполнения. Успех подтверждается реальным Runtime: запуском, кодом завершения, результатом, временем, revision и привязкой к task_id.</p>
-<h2 id="runtime">Runtime</h2>
+<h2 id="среда-исполнения-runtime">Среда исполнения (Runtime)</h2>
 <p>Execution поддерживает Runtime через общий адаптер: локальные процессы, PowerShell, shell, Python, Git, контейнеры, удалённые Runner и специализированные среды.</p>
 <p>Runtime Adapter обязан уметь проверить доступность, запустить действие, контролировать время, остановить процесс, получить stdout/stderr, exit status, собрать Evidence и выполнить cleanup.</p>
-<h2 id="executable-first">Executable-first</h2>
+<h2 id="приоритет-исполняемого-кода-executable-first">Приоритет исполняемого кода (Executable-first)</h2>
 <p>Все формализуемые операции выполняются локальным кодом, если это достаточно надёжно: Git, поиск, сравнение изменений, тесты, статические проверки, форматная валидация, Scope Guard, метрики, очистка. ИИ используется только для остаточных интеллектуальных шагов.</p>
 <h2 id="исполняемые-workflow">Исполняемые Workflow</h2>
 <p>Workflow реализуются как машина состояний, а не только текстовая инструкция. Минимальные состояния: <code>PREPARING</code>, <code>READY</code>, <code>RUNNING</code>, <code>VALIDATING</code>, <code>PUBLISHING</code>, <code>COMPLETED</code>, а также <code>BLOCKED</code>, <code>FAILED</code>, <code>TIMED_OUT</code>, <code>CANCELLED</code>, <code>CLEANING</code>, <code>CLEANUP_FAILED</code>.</p>
-<h2 id="workspace-isolation">Workspace Isolation</h2>
+<h2 id="изоляция-рабочего-пространства-workspace-isolation">Изоляция рабочего пространства (Workspace Isolation)</h2>
 <p>Изменяющие задачи по возможности выполняются в отдельном Workspace: Git Worktree, ветка, временная директория, контейнер или иной изолированный Runtime. Работы одной задачи не должны загрязнять другую.</p>
 <p>Worktree создаётся только когда требуется изолированное изменение; read-only задачи могут использовать существующий чистый checkout или ResourceRef.</p>
-<h2 id="scope-guard">Scope Guard</h2>
+<h2 id="контроль-границ-области-scope-guard">Контроль границ области (Scope Guard)</h2>
 <p>Scope Guard локальным детерминированным кодом сравнивает разрешённую область с фактическими изменениями. Выход за Scope блокирует публикацию с состоянием <code>SCOPE_VIOLATION</code>.</p>
-<h2 id="process-supervision">Process Supervision</h2>
+<h2 id="контроль-процессов-process-supervision">Контроль процессов (Process Supervision)</h2>
 <p>Каждый процесс связан с task_id, worker_id и execution_id. Execution контролирует зависание, остановку, ошибку, cleanup и освобождение ресурсов.</p>
 <h2 id="timeout-и-retry">Timeout и Retry</h2>
 <p>У действий есть soft и hard timeout. Hard timeout приводит к остановке, Evidence и cleanup. Retry ограничен числом попыток и типами ошибок; permission denied и иные детерминированные запреты не повторяются бессмысленно.</p>
-<h2 id="idempotency">Idempotency</h2>
+<h2 id="идемпотентность-idempotency">Идемпотентность (Idempotency)</h2>
 <p>Критические операции проектируются так, чтобы повтор не создавал второй побочный эффект. Используются task_id/operation_id для дедупликации PR, комментариев, файлов и других внешних действий.</p>
 <h2 id="побочные-эффекты">Побочные эффекты</h2>
 <p>Операции делятся на <code>READ</code>, <code>LOCAL_WRITE</code>, <code>EXTERNAL_WRITE</code>, <code>DESTRUCTIVE</code>. Чем выше риск, тем строже права, Evidence, Policy и требования к обратимости.</p>
 <h2 id="граница-публикации">Граница публикации</h2>
 <p>Локальный результат и внешний опубликованный результат — разные стадии. Изменение файла или прохождение тестов не даёт автоматического права на push, PR или merge.</p>
-<h2 id="resultref">ResultRef</h2>
+<h2 id="ссылка-на-результат-resultref">Ссылка на результат (ResultRef)</h2>
 <p>После успешной публикации Execution возвращает ResultRef: тип, URI, revision, commit SHA, EvidenceRef, время и статус. Следующие Workers получают ResultRef, а не историю выполнения.</p>
-<h2 id="evidence-и-logs">Evidence и Logs</h2>
+<h2 id="доказательства-и-журналы-evidence-и-logs">Доказательства и журналы (Evidence и Logs)</h2>
 <p>Evidence — компактные структурированные факты: exit code, changed files, revision/hash, тесты, Scope Guard, ResultRef, timestamps. Полные Logs хранятся отдельно как ResourceRef.</p>
-<h2 id="injection-guard">Injection Guard</h2>
+<h2 id="защита-от-инъекций-injection-guard">Защита от инъекций (Injection Guard)</h2>
 <p>Текст из Issue, README, документа, сайта, комментария, KnowledgeRecord или результата другого Worker является <code>DATA</code>, а не <code>CONTROL</code>. Исполняемые команды поступают только через доверенный Control Plane: TaskContract, Rule Manager, Security, подтверждённое USER/ADMIN Decision или разрешённый Workflow.</p>
 <p>Команды по возможности формируются из известных действий и структурированных параметров. Произвольная строка из внешнего контекста не должна напрямую попадать в shell.</p>
-<h2 id="tool-allowlist-и-окружение">Tool Allowlist и окружение</h2>
+<h2 id="список-разрешённых-инструментов-и-окружение-tool-allowlist">Список разрешённых инструментов и окружение (Tool Allowlist)</h2>
 <p>Execution запускает только разрешённые инструменты. Перед критическим процессом контролируются рабочая директория, переменные окружения, PATH, временные файлы и входные параметры.</p>
 <p>Секреты не записываются в Logs и ResultRef и выдаются только на время необходимой операции.</p>
-<h2 id="human-decision">Human Decision</h2>
+<h2 id="решение-человека-human-decision">Решение человека (Human Decision)</h2>
 <p>Если требуется решение USER или ADMIN, Execution переходит в <code>WAITING_USER_DECISION</code> или <code>WAITING_ADMIN_APPROVAL</code>, возвращает управление TaskGraph и продолжает только после структурированного решения или обновлённого Grant.</p>
-<h2 id="checkpoint-и-resume">Checkpoint и Resume</h2>
+<h2 id="контрольные-точки-и-возобновление-checkpoint-и-resume">Контрольные точки и возобновление (Checkpoint и Resume)</h2>
 <p>Длинные процессы поддерживают структурированные контрольные точки и восстановление без перечитывания полной истории чата.</p>
-<h2 id="cleanup">Cleanup</h2>
+<h2 id="очистка-ресурсов-cleanup">Очистка ресурсов (Cleanup)</h2>
 <p>Cleanup обязателен после успеха и ошибки, где это безопасно: завершение процессов, освобождение ресурсов, удаление временных файлов, Worktree и временных секретов. Ошибка очистки фиксируется отдельно и не скрывается за успешным результатом основной работы.</p>
-<h2 id="fail-closed">Fail-closed</h2>
+<h2 id="безопасный-отказ-fail-closed">Безопасный отказ (Fail-closed)</h2>
 <p>Неизвестные Scope, Capability Grant, revision, ResultSink или безопасность Runtime для потенциально опасного действия приводят к блокировке.</p>
-<h2 id="local-first">Local-first</h2>
+<h2 id="приоритет-локального-исполнения-local-first">Приоритет локального исполнения (Local-first)</h2>
 <p>При одинаковой корректности предпочтение получает локальный инструмент, локальная среда и локальный Runtime. Удалённое выполнение используется только когда необходимо и разрешено.</p>
 <h2 id="метрики">Метрики</h2>
 <p>Собираются детерминированно: время подготовки/исполнения/ожидания/тестов, retries, timeouts, exit codes, Scope violations, cleanup failures, локальное/удалённое выполнение, I/O, внешние side effects и ручные решения.</p>
 <p>Ключевые KPI: Execution Success Rate, First Attempt Execution Rate, Scope Violation Rate, Cleanup Success Rate, Runtime Failure Rate, Mean Recovery Time, Local Execution Rate.</p>
-<h2 id="learning">Learning</h2>
+<h2 id="обучение-learning">Обучение (Learning)</h2>
 <p>Learning использует Evidence и Metrics для поиска повторяющихся Runtime-ошибок, кандидатов на новые локальные модули, улучшения timeout/checkpoint/cleanup и дальнейшей детерминизации процессов. Execution самостоятельно своё поведение не переписывает.</p>
 <h2 id="основные-принципы">Основные принципы</h2>
 <ol>
@@ -1479,12 +1479,12 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <h2 id="явная-очистка">Явная очистка</h2>
 <p>KAT9I_OS должна поддерживать команду пользователя/администратора «очистить кэш» с указанным Scope: весь кэш, проект, Context, Resource, модель, текущая задача и т. п. Очистка выполняется локальным детерминированным кодом.</p>
 <p>Команда очистки кэша не удаляет канонические KnowledgeRecord, Rules, Metrics history, Task state, документы и другие источники истины. Удаляются только восстанавливаемые производные данные.</p>
-<h2 id="cache-registry">Cache Registry</h2>
+<h2 id="реестр-кэша-cache-registry">Реестр кэша (Cache Registry)</h2>
 <p>Для записи кэша хранятся как минимум: cache_id, source_ref, source_revision, type, scope, created_at, last_access, size, TTL, Security classification, invalidation policy, recompute cost, hit count, confidence и dependencies.</p>
-<h2 id="ttl">TTL</h2>
+<h2 id="срок-жизни-ttl">Срок жизни (TTL)</h2>
 <p><code>TTL (срок жизни)</code> различается по типу данных. Он является самообучаемым параметром, но Learning не может превышать максимальные сроки, установленные Security/Policy.</p>
 <p>TTL — только один сигнал. Кэш может устареть раньше, если существенно изменился контекст или зависимые версии.</p>
-<h2 id="context-drift">Context Drift</h2>
+<h2 id="смещение-контекста-context-drift">Смещение контекста (Context Drift)</h2>
 <p>KAT9I_OS оценивает <code>Context Drift (смещение контекста)</code> и <code>Context Similarity Score (сходство контекста)</code>. Глобальный фиксированный порог вроде 50% не используется для всех типов данных.</p>
 <p>Изменение половины контекста может означать разную полезность для разных типов кэша. Для QA изменение даже одного критичного файла может полностью инвалидировать результат.</p>
 <h2 id="результаты-проверки-кэша">Результаты проверки кэша</h2>
@@ -1496,25 +1496,25 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li><code>STALE</code> — запись устарела;</li>
 <li><code>FORBIDDEN</code> — использование/хранение запрещено.</li>
 </ul>
-<h2 id="partial-hit-и-incremental-recompute">Partial Hit и Incremental Recompute</h2>
+<h2 id="частичное-попадание-и-инкрементальный-пересчёт-partial-hit-и-incremental-recompute">Частичное попадание и инкрементальный пересчёт (Partial Hit и Incremental Recompute)</h2>
 <p>Если изменилась только часть входов, KAT9I_OS должна по возможности повторно использовать неизменившуюся часть и пересчитывать только изменившуюся.</p>
 <p>Это применяется к индексам, анализу репозитория, embeddings, summaries, dependency graph, Research registry и большим документам.</p>
 <h2 id="зависимости-записи">Зависимости записи</h2>
 <p>Кэш привязывается к значимым входам: source revision, RulesRef digest, Skill version, Workflow version, ContextRefs, параметрам запуска и версии инструмента.</p>
 <p>Изменение критичного Rule/Skill/Workflow может автоматически инвалидировать зависимый кэш.</p>
-<h2 id="semantic-cache">Semantic Cache</h2>
+<h2 id="семантический-кэш-semantic-cache">Семантический кэш (Semantic Cache)</h2>
 <p>Допускается смысловой кэш для поиска похожих предыдущих задач/результатов. Такой результат считается подсказкой, а не актуальным доказательством. Для критичных действий требуется повторная проверка.</p>
 <p>Semantic Cache по возможности реализуется локальным индексом, локальными embeddings и локальным ИИ.</p>
-<h2 id="result-cache">Result Cache</h2>
+<h2 id="кэш-результатов-result-cache">Кэш результатов (Result Cache)</h2>
 <p>Ответы моделей могут повторно использоваться только если совпадают существенные входы, Rules, версии Skill/Workflow, политика безопасности и требования актуальности.</p>
 <p>Не допускается слепое повторное использование Security Decision, USER/ADMIN approval, текущего GitHub status, QA для изменившегося head, прав, секретов и одноразовых токенов.</p>
-<h2 id="qa-cache">QA Cache</h2>
+<h2 id="кэш-проверок-качества-qa-cache">Кэш проверок качества (QA Cache)</h2>
 <p>QA привязан к точной revision. Изменение head SHA инвалидирует действующий QA. Старый QA может использоваться только как вспомогательный источник.</p>
-<h2 id="cache-warming-и-eviction">Cache Warming и Eviction</h2>
+<h2 id="прогрев-и-вытеснение-кэша-cache-warming-и-eviction">Прогрев и вытеснение кэша (Cache Warming и Eviction)</h2>
 <p>Часто используемые разрешённые данные могут предварительно кэшироваться, если выгода доказана. Удаление учитывает TTL, размер, частоту использования, стоимость пересчёта, чувствительность, устаревание, Context Drift и лимиты диска.</p>
 <h2 id="экономика">Экономика</h2>
 <p>Кэширование оценивается не только по Hit Rate, но и по чистой выгоде. Дорогие для пересчёта результаты могут храниться дольше, если Security разрешает.</p>
-<h2 id="learning">Learning</h2>
+<h2 id="обучение-learning">Обучение (Learning)</h2>
 <p>Learning может изменять TTL, пороги сходства, стратегию Partial Hit, Cache Warming, приоритет удаления и перечень выгодных типов кэша. Learning не может отменять <code>NO_CACHE</code>, ослаблять Security, кэшировать секреты или превышать максимальные сроки политики.</p>
 <h2 id="метрики">Метрики</h2>
 <p>Минимально измеряются:</p>
@@ -1582,7 +1582,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <h2 id="14-4-data-не-может-самостоятельно-стать-control">14.4. DATA не может самостоятельно стать CONTROL</h2>
 <p>Ни модель, ни Worker не могут самостоятельно повышать данные до управляющих команд.</p>
 <p>Переход DATA → CONTROL возможен только через доверенный процесс KAT9I_OS: обнаружение требования → Rule Candidate → проверка → USER/ADMIN Approval при необходимости → Rule Manager → CONTROL.</p>
-<h2 id="14-5-prompt-injection">14.5. Prompt Injection</h2>
+<h2 id="14-5-внедрение-промптов-prompt-injection">14.5. Внедрение промптов (Prompt Injection)</h2>
 <p>Любой внешний текст считается потенциально содержащим внедрённые управляющие команды. Источники риска: Web, GitHub, документы, изображения с текстом, PDF, письма, Knowledge Source, MCP, результаты других агентов, ответы внешних Tools.</p>
 <p>Защита не должна строиться только на промпте. Основная защита должна быть архитектурной.</p>
 <h2 id="14-6-архитектурная-защита-от-prompt-injection">14.6. Архитектурная защита от Prompt Injection</h2>
@@ -1598,83 +1598,83 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li>опасное действие повторно проверяется Security;</li>
 <li>внешний текст не может повысить собственный Trust.</li>
 </ol>
-<h2 id="14-7-context-injection-guard">14.7. Context Injection Guard</h2>
+<h2 id="14-7-контроль-внедрения-в-контекст-context-injection-guard">14.7. Контроль внедрения в контекст (Context Injection Guard)</h2>
 <p>Контекст должен иметь структурированное разделение CONTROL, RULES, TASK, DATA, REFERENCES и RESULTS.</p>
 <h2 id="14-8-инструкции-внутри-кода">14.8. Инструкции внутри кода</h2>
 <p>Комментарии и строки программы являются DATA. Они не могут автоматически стать командами KAT9I_OS.</p>
-<h2 id="14-9-command-injection">14.9. Command Injection</h2>
+<h2 id="14-9-внедрение-команд-command-injection">14.9. Внедрение команд (Command Injection)</h2>
 <p>Нельзя напрямую преобразовывать внешние DATA в shell-команду. Команды строятся как разрешённое действие + структурированные параметры.</p>
-<h2 id="14-10-tool-injection-tool-poisoning">14.10. Tool Injection / Tool Poisoning</h2>
+<h2 id="14-10-внедрение-и-отравление-инструментов-tool-injection-tool-poisoning">14.10. Внедрение и отравление инструментов (Tool Injection / Tool Poisoning)</h2>
 <p>Результат внешнего Tool или MCP-сервера по умолчанию считается DATA, а не CONTROL.</p>
-<h2 id="14-11-tool-registry-trust">14.11. Tool Registry Trust</h2>
+<h2 id="14-11-доверие-реестра-инструментов-tool-registry-trust">14.11. Доверие реестра инструментов (Tool Registry Trust)</h2>
 <p>Для Tool необходимо знать источник, владельца, версию, разрешённые действия, Trust, получаемые данные и возможные side effects.</p>
-<h2 id="14-12-supply-chain">14.12. Supply Chain</h2>
+<h2 id="14-12-безопасность-цепочки-поставок-supply-chain">14.12. Безопасность цепочки поставок (Supply Chain)</h2>
 <p>Security учитывает безопасность Skills, локального кода, зависимостей, MCP-серверов, Runtime, библиотек, обновлений и моделей.</p>
-<h2 id="14-13-identity">14.13. Identity</h2>
+<h2 id="14-13-идентичность-субъектов-identity">14.13. Идентичность субъектов (Identity)</h2>
 <p>Типы Identity: USER, ADMIN, LOCAL_WORKER, REMOTE_WORKER, KAT9I_REMOTE, SERVICE, CONNECTOR, MCP_SERVER, PROVIDER.</p>
 <p>Identity и Capability — разные сущности.</p>
-<h2 id="14-14-user">14.14. USER</h2>
+<h2 id="14-14-роль-пользователя-user">14.14. Роль пользователя (USER)</h2>
 <p>USER принимает решения, относящиеся к пользовательскому намерению: выбор варианта, желаемый результат, недостающая информация, личные предпочтения, содержательные решения.</p>
-<h2 id="14-15-admin">14.15. ADMIN</h2>
+<h2 id="14-15-роль-администратора-admin">14.15. Роль администратора (ADMIN)</h2>
 <p>ADMIN отвечает за высокорисковые системные решения: расширение прав, подключение доверенного Worker, изменение Security Policy, доступ к секретам, критические Integrations и системные границы.</p>
 <p>USER и ADMIN могут физически быть одним человеком, но логически это разные роли.</p>
-<h2 id="14-16-human-approval">14.16. Human Approval</h2>
+<h2 id="14-16-одобрение-человеком-human-approval">14.16. Одобрение человеком (Human Approval)</h2>
 <p>Human Approval должен быть структурированным и содержать actor, action, resource, scope, срок, task_id и timestamp.</p>
 <h2 id="14-17-ограниченность-approval">14.17. Ограниченность Approval</h2>
 <p>Разрешение на одно действие не является постоянным разрешением на весь класс действий.</p>
-<h2 id="14-18-deny-wins">14.18. Deny wins</h2>
+<h2 id="14-18-приоритет-запрета-deny-wins">14.18. Приоритет запрета (Deny wins)</h2>
 <p>Запрет выше разрешения. USER не может отменить системный запрет без соответствующего административного полномочия.</p>
-<h2 id="14-19-least-privilege">14.19. Least Privilege</h2>
+<h2 id="14-19-наименьшие-привилегии-least-privilege">14.19. Наименьшие привилегии (Least Privilege)</h2>
 <p>Worker получает только права конкретной задачи.</p>
-<h2 id="14-20-temporary-capabilities">14.20. Temporary Capabilities</h2>
+<h2 id="14-20-временные-полномочия-temporary-capabilities">14.20. Временные полномочия (Temporary Capabilities)</h2>
 <p>Capability Grant автоматически истекает после завершения Task, Lease expiration, заданного срока, отмены или критического изменения Security State.</p>
-<h2 id="14-21-scope-guard">14.21. Scope Guard</h2>
+<h2 id="14-21-контроль-границ-области-scope-guard">14.21. Контроль границ области (Scope Guard)</h2>
 <p>Security задаёт Scope, Execution детерминированно проверяет фактические действия.</p>
-<h2 id="14-22-privilege-escalation">14.22. Privilege Escalation</h2>
+<h2 id="14-22-эскалация-привилегий-privilege-escalation">14.22. Эскалация привилегий (Privilege Escalation)</h2>
 <p>Worker не может самостоятельно расширить права. Используется REQUEST_CAPABILITY_EXTENSION → Security → при необходимости ADMIN → новый Capability Grant.</p>
-<h2 id="14-23-sensitive-data-classification">14.23. Sensitive Data Classification</h2>
+<h2 id="14-23-классификация-чувствительных-данных-sensitive-data-classification">14.23. Классификация чувствительных данных (Sensitive Data Classification)</h2>
 <p>Минимальные классы: PUBLIC, INTERNAL, SENSITIVE, SECRET, LOCAL_ONLY.</p>
 <h2 id="14-24-наследование-классификации">14.24. Наследование классификации</h2>
 <p>Итоговый пакет не может иметь уровень чувствительности ниже наиболее чувствительной значимой части.</p>
-<h2 id="14-25-data-minimization">14.25. Data Minimization</h2>
+<h2 id="14-25-минимизация-данных-data-minimization">14.25. Минимизация данных (Data Minimization)</h2>
 <p>Даже разрешённому Provider передаётся минимально необходимый объём данных.</p>
-<h2 id="14-26-secrets">14.26. Secrets</h2>
+<h2 id="14-26-секреты-secrets">14.26. Секреты (Secrets)</h2>
 <p>Секреты не хранятся в промптах без необходимости, не попадают в Logs, обычную Knowledge Base, ResultRef и обычный Cache, не передаются Worker без необходимости.</p>
-<h2 id="14-27-secretref">14.27. SecretRef</h2>
+<h2 id="14-27-ссылка-на-секрет-secretref">14.27. Ссылка на секрет (SecretRef)</h2>
 <p>По возможности вместо секрета используется SecretRef. Runtime получает секрет только на время разрешённой операции.</p>
 <h2 id="14-28-no_cache-для-секретов">14.28. NO_CACHE для секретов</h2>
 <p>Секреты и временные токены по умолчанию NO_CACHE.</p>
-<h2 id="14-29-knowledge-security">14.29. Knowledge Security</h2>
+<h2 id="14-29-безопасность-базы-знаний-knowledge-security">14.29. Безопасность базы знаний (Knowledge Security)</h2>
 <p>KnowledgeRecord должен иметь Scope, Sensitivity, Trust, Provenance и допустимых Consumers.</p>
-<h2 id="14-30-knowledge-laundering">14.30. Knowledge Laundering</h2>
+<h2 id="14-30-отмывание-знаний-knowledge-laundering">14.30. Отмывание знаний (Knowledge Laundering)</h2>
 <p>Преобразование, summary или перенос записи в Knowledge Base не повышают автоматически Trust. Provenance сохраняется до первоисточника.</p>
-<h2 id="14-31-cache-security">14.31. Cache Security</h2>
+<h2 id="14-31-безопасность-кэша-cache-security">14.31. Безопасность кэша (Cache Security)</h2>
 <p>Cache наследует ограничения исходных данных. NO_CACHE распространяется на производные данные, если отдельная политика не разрешает обратное.</p>
 <h2 id="14-32-context-drift-и-безопасность">14.32. Context Drift и безопасность</h2>
 <p>Смена repository, RulesRef, чувствительных Resources или Task Scope может инвалидировать старые Security Decision и Grants.</p>
-<h2 id="14-33-external-provider-security">14.33. External Provider Security</h2>
+<h2 id="14-33-безопасность-внешних-провайдеров-external-provider-security">14.33. Безопасность внешних провайдеров (External Provider Security)</h2>
 <p>До выбора внешнего Provider проверяются класс данных, Rules, допустимый Provider, требуемые Connectors, передаваемые данные и Result Sink.</p>
 <h2 id="14-34-local-first-как-защита">14.34. Local-first как защита</h2>
 <p>Для SENSITIVE/LOCAL_ONLY Local-first является одновременно механизмом экономии и уменьшения поверхности утечки.</p>
-<h2 id="14-35-remote-worker-security">14.35. Remote Worker Security</h2>
+<h2 id="14-35-безопасность-удалённых-исполнителей-remote-worker-security">14.35. Безопасность удалённых исполнителей (Remote Worker Security)</h2>
 <p>Удалённый Worker, включая KAT9I_REMOTE, проверяется по Identity, Trust, Capabilities, версии протокола, Resources, Scope и Capability Grant.</p>
-<h2 id="14-36-compromised-worker">14.36. Compromised Worker</h2>
+<h2 id="14-36-скомпрометированный-исполнитель-compromised-worker">14.36. Скомпрометированный исполнитель (Compromised Worker)</h2>
 <p>Архитектура должна ограничивать ущерб от ошибочного или скомпрометированного Worker через Scope, временные права, изолированный Workspace, Tool Allowlist, ResultSink и независимый QA.</p>
 <h2 id="14-37-независимый-qa">14.37. Независимый QA</h2>
 <p>Для критических изменений Implementation Worker != QA Worker. QA проверяет ResultRef, Evidence, точную revision и RulesRef независимо.</p>
 <h2 id="14-38-approval-не-заменяет-qa">14.38. Approval не заменяет QA</h2>
 <p>Approval означает, что действие разрешено. QA означает, что результат корректен.</p>
-<h2 id="14-39-fail-closed">14.39. Fail-closed</h2>
+<h2 id="14-39-безопасный-отказ-fail-closed">14.39. Безопасный отказ (Fail-closed)</h2>
 <p>Если система не может определить Identity, Scope, Rules, Sensitivity, действительность Grant или безопасность действия, потенциально опасная операция блокируется.</p>
-<h2 id="14-40-security-event">14.40. Security Event</h2>
+<h2 id="14-40-события-безопасности-security-event">14.40. События безопасности (Security Event)</h2>
 <p>Отдельно фиксируются injection detected, scope violation, denied capability request, secret exposure attempt, invalid approval, unknown Worker, modified RulesRef, unauthorized Tool invocation и аналогичные события.</p>
-<h2 id="14-41-audit-trail">14.41. Audit Trail</h2>
+<h2 id="14-41-журнал-аудита-audit-trail">14.41. Журнал аудита (Audit Trail)</h2>
 <p>Для значимых операций должно быть возможно установить кто запросил, кто разрешил, кто выполнил, какой RulesRef, какой Capability Grant, какой Resource, какая revision, какой ResultRef и какой QA.</p>
 <h2 id="14-42-audit-trail-не-равен-chain-of-thought">14.42. Audit Trail не равен Chain of Thought</h2>
 <p>Для аудита нужны проверяемые события и решения, а не внутренние рассуждения модели.</p>
-<h2 id="14-43-security-metrics">14.43. Security Metrics</h2>
+<h2 id="14-43-метрики-безопасности-security-metrics">14.43. Метрики безопасности (Security Metrics)</h2>
 <p>Минимально измеряются blocked actions, scope violations, injection detections, rejected Tools, privilege escalation requests, USER approvals, ADMIN approvals, secret access events, invalid grants, security-related QA failures, операции SENSITIVE/LOCAL_ONLY и инциденты false positive/false negative.</p>
-<h2 id="14-44-security-learning">14.44. Security Learning</h2>
+<h2 id="14-44-обучение-безопасности-security-learning">14.44. Обучение безопасности (Security Learning)</h2>
 <p>Learning может улучшать detection patterns, Trust scores, Tool reputation, Provider routing, рекомендации Scope и классификацию данных, но не может самостоятельно ослаблять Security Policy.</p>
 <h2 id="14-45-security-должна-быть-дешёвой">14.45. Security должна быть дешёвой</h2>
 <p>Identity, Scope, Grant, hash, signature, classification, allowlist, TTL и revision по возможности проверяются локальным детерминированным кодом.</p>
@@ -1684,9 +1684,9 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Наличие ResourceRef означает только, что объект известен системе, но не что доступ к нему разрешён.</p>
 <h2 id="14-48-security-и-resultref">14.48. Security и ResultRef</h2>
 <p>ResultRef от Worker считается DATA до проверки. Статус QA должен происходить из доверенного QA-процесса.</p>
-<h2 id="14-49-emergency-stop">14.49. Emergency Stop</h2>
+<h2 id="14-49-аварийная-остановка-emergency-stop">14.49. Аварийная остановка (Emergency Stop)</h2>
 <p>USER/ADMIN должен иметь возможность остановить конкретную Task, Worker, Workflow, удалённый узел или внешние записи. Emergency Stop не должен зависеть от согласия модели.</p>
-<h2 id="14-50-revocation">14.50. Revocation</h2>
+<h2 id="14-50-отзыв-полномочий-revocation">14.50. Отзыв полномочий (Revocation)</h2>
 <p>Администратор или Security Policy могут немедленно отозвать Capability Grant, Worker Trust, Connector, Provider route или Secret access. Отзыв выше ранее выданного разрешения.</p>
 <h2 id="14-51-основные-принципы">14.51. Основные принципы</h2>
 <ol>
@@ -1813,7 +1813,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>→ при необходимости локальное извлечение содержимого</p>
 <p>→ ResourceRef.</p>
 <p>Содержимое файла не получает управляющую силу.</p>
-<h2 id="15a-9-research-discovery">15A.9. Research Discovery</h2>
+<h2 id="15a-9-поиск-в-исследованиях-research-discovery">15A.9. Поиск в исследованиях (Research Discovery)</h2>
 <p>Публичные Telegram-каналы могут использоваться как Discovery Source (источник обнаружения) для Research (исследований).</p>
 <p>Их сообщения считаются DATA и не должны автоматически становиться подтверждённым Knowledge (знанием).</p>
 <p>Для значимых выводов по возможности проверяется первичный источник: официальный сайт, документация, GitHub, paper, реестр или иной первичный материал.</p>
@@ -1998,7 +1998,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>→ Security Gateway</p>
 <p>→ MCP Server</p>
 <p>→ DATA result.</p>
-<h2 id="15-16-mcp-server-kat9i_os">15.16. MCP Server KAT9I_OS</h2>
+<h2 id="15-16-собственный-сервер-mcp-mcp-server-kat9i_os">15.16. Собственный сервер MCP (MCP Server KAT9I_OS)</h2>
 <p>KAT9I_OS может предоставлять ограниченный набор возможностей внешним агентам через собственный MCP Server.</p>
 <p>Например:</p>
 <ul>
@@ -2230,7 +2230,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Процесс:</p>
 <p>репозиторий → инвентаризация → карта архитектуры → зависимости → дублирование → мёртвый код → сложность → тесты → CI → документация → безопасность → производительность → список улучшений.</p>
 <p>Аудит не должен незаметно превращаться в изменение. Выводы становятся отдельными задачами разработки.</p>
-<h2 id="16-10-suno">16.10. Suno</h2>
+<h2 id="16-10-генерация-музыки-домен-suno">16.10. Генерация музыки (Домен Suno)</h2>
 <p>Suno — самостоятельный домен и не является частью общего ядра исполнения.</p>
 <p>Домен знает структуру песни, BPM, тональность, вокальную режиссуру, рифмовку, музыкальный стиль, ограничения Suno и форматы Style / Lyrics / Negative.</p>
 <p>Базовый процесс:</p>
@@ -11469,35 +11469,35 @@ Learning (самообучение)
 
     <section id="arch-kat9i_os_architecture_context">
       <div class="badge">Каноническая архитектура</div>
-      <h1 id="kat9i-os-architecture-context">KAT9I OS — Architecture Context</h1>
-<div class="note"><strong>Примечание:</strong> Initial architecture snapshot distilled from the design discussion that started with the modular-monolith proposal.</div>
-<div class="note"><strong>Примечание:</strong> This document intentionally excludes unrelated earlier chat context.</div>
-<div class="note"><strong>Примечание:</strong> Status: architecture draft / design context, not an implementation specification.</div>
-<h2 id="1-core-direction-modular-monolith">1. Core direction: modular monolith</h2>
-<p>The proposed direction is to converge KAT9I and AG25 into a <strong>modular monolith</strong> rather than continue growing cross-repository bridges.</p>
-<p>The goal is not a &quot;single pile of code&quot;. The goal is:</p>
+      <h1 id="kat9i_os-архитектурный-контекст-architecture-context">KAT9I_OS — Архитектурный контекст (Architecture Context)</h1>
+<div class="note"><strong>Примечание:</strong> Начальный архитектурный снимок, сформированный на основе дискуссии по проектированию модульного монолита.</div>
+<div class="note"><strong>Примечание:</strong> Этот документ намеренно исключает не связанный с архитектурой контекст более ранних обсуждений.</div>
+<div class="note"><strong>Примечание:</strong> Статус: архитектурный проект / контекст проектирования, не является реализационной спецификацией.</div>
+<h2 id="1-базовое-направление-модульный-монолит-modular-monolith">1. Базовое направление: модульный монолит (Modular Monolith)</h2>
+<p>Предлагаемое направление заключается в сведении KAT9I и AG25 в <strong>модульный монолит (modular monolith)</strong> вместо дальнейшего наращивания межрепозиторных мостов.</p>
+<p>Цель заключается не в создании «одной неструктурированной кучи кода». Цель состоит в обеспечении:</p>
 <ul>
-<li>one repository;</li>
-<li>one release;</li>
-<li>one CI graph;</li>
-<li>one end-to-end lifecycle;</li>
-<li>one task model;</li>
-<li>one policy model;</li>
-<li>strict internal module boundaries;</li>
-<li>external data/knowledge kept outside the product repository.</li>
+<li>одного репозитория;</li>
+<li>одного релиза;</li>
+<li>одного графа CI;</li>
+<li>одного сквозного жизненного цикла;</li>
+<li>одной модели задач (TaskContract);</li>
+<li>одной модели политик (Policy Model);</li>
+<li>строгих внутренних границ между модулями;</li>
+<li>хранения внешних данных и знаний за пределами продуктового репозитория.</li>
 </ul>
-<p>The main expected gains:</p>
+<p>Основные ожидаемые преимущества:</p>
 <ul>
-<li>fewer cross-repository contracts and compatibility problems;</li>
-<li>easier end-to-end testing;</li>
-<li>easier Windows bootstrap and local deployment;</li>
-<li>simpler debugging and telemetry;</li>
-<li>atomic refactoring across policy + execution;</li>
-<li>less duplicated state and transport logic;</li>
-<li>faster development of worker orchestration;</li>
-<li>easier enforcement of rules directly in execution.</li>
+<li>меньше межрепозиторных контрактов и проблем совместимости;</li>
+<li>более простое сквозное тестирование (E2E testing);</li>
+<li>упрощённая инициализация под Windows и локальное развёртывание;</li>
+<li>упрощённая отладка и телеметрия;</li>
+<li>атомарный рефакторинг сквозь политики и исполнение;</li>
+<li>меньше дублирования состояния и транспортной логики;</li>
+<li>более быстрая разработка оркестрации исполнителей (Coworker);</li>
+<li>более строгое применение правил непосредственно в исполнении (Execution).</li>
 </ul>
-<p>A proposed top-level decomposition:</p>
+<p>Предлагаемая высокоуровневая декомпозиция:</p>
 <pre><code class="language-text">KAT9I/
 ├── core/
 ├── context/
@@ -11511,20 +11511,20 @@ Learning (самообучение)
 ├── resources/
 ├── telemetry/
 └── tests/</code></pre>
-<p>The architectural question split is:</p>
-<pre><code class="language-text">DOMAIN      → What needs to be done?
-CORE        → Which rules/policies/contracts apply?
-CONTEXT     → What does the model need to know?
-INFERENCE   → Which intelligence/provider should be used?
-COWORKER    → Who should do the work?
-EXECUTION   → How is the work physically executed?
-INTEGRATION → How do we reach external systems?
-PERSONAL    → How should the system behave for this user?
-RESOURCES   → Where are source context and result artifacts located?</code></pre>
+<p>Архитектурное разделение обязанностей по вопросам:</p>
+<pre><code class="language-text">DOMAIN      → Что именно требуется сделать?
+CORE        → Какие правила, политики и контракты применяются?
+CONTEXT     → Что модели/исполнителю необходимо знать для работы?
+INFERENCE   → Какой вычислительный интеллект или провайдер должен использоваться?
+COWORKER    → Кто конкретно выполняет работу?
+EXECUTION   → Как работа физически исполняется?
+INTEGRATION → Как осуществляется связь с внешними системами?
+PERSONAL    → Как система должна вести себя для конкретного пользователя?
+RESOURCES   → Где физически расположены исходный контекст и результирующие артефакты?</code></pre>
 <hr>
-<h2 id="2-core">2. Core</h2>
-<p><code>core/</code> is the generic control plane.</p>
-<p>Suggested contents:</p>
+<h2 id="2-ядро-платформы-core">2. Ядро платформы (Core)</h2>
+<p>Каталог <code>core/</code> представляет собой универсальный уровень управления (Control Plane).</p>
+<p>Предлагаемый состав:</p>
 <pre><code class="language-text">core/
 ├── tasks/
 ├── contracts/
@@ -11533,28 +11533,28 @@ RESOURCES   → Where are source context and result artifacts located?</code></p
 ├── routing/
 ├── policy/
 └── learning/</code></pre>
-<p>Responsibilities:</p>
+<p>Обязанности ядра:</p>
 <ul>
-<li>generic task contracts;</li>
-<li>skill registry and skill routing;</li>
-<li>Rule Manager;</li>
-<li>Effective Ruleset;</li>
-<li>policy conflict resolution;</li>
-<li>generic task/domain routing;</li>
-<li>governed learning/proposals;</li>
-<li>stable internal contracts.</li>
+<li>универсальные контракты задач (<code>TaskContract</code>);</li>
+<li>реестр навыков (<code>Skill Registry</code>) и маршрутизация навыков (<code>Skill Routing</code>);</li>
+<li>менеджер правил (<code>Rule Manager</code>);</li>
+<li>эффективный набор действующих правил (<code>Effective Ruleset</code>);</li>
+<li>разрешение конфликтов политик (<code>Policy Conflict Resolution</code>);</li>
+<li>общая маршрутизация задач и доменов;</li>
+<li>контролируемое самообучение и предложения улучшений (<code>Governed Learning / Proposals</code>);</li>
+<li>стабильные внутренние интерфейсные контракты.</li>
 </ul>
-<p>Hard rule:</p>
-<div class="note"><strong>Примечание:</strong> Domain-specific semantics must not leak into the generic core.</div>
-<p>Examples:</p>
+<p>Жёсткое инвариантное правило:</p>
+<div class="note"><strong>Примечание:</strong> Специфическая семантика конкретных предметных областей (доменов) не должна проникать в универсальное ядро платформы.</div>
+<p>Примеры:</p>
 <ul>
-<li>Core may know that a rule applies to a task.</li>
-<li>Core should not know what a chorus, BPM, rhyme, pressure sensor, or PR review means.</li>
+<li>Ядро может знать, что к задаче применяется определённое правило.</li>
+<li>Ядро не должно знать, что означают понятия «припев», «BPM», «рифма», «датчик давления» или «ревью Pull Request».</li>
 </ul>
 <hr>
-<h2 id="3-execution">3. Execution</h2>
-<p><code>execution/</code> contains the low-level mechanics that AG25 currently largely owns.</p>
-<p>Suggested structure:</p>
+<h2 id="3-уровень-исполнения-execution">3. Уровень исполнения (Execution)</h2>
+<p>Каталог <code>execution/</code> содержит низкоуровневые механизмы, за которые сейчас в значительной степени отвечает AG25.</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">execution/
 ├── workers/
 ├── runtime/
@@ -11565,27 +11565,27 @@ RESOURCES   → Where are source context and result artifacts located?</code></p
 ├── scope_guard/
 ├── timeouts/
 └── cleanup/</code></pre>
-<p>Responsibilities:</p>
+<p>Обязанности:</p>
 <ul>
-<li>run processes;</li>
-<li>launch/supervise workers;</li>
-<li>manage worktrees and branches;</li>
-<li>enforce timeout;</li>
-<li>maintain leases;</li>
-<li>collect execution evidence;</li>
-<li>scope guard;</li>
-<li>cleanup;</li>
-<li>process lifecycle.</li>
+<li>запуск процессов;</li>
+<li>запуск и надзор за исполнителями (<code>Worker Supervision</code>);</li>
+<li>управление рабочими деревьями (<code>Git Worktree</code>) и ветками;</li>
+<li>контроль тайм-аутов (<code>Timeouts</code>);</li>
+<li>поддержание временных прав (<code>Leases</code>);</li>
+<li>сбор доказательств исполнения (<code>Execution Evidence</code>);</li>
+<li>контроль границ разрешённой области (<code>Scope Guard</code>);</li>
+<li>очистка ресурсов (<code>Cleanup</code>);</li>
+<li>контроль жизненного цикла процессов.</li>
 </ul>
-<p>Key boundary:</p>
-<pre><code class="language-text">Coworker = WHO gets the task
-Execution = HOW the task is physically run</code></pre>
+<p>Ключевая архитектурная граница:</p>
+<pre><code class="language-text">Coworker  = КТО получает задачу
+Execution = КАК задача физически исполняется</code></pre>
 <hr>
-<h2 id="4-coworker-distributed-agent-work">4. Coworker: distributed agent work</h2>
-<p><code>coworker/</code> is a first-class platform component, not a domain.</p>
-<p>Purpose:</p>
-<div class="note"><strong>Примечание:</strong> Coordinate distributed work between local agents, local machines, remote Katya, cloud workers, and potentially humans.</div>
-<p>Suggested structure:</p>
+<h2 id="4-коллега-coworker-распределённая-агентная-работа">4. Коллега (Coworker): распределённая агентная работа</h2>
+<p>Компонент <code>coworker/</code> является первоклассным компонентом платформы, а не отдельным прикладным доменом.</p>
+<p>Назначение:</p>
+<div class="note"><strong>Примечание:</strong> Координация распределённой работы между локальными агентами, локальными машинами, удалённым экземпляром Кати (Remote Katya), облачными исполнителями и людьми.</div>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">coworker/
 ├── coordinator/
 ├── worker_registry/
@@ -11601,8 +11601,8 @@ Execution = HOW the task is physically run</code></pre>
 ├── local/
 ├── remote/
 └── federation/</code></pre>
-<h3 id="worker-registry">Worker Registry</h3>
-<p>A worker should be describable as:</p>
+<h3 id="реестр-исполнителей-worker-registry">Реестр исполнителей (Worker Registry)</h3>
+<p>Исполнитель должен описываться следующей структурой:</p>
 <pre><code class="language-text">Worker
 ├── id
 ├── location
@@ -11614,14 +11614,14 @@ Execution = HOW the task is physically run</code></pre>
 ├── current_task
 ├── trust_level
 └── last_seen</code></pre>
-<p>Worker types may include:</p>
+<p>Типы исполнителей могут включать:</p>
 <pre><code class="language-text">LOCAL
 REMOTE
 CLOUD
 HUMAN</code></pre>
-<p>Remote Katya should not use a special privileged architecture. It should be another worker/coordinator endpoint with explicit capabilities and scope.</p>
-<h3 id="capability-grants">Capability grants</h3>
-<p>Remote/local workers should receive a bounded grant, for example:</p>
+<p>Удалённая Катя (Remote Katya) не должна использовать специальную привилегированную архитектуру: она выступает обычной конечной точкой исполнителя или координатора с явно заданными полномочиями и областью действия (Scope).</p>
+<h3 id="предоставление-полномочий-capability-grants">Предоставление полномочий (Capability Grants)</h3>
+<p>Удалённые и локальные исполнители должны получать строго ограниченный грант полномочий (<code>WorkerGrant</code>), например:</p>
 <pre><code class="language-text">WorkerGrant
 ├── repository
 ├── allowed_paths
@@ -11630,36 +11630,36 @@ HUMAN</code></pre>
 ├── merge permission
 ├── timeout
 └── expiration</code></pre>
-<p>A worker receives only:</p>
+<p>Исполнитель получает только:</p>
 <ul>
-<li>task scope;</li>
-<li>required context;</li>
-<li>Effective Ruleset / rules reference;</li>
-<li>temporary capabilities;</li>
-<li>output contract.</li>
+<li>область задачи (<code>Task Scope</code>);</li>
+<li>необходимый контекст (<code>Context</code>);</li>
+<li>эффективный набор правил (<code>Effective Ruleset</code>) / ссылку на правила (<code>RulesRef</code>);</li>
+<li>временные полномочия (<code>Temporary Capabilities</code>);</li>
+<li>контракт выходных результатов (<code>Output Contract</code>).</li>
 </ul>
-<h3 id="distributed-layout-example">Distributed layout example</h3>
+<h3 id="пример-распределённой-структуры">Пример распределённой структуры</h3>
 <pre><code class="language-text">                   KAT9I Coordinator
-                         │
-          ┌──────────────┼───────────────┐
-          ▼              ▼               ▼
-     Local PC       Remote Katya      Server
-          │              │               │
-      ┌───┴───┐      ┌───┴───┐       ┌───┴───┐
-    Worker A Worker B Agent C Agent D Worker E</code></pre>
-<p>The current AG25 Mesh concepts map naturally here:</p>
-<pre><code class="language-text">AG25 orchestration  → coworker/
-AG25 worker runtime → execution/
-AG25 security       → security/
-AG25 GitHub logic   → integrations/github/
-AG25 Suno logic     → domains/suno/</code></pre>
-<p>AG25 does not need to be &quot;deleted&quot;; its useful components are absorbed into the correct modules.</p>
+                          │
+           ┌──────────────┼───────────────┐
+           ▼              ▼               ▼
+      Local PC       Remote Katya      Server
+           │              │               │
+       ┌───┴───┐      ┌───┴───┐       ┌───┴───┐
+     Worker A Worker B Agent C Agent D Worker E</code></pre>
+<p>Существующие концепции Mesh из AG25 естественным образом проецируются на эту структуру:</p>
+<pre><code class="language-text">Оркестрация AG25            → coworker/
+Среда исполнения AG25       → execution/
+Безопасность AG25           → security/
+Логика взаимодействия с Git → integrations/github/
+Логика Suno                 → domains/suno/</code></pre>
+<p>Нет необходимости «удалять» полезные наработки AG25: они абсорбируются в соответствующие специализированные модули.</p>
 <hr>
-<h2 id="5-domains">5. Domains</h2>
-<p><code>domains/</code> contains applied task stacks.</p>
-<p>A domain answers:</p>
-<div class="note"><strong>Примечание:</strong> What kind of work are we doing, and what domain-specific workflow/skills/validators apply?</div>
-<p>Proposed examples:</p>
+<h2 id="5-предметные-области-domains">5. Предметные области (Domains)</h2>
+<p>Каталог <code>domains/</code> содержит прикладные стеки задач.</p>
+<p>Домен отвечает на вопрос:</p>
+<div class="note"><strong>Примечание:</strong> Какую именно работу мы выполняем, и какой специфический рабочий процесс (Workflow), навыки (Skills) и валидаторы к ней применяются?</div>
+<p>Примеры предлагаемых доменов:</p>
 <pre><code class="language-text">domains/
 ├── software_delivery/
 ├── repository_optimization/
@@ -11668,11 +11668,11 @@ AG25 Suno logic     → domains/suno/</code></pre>
 ├── documents/
 ├── engineering/
 └── automation/</code></pre>
-<p>Domains should call platform capabilities through contracts, not reach into execution internals.</p>
+<p>Домены должны вызывать возможности платформы через контракты, не вмешиваясь во внутреннее устройство среды исполнения (Execution).</p>
 <hr>
-<h2 id="6-software-delivery-domain">6. Software Delivery domain</h2>
-<p><code>software_delivery/</code> covers Issue/PR/QA/release work.</p>
-<p>Suggested structure:</p>
+<h2 id="6-домен-разработки-по-software-delivery-domain">6. Домен разработки ПО (Software Delivery Domain)</h2>
+<p>Модуль <code>software_delivery/</code> охватывает задачи работы с Issue, PR, контролем качества (QA) и релизами.</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">domains/software_delivery/
 ├── contracts/
 ├── workflows/
@@ -11681,55 +11681,55 @@ AG25 Suno logic     → domains/suno/</code></pre>
 ├── validators/
 ├── policies/
 └── tests/</code></pre>
-<p>Example stacks:</p>
-<h3 id="issue_to_pr">issue_to_pr</h3>
-<pre><code class="language-text">Issue
-→ Analyze
-→ Plan
-→ Claim
-→ Implement
-→ Test
-→ PR</code></pre>
-<h3 id="pr_to_merge">pr_to_merge</h3>
-<pre><code class="language-text">PR
-→ Diff Analysis
-→ Policy Check
-→ QA
-→ CI
-→ Review
-→ Merge</code></pre>
-<h3 id="qa">qa</h3>
-<pre><code class="language-text">Target
-→ Exact Head Binding
-→ Static Checks
-→ Tests
-→ Behavioral Checks
-→ Evidence
-→ PASS / FAIL</code></pre>
-<h3 id="bug_repair">bug_repair</h3>
-<pre><code class="language-text">Failure
-→ Reproduce
-→ Root Cause
-→ Fix
-→ Regression Test
-→ QA
-→ PR</code></pre>
-<h3 id="roadmap">roadmap</h3>
-<pre><code class="language-text">Issues
-→ Dependency Graph
-→ Duplicate Detection
-→ Priority
-→ Batch Formation
-→ Execution Order</code></pre>
-<p>Important governance rule:</p>
+<p>Примеры стеков процессов:</p>
+<h3 id="от-задачи-к-pr-issue_to_pr">От задачи к PR (issue_to_pr)</h3>
+<pre><code class="language-text">Issue (Задача)
+→ Analyze (Анализ)
+→ Plan (Планирование)
+→ Claim (Захват)
+→ Implement (Реализация)
+→ Test (Тестирование)
+→ PR (Создание PR)</code></pre>
+<h3 id="от-pr-к-слиянию-pr_to_merge">От PR к слиянию (pr_to_merge)</h3>
+<pre><code class="language-text">PR (Запрос на слияние)
+→ Diff Analysis (Анализ изменений)
+→ Policy Check (Проверка политик)
+→ QA (Контроль качества)
+→ CI (Непрерывная интеграция)
+→ Review (Ревью)
+→ Merge (Слияние)</code></pre>
+<h3 id="контроль-качества-qa">Контроль качества (QA)</h3>
+<pre><code class="language-text">Target (Цель)
+→ Exact Head Binding (Привязка к точной ревизии)
+→ Static Checks (Статические проверки)
+→ Tests (Тесты)
+→ Behavioral Checks (Поведенческие проверки)
+→ Evidence (Сбор доказательств)
+→ PASS / FAIL (Вердикт)</code></pre>
+<h3 id="исправление-ошибок-bug_repair">Исправление ошибок (bug_repair)</h3>
+<pre><code class="language-text">Failure (Сбой)
+→ Reproduce (Воспроизведение)
+→ Root Cause (Поиск первопричины)
+→ Fix (Исправление)
+→ Regression Test (Регрессионное тестирование)
+→ QA (Контроль качества)
+→ PR (Запрос на слияние)</code></pre>
+<h3 id="дорожная-карта-roadmap">Дорожная карта (Roadmap)</h3>
+<pre><code class="language-text">Issues (Задачи)
+→ Dependency Graph (Граф зависимостей)
+→ Duplicate Detection (Поиск дубликатов)
+→ Priority (Приоритезация)
+→ Batch Formation (Формирование пакетов задач)
+→ Execution Order (Порядок выполнения)</code></pre>
+<p>Важное правило управления:</p>
 <pre><code class="language-text">ImplementationWorker != QAWorker</code></pre>
-<p>Independent QA should be a workflow invariant, not merely text guidance.</p>
+<p>Независимый контроль качества (Independent QA) должен быть системным инвариантом рабочего процесса, а не просто текстовым пожеланием.</p>
 <hr>
-<h2 id="7-repository-optimization-domain">7. Repository Optimization domain</h2>
-<p>This should be separate from normal issue implementation.</p>
-<p>Purpose:</p>
-<div class="note"><strong>Примечание:</strong> Analyze a repository as a system and produce an evidence-backed optimization backlog.</div>
-<p>Suggested structure:</p>
+<h2 id="7-домен-оптимизации-репозитория-repository-optimization-domain">7. Домен оптимизации репозитория (Repository Optimization Domain)</h2>
+<p>Этот процесс должен быть отделён от обычной реализации единичных Issue.</p>
+<p>Назначение:</p>
+<div class="note"><strong>Примечание:</strong> Анализ репозитория как целостной системы и формирование подтверждённого доказательствами бэклога оптимизаций.</div>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">domains/repository_optimization/
 ├── analyzers/
 ├── skills/
@@ -11737,68 +11737,68 @@ AG25 Suno logic     → domains/suno/</code></pre>
 ├── metrics/
 ├── recommendations/
 └── tests/</code></pre>
-<p>Pipeline:</p>
-<pre><code class="language-text">Repository
+<p>Конвейер анализа:</p>
+<pre><code class="language-text">Repository (Репозиторий)
    ↓
-Inventory
+Inventory (Инвентаризация)
    ↓
-Architecture Map
+Architecture Map (Архитектурная карта)
    ↓
-Dependency Analysis
+Dependency Analysis (Анализ зависимостей)
    ↓
-Duplication Analysis
+Duplication Analysis (Анализ дублирования)
    ↓
-Dead Code
+Dead Code (Мёртвый код)
    ↓
-Complexity
+Complexity (Сложность)
    ↓
-Tests / CI
+Tests / CI (Тесты / CI)
    ↓
-Documentation
+Documentation (Документация)
    ↓
-Security
+Security (Безопасность)
    ↓
-Performance
+Performance (Производительность)
    ↓
-Improvement Backlog</code></pre>
-<p>Potential output:</p>
+Improvement Backlog (Бэклог улучшений)</code></pre>
+<p>Возможный артефакт вывода:</p>
 <pre><code class="language-text">RepositoryOptimizationReport
-├── findings
-├── severity
-├── evidence
-├── suggested_fix
-├── estimated_effort
-├── dependencies
-└── proposed_issues</code></pre>
-<p>Then:</p>
-<pre><code class="language-text">Repository Optimization
+├── findings (Находки)
+├── severity (Критичность)
+├── evidence (Доказательства)
+├── suggested_fix (Предлагаемое исправление)
+├── estimated_effort (Оценка трудозатрат)
+├── dependencies (Зависимости)
+└── proposed_issues (Предложенные задачи)</code></pre>
+<p>Дальнейший поток:</p>
+<pre><code class="language-text">Repository Optimization (Оптимизация репозитория)
         ↓
-proposed Issues
+Proposed Issues (Предложенные задачи)
         ↓
-Software Delivery
+Software Delivery (Доставка ПО)
         ↓
-Coworker
+Coworker (Координатор)
         ↓
-implementation workers</code></pre>
+Implementation Workers (Исполнители)</code></pre>
 <hr>
-<h2 id="8-suno-domain">8. Suno domain</h2>
-<p>Suno is explicitly separated as a <strong>domain module</strong> while remaining inside the monolith.</p>
-<p>Reason:</p>
-<div class="note"><strong>Примечание:</strong> Suno is an application of the agent platform, not infrastructure of the agent platform.</div>
-<p>Generic execution should not know about:</p>
+<h2 id="8-домен-генерации-музыки-suno-suno-domain">8. Домен генерации музыки Suno (Suno Domain)</h2>
+<p>Suno явно выделяется в <strong>доменный прикладной модуль</strong>, оставаясь при этом внутри монолита.</p>
+<p>Обоснование:</p>
+<div class="note"><strong>Примечание:</strong> Suno — это прикладное применение агентной платформы, а не базовая инфраструктура агентной платформы.</div>
+<p>Универсальная среда исполнения не должна знать о таких понятиях, как:</p>
 <ul>
-<li>Verse;</li>
-<li>Chorus;</li>
-<li>BPM;</li>
-<li>key;</li>
-<li>vocals;</li>
-<li>rhyme;</li>
-<li>dramaturgy;</li>
-<li>arrangement;</li>
-<li>Style/Lyrics/Negative;</li>
-<li>Suno-specific validation.</li>
+<li>куплет (Verse);</li>
+<li>припев (Chorus);</li>
+<li>темп (BPM);</li>
+<li>тональность (Key);</li>
+<li>тип вокала (Vocals);</li>
+<li>рифма (Rhyme);</li>
+<li>драматургия (Dramaturgy);</li>
+<li>аранжировка (Arrangement);</li>
+<li>разметка Style / Lyrics / Negative;</li>
+<li>специфическая валидация генератора Suno.</li>
 </ul>
-<p>Suggested structure:</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">domains/suno/
 ├── contracts/
 ├── pipeline/
@@ -11810,77 +11810,77 @@ implementation workers</code></pre>
 ├── presets/
 ├── evaluation/
 └── tests/</code></pre>
-<p>Example skills:</p>
-<pre><code class="language-text">dramaturg
-lyric-editor
-rhyme-editor
-structure-editor
-vocal-director
-style-engineer
-suno-prompt-engineer
-final-reviewer</code></pre>
-<p>The dramaturg module belongs here because concepts such as exposition, conflict, culmination, hero, and dramatic function are song-domain semantics.</p>
-<p>Example Suno pipeline:</p>
-<pre><code class="language-text">INPUT
-  ↓
-IDEA ANALYSIS
-  ↓
-DRAMATURGY
-  ↓
-LYRICS EDIT
-  ↓
-STRUCTURE
-  ↓
-VOCAL DESIGN
-  ↓
-STYLE DESIGN
-  ↓
-SUNO FORMAT
-  ↓
-VALIDATION
-  ↓
-FINAL</code></pre>
-<p>Important ownership split:</p>
-<pre><code class="language-text">Suno owns skill content and domain workflow.
-KAT9I Core owns registry, routing, governance, policy and generic contracts.
-Execution owns physical execution.</code></pre>
-<p>The same KAT9I platform can later host other domains without contaminating the execution engine with music logic.</p>
+<p>Примеры прикладных навыков:</p>
+<pre><code class="language-text">dramaturg (драматург)
+lyric-editor (редактор текста)
+rhyme-editor (редактор рифмы)
+structure-editor (редактор структуры)
+vocal-director (вокальный режиссёр)
+style-engineer (инженер стиля)
+suno-prompt-engineer (инженер промптов Suno)
+final-reviewer (финальный контролёр)</code></pre>
+<p>Модуль драматурга относится именно сюда, поскольку экспозиция, конфликт, кульминация, герой и драматическая функция являются семантикой музыкального песенного домена.</p>
+<p>Пример конвейера Suno:</p>
+<pre><code class="language-text">ВХОДНЫЕ ДАННЫЕ (INPUT)
+   ↓
+АНАЛИЗ ИДЕИ (IDEA ANALYSIS)
+   ↓
+ДРАМАТУРГИЯ (DRAMATURGY)
+   ↓
+РЕДАКТУРА ТЕКСТА (LYRICS EDIT)
+   ↓
+СТРУКТУРА (STRUCTURE)
+   ↓
+ВОКАЛЬНЫЙ ДИЗАЙН (VOCAL DESIGN)
+   ↓
+СТИЛЕВОЙ ДИЗАЙН (STYLE DESIGN)
+   ↓
+ФОРМАТИРОВАНИЕ ДЛЯ SUNO (SUNO FORMAT)
+   ↓
+ВАЛИДАЦИЯ (VALIDATION)
+   ↓
+ФИНАЛЬНЫЙ РЕЗУЛЬТАТ (FINAL)</code></pre>
+<p>Важное разделение зон ответственности:</p>
+<pre><code class="language-text">Suno владеет содержанием навыков и прикладным рабочим процессом (Workflow).
+KAT9I Core владеет реестром, маршрутизацией, управлением, политиками и общими контрактами.
+Execution отвечает за физическое исполнение процессов.</code></pre>
+<p>Та же платформа KAT9I в дальнейшем сможет обслуживать другие предметные области без засорения движка исполнения музыкальной спецификой.</p>
 <hr>
-<h2 id="9-other-example-domains">9. Other example domains</h2>
-<h3 id="research">Research</h3>
-<pre><code class="language-text">Question
-→ Discovery
-→ Sources
-→ Verification
-→ Comparison
-→ Synthesis
-→ Report</code></pre>
-<h3 id="documents">Documents</h3>
-<pre><code class="language-text">Input files
-→ Extraction
-→ Validation
-→ Translation
-→ Formatting
-→ PDF/DOCX</code></pre>
-<h3 id="engineering">Engineering</h3>
-<pre><code class="language-text">Requirements
-→ Standards
-→ Candidate search
-→ Compliance check
-→ Configuration
-→ Technical description
-→ Documentation</code></pre>
-<h3 id="automation">Automation</h3>
-<pre><code class="language-text">Trigger
-→ Condition
-→ Task
-→ Worker
-→ Result
-→ Notification</code></pre>
+<h2 id="9-другие-примеры-предметных-областей-domains">9. Другие примеры предметных областей (Domains)</h2>
+<h3 id="исследования-research">Исследования (Research)</h3>
+<pre><code class="language-text">Вопрос (Question)
+→ Поиск источников (Discovery)
+→ Источники (Sources)
+→ Верификация (Verification)
+→ Сравнение (Comparison)
+→ Синтез (Synthesis)
+→ Отчёт (Report)</code></pre>
+<h3 id="документооборот-documents">Документооборот (Documents)</h3>
+<pre><code class="language-text">Входные файлы (Input files)
+→ Извлечение (Extraction)
+→ Валидация (Validation)
+→ Перевод (Translation)
+→ Форматирование (Formatting)
+→ Генерация PDF/DOCX</code></pre>
+<h3 id="инженерия-engineering">Инженерия (Engineering)</h3>
+<pre><code class="language-text">Требования (Requirements)
+→ Стандарты (Standards)
+→ Поиск вариантов (Candidate search)
+→ Проверка соответствия (Compliance check)
+→ Конфигурация (Configuration)
+→ Техническое описание (Technical description)
+→ Документация (Documentation)</code></pre>
+<h3 id="автоматизация-automation">Автоматизация (Automation)</h3>
+<pre><code class="language-text">Событие/Триггер (Trigger)
+→ Условие (Condition)
+→ Задача (Task)
+→ Исполнитель (Worker)
+→ Результат (Result)
+→ Уведомление (Notification)</code></pre>
 <hr>
-<h2 id="10-personal-layer">10. Personal layer</h2>
-<p>A separate personal layer is required.</p>
-<p>Proposed structure:</p>
+<h2 id="10-персональный-слой-personal-layer">10. Персональный слой (Personal Layer)</h2>
+<p>Требуется выделение отдельного персонального слоя пользователя.</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">personal/
 ├── profile/
 ├── rules/
@@ -11888,61 +11888,61 @@ Execution owns physical execution.</code></pre>
 ├── settings/
 ├── knowledge/
 └── workspaces/</code></pre>
-<p>Four concepts must remain separate:</p>
-<div class="table-container"><table class="doc-table"><thead><tr><th>Layer</th><th>Purpose</th></tr></thead><tbody><tr><td>Knowledge</td><td>Facts/history/decisions</td></tr><tr><td>Rules</td><td>MUST / MUST NOT constraints</td></tr><tr><td>Preferences</td><td>Soft preferences</td></tr><tr><td>Settings</td><td>Runtime/environment configuration</td></tr></tbody></table></div>
-<p>Examples:</p>
-<h3 id="knowledge">Knowledge</h3>
-<pre><code class="language-text">Canonical KAT repository is X.
-A certain song has BPM/key Y.
-A project uses Windows.</code></pre>
-<h3 id="rule">Rule</h3>
-<pre><code class="language-text">Never use a mirror as runtime source-of-truth.
-A specific project forbids male vocals.
-Secrets must not leave local environment.</code></pre>
-<h3 id="preference">Preference</h3>
-<pre><code class="language-text">Prefer concise reports.
-Prefer tables.
-Prefer Russian output.</code></pre>
-<h3 id="setting">Setting</h3>
+<p>Необходимо строго различать четыре концепции:</p>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Слой</th><th>Назначение</th></tr></thead><tbody><tr><td>Знания (Knowledge)</td><td>Факты, история, принятые решения</td></tr><tr><td>Правила (Rules)</td><td>Обязательные ограничения (MUST / MUST NOT)</td></tr><tr><td>Предпочтения (Preferences)</td><td>Мягкие пользовательские предпочтения</td></tr><tr><td>Настройки (Settings)</td><td>Конфигурация среды и времени выполнения</td></tr></tbody></table></div>
+<p>Примеры:</p>
+<h3 id="знания-knowledge">Знания (Knowledge)</h3>
+<pre><code class="language-text">Канонический репозиторий KAT9I — X.
+Песня имеет темп Y BPM и тональность Z.
+Проект разрабатывается под ОС Windows.</code></pre>
+<h3 id="правила-rules">Правила (Rules)</h3>
+<pre><code class="language-text">Никогда не использовать зеркало в качестве канонического источника истины (SSoT).
+В конкретном проекте запрещён мужской вокал.
+Секреты не должны покидать локальное окружение.</code></pre>
+<h3 id="предпочтения-preferences">Предпочтения (Preferences)</h3>
+<pre><code class="language-text">Предпочитать краткие отчёты.
+Предпочитать таблицы для структурированных данных.
+Предпочитать русский язык для ответов и документации.</code></pre>
+<h3 id="настройки-settings">Настройки (Settings)</h3>
 <pre><code class="language-text">platform = windows
 shell = pwsh
 max_local_workers = 3
 default_provider = ...</code></pre>
-<p>Hard rules can block work. Preferences must not.</p>
+<p>Жёсткие правила (Rules) могут блокировать выполнение работы при несоответствии. Пользовательские предпочтения (Preferences) не имеют права блокировать исполнение.</p>
 <hr>
-<h2 id="11-personal-knowledge-base">11. Personal knowledge base</h2>
-<p>The personal knowledge mechanism belongs to the product, but the physical knowledge data should remain external.</p>
-<p>Inside KAT9I:</p>
+<h2 id="11-персональная-база-знаний-personal-knowledge-base">11. Персональная база знаний (Personal Knowledge Base)</h2>
+<p>Механизм персональных знаний является частью продукта, однако физические файлы знаний должны оставаться во внешнем хранилище.</p>
+<p>Внутри репозитория KAT9I:</p>
 <pre><code class="language-text">personal/knowledge/
 ├── schema/
 ├── providers/
 ├── index/
 └── policies/</code></pre>
-<p>External Personal Data Plane may contain:</p>
+<p>Внешний слой персональных данных (Personal Data Plane) может включать:</p>
 <pre><code class="language-text">KAT9I_IIIJIIOXA
 Obsidian
-ChatGPT memory
+Память ChatGPT
 Google Drive
-local notes
-project documentation
-research databases</code></pre>
-<p>The Engine should access them through providers/connectors.</p>
-<p>Do not merge all private/personal data into the product Git repository.</p>
+Локальные заметки
+Документацию проектов
+Исследовательские базы данных</code></pre>
+<p>Движок KAT9I должен обращаться к ним через провайдеры и коннекторы (Connectors).</p>
+<p>Не следует смешивать и коммитить все приватные и персональные данные в продуктовый Git-репозиторий.</p>
 <hr>
-<h2 id="12-personal-workspaces-projects">12. Personal workspaces/projects</h2>
-<p>Projects are not domains.</p>
-<p>Examples:</p>
-<pre><code class="language-text">Suno        = domain
-AG25        = project/repository
-Genre_test  = project
-KAT9I_OS    = project/system</code></pre>
-<p>Suggested structure:</p>
+<h2 id="12-персональные-рабочие-пространства-и-проекты-personal-workspaces-projects">12. Персональные рабочие пространства и проекты (Personal Workspaces/Projects)</h2>
+<p>Проекты не являются доменными модулями платформы.</p>
+<p>Примеры:</p>
+<pre><code class="language-text">Suno        = прикладной домен
+AG25        = проект / репозиторий
+Genre_test  = проект
+KAT9I_OS    = проект / метасистема</code></pre>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">personal/workspaces/
 ├── kat9i/
 ├── ag25/
 ├── genre_test/
 └── sqwin/</code></pre>
-<p>A workspace may define:</p>
+<p>Рабочее пространство (Workspace) может определять:</p>
 <pre><code class="language-text">ProjectContext
 ├── repositories
 ├── local_paths
@@ -11951,11 +11951,11 @@ KAT9I_OS    = project/system</code></pre>
 ├── active_issues
 ├── runtime
 └── preferred_workflows</code></pre>
-<p>This allows one KAT instance to work across many projects.</p>
+<p>Это позволяет одному экземпляру KAT9I эффективно и изолированно работать с множеством различных проектов.</p>
 <hr>
-<h2 id="13-context-engine">13. Context Engine</h2>
-<p>Token/context optimization should be a platform layer.</p>
-<p>Suggested structure:</p>
+<h2 id="13-движок-управления-контекстом-context-engine">13. Движок управления контекстом (Context Engine)</h2>
+<p>Оптимизация токенов и контекста должна представлять собой платформенный слой.</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">context/
 ├── references/
 ├── resolver/
@@ -11968,39 +11968,39 @@ KAT9I_OS    = project/system</code></pre>
 ├── context_cache/
 ├── context_packs/
 └── materializer/</code></pre>
-<p>Initial concept:</p>
-<pre><code class="language-text">Task
+<p>Исходная базовая концепция:</p>
+<pre><code class="language-text">Задача (Task)
  ↓
-Context Compiler
+Компилятор контекста (Context Compiler)
  ↓
-Minimal Context Pack
+Минимальный пакет контекста (Minimal Context Pack)
  ↓
-Model</code></pre>
-<p>But the preferred design evolves into <strong>reference-first context</strong>, where KAT does not carry large context bodies unless necessary.</p>
+Модель (Model)</code></pre>
+<p>Однако предпочтительная архитектура эволюционирует к подходу <strong>приоритета ссылок (Reference-first Context)</strong>, где KAT9I не переносит большие тела контекста без крайней необходимости.</p>
 <hr>
-<h2 id="14-reference-first-architecture">14. Reference-first architecture</h2>
-<p>The central design principle:</p>
-<div class="note"><strong>Примечание:</strong> KAT9I should orchestrate references, permissions, tasks and result locations instead of transporting large model context payloads.</div>
-<p>Bad path:</p>
-<pre><code class="language-text">KAT
-→ download repository
-→ put large repository into prompt
-→ send to provider
-→ receive huge response
-→ resend it to another worker</code></pre>
-<p>Preferred path:</p>
-<pre><code class="language-text">KAT
-→ TaskContract
-→ ContextRefs
-→ provider reads sources through its own connectors
-→ performs work
-→ writes result directly to shared sink
-→ KAT receives ResultRef</code></pre>
-<p>This turns KAT from a <strong>data bus</strong> into a <strong>control bus</strong>.</p>
+<h2 id="14-архитектура-с-приоритетом-ссылок-reference-first-architecture">14. Архитектура с приоритетом ссылок (Reference-first Architecture)</h2>
+<p>Центральный архитектурный принцип:</p>
+<div class="note"><strong>Примечание:</strong> KAT9I_OS должна координировать ссылки, права доступа, задачи и места назначения результатов вместо сквозной пересылки больших объёмов контекста через модель.</div>
+<p>Неэффективный путь:</p>
+<pre><code class="language-text">KAT9I
+→ скачивает весь репозиторий
+→ загружает огромный репозиторий в промпт
+→ отправляет провайдеру
+→ получает огромный ответ
+→ пересылает его следующему исполнителю</code></pre>
+<p>Предпочтительный архитектурный путь:</p>
+<pre><code class="language-text">KAT9I
+→ формирует контракт задачи (TaskContract)
+→ передаёт ссылки на контекст (ContextRefs)
+→ провайдер напрямую читает источники через собственные коннекторы
+→ выполняет работу
+→ сохраняет результат напрямую в общий приёмник (Shared ResultSink)
+→ KAT9I получает ссылку на результат (ResultRef)</code></pre>
+<p>Это преобразует KAT9I из <strong>шины данных (Data Bus)</strong> в <strong>шину управления (Control Bus)</strong>.</p>
 <hr>
-<h2 id="15-resource-fabric">15. Resource Fabric</h2>
-<p>Introduce a first-class <code>resources/</code> component.</p>
-<p>Suggested structure:</p>
+<h2 id="15-фабрика-ресурсов-resource-fabric">15. Фабрика ресурсов (Resource Fabric)</h2>
+<p>Вводится первоклассный платформенный компонент <code>resources/</code>.</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">resources/
 ├── registry/
 ├── refs/
@@ -12009,15 +12009,15 @@ Model</code></pre>
 ├── permissions/
 ├── provenance/
 └── cache/</code></pre>
-<p>It manages resource identities such as:</p>
+<p>Компонент управляет идентичностями ресурсов, такими как:</p>
 <pre><code class="language-text">github://...
 gdrive://...
 knowledge://...
 file://...
 mcp://...
 artifact://...</code></pre>
-<h3 id="resourceref-contextref">ResourceRef / ContextRef</h3>
-<p>Concept:</p>
+<h3 id="ссылка-на-ресурс-и-контекст-resourceref-contextref">Ссылка на ресурс и контекст (ResourceRef / ContextRef)</h3>
+<p>Концепция:</p>
 <pre><code class="language-text">ContextRef
 ├── type
 ├── provider
@@ -12028,7 +12028,7 @@ artifact://...</code></pre>
 ├── trust
 ├── freshness
 └── resolver_hint</code></pre>
-<p>Example:</p>
+<p>Пример:</p>
 <pre><code class="language-text">type: github
 repository: NewDeep67/kat9i_skills
 revision: &lt;commit&gt;
@@ -12037,19 +12037,19 @@ scope:
   - kat9i/rules/**
   - tests/**
 access: read</code></pre>
-<h3 id="url-is-identity-connector-is-transport">URL is identity; Connector is transport</h3>
-<p>Important abstraction:</p>
-<pre><code class="language-text">ResourceRef = WHAT
-Connector   = HOW TO GET IT</code></pre>
-<p>The same GitHub resource may be resolved by:</p>
-<pre><code class="language-text">ChatGPT GitHub connector
-native GitHub API
-MCP GitHub server
-local Git checkout</code></pre>
-<p>The domain should not need to know which one.</p>
+<h3 id="url-как-идентичность-коннектор-как-транспорт">URL как идентичность; коннектор как транспорт</h3>
+<p>Важная абстракция:</p>
+<pre><code class="language-text">ResourceRef = ЧТО за ресурс
+Connector   = КАК ЕГО ПОЛУЧИТЬ</code></pre>
+<p>Один и тот же ресурс GitHub может быть разрешён через:</p>
+<pre><code class="language-text">Коннектор GitHub в ChatGPT
+Нативный GitHub API
+Сервер MCP GitHub
+Локальный Git checkout</code></pre>
+<p>Доменный модуль не должен зависеть от того, какой именно коннектор используется.</p>
 <hr>
-<h2 id="16-context-manifest">16. Context Manifest</h2>
-<p>A task should normally carry references, not full source material.</p>
+<h2 id="16-манифест-контекста-context-manifest">16. Манифест контекста (Context Manifest)</h2>
+<p>Задача должна переносить ссылки, а не полные исходные материалы.</p>
 <pre><code class="language-text">TaskContract
 ├── objective
 ├── context_manifest
@@ -12060,79 +12060,79 @@ local Git checkout</code></pre>
 ├── rules_ref
 ├── output_contract
 └── result_sink</code></pre>
-<p>Reference-first resolution algorithm:</p>
-<pre><code class="language-text">RESOURCE REFERENCE
+<p>Алгоритм разрешения контекста с приоритетом ссылок:</p>
+<pre><code class="language-text">ССЫЛКА НА РЕСУРС (RESOURCE REFERENCE)
     ↓
-Can provider resolve source itself?
+Может ли провайдер разрешить источник самостоятельно?
     │
-   YES → pass reference
+   ДА → передать ссылку
     │
-    NO
+   НЕТ
     ↓
-Can a connector be attached?
+Можно ли подключить готовый коннектор?
     │
-   YES → use connector
+   ДА → использовать коннектор
     │
-    NO
+   НЕТ
     ↓
-KAT materializes minimal context</code></pre>
-<p>Rule:</p>
-<div class="note"><strong>Примечание:</strong> Materialize context only when reference resolution is unavailable.</div>
+KAT9I материализует минимально необходимый контекст</code></pre>
+<p>Правило:</p>
+<div class="note"><strong>Примечание:</strong> Материализация контекста выполняется только тогда, когда прямое разрешение по ссылкам недоступно.</div>
 <hr>
-<h2 id="17-resultref-and-resultsink">17. ResultRef and ResultSink</h2>
-<p>Results should follow the same reference-first design.</p>
-<p>Instead of returning a huge report/diff through KAT, a provider writes directly to a sink:</p>
+<h2 id="17-ссылка-на-результат-и-приёмник-результата-resultref-и-resultsink">17. Ссылка на результат и приёмник результата (ResultRef и ResultSink)</h2>
+<p>Результаты выполнения задач следуют тому же принципу приоритета ссылок.</p>
+<p>Вместо возврата гигантского отчёта или diff через KAT9I, исполнитель записывает данные напрямую в приёмник (ResultSink):</p>
 <pre><code class="language-text">ResultSink
 ├── GitHub PR
-├── GitHub Issue/comment
-├── GitHub artifact
-├── Google Drive document
-├── file/artifact store
-└── Knowledge entry</code></pre>
-<p>KAT receives:</p>
+├── Комментарий или Issue GitHub
+├── Артефакт GitHub
+├── Документ Google Drive
+├── Хранилище локальных файлов и артефактов
+└── Запись в базе знаний</code></pre>
+<p>KAT9I получает компактную ссылку:</p>
 <pre><code class="language-text">ResultRef
 ├── type
 ├── uri/id
 ├── revision/head
 ├── evidence
 └── provenance</code></pre>
-<p>Example development flow:</p>
-<pre><code class="language-text">KAT
+<p>Пример процесса разработки:</p>
+<pre><code class="language-text">KAT9I
  ↓
-task source = GitHub Issue
-context = GitHub repository reference
-result sink = GitHub PR
+источник задачи = GitHub Issue
+контекст = ссылка на репозиторий GitHub
+приёмник результата = GitHub PR
 
-Provider/worker
+Провайдер / исполнитель
  ↓
-reads repo using connector
+читает репозиторий через коннектор
  ↓
-creates PR
+создаёт PR
 
-KAT
+KAT9I
  ↓
-receives PR ResultRef</code></pre>
-<p>QA should then receive the PR reference, not a re-transmitted diff:</p>
-<pre><code class="language-text">Worker A → PR #X
-KAT → QA Task(target = PR #X)
-QA Worker → reads PR through GitHub connector</code></pre>
-<p>This naturally supports independent QA and minimizes outgoing payloads.</p>
+получает ResultRef созданного PR</code></pre>
+<p>Процесс контроля качества (QA) затем получает ссылку на PR, а не ретранслированный diff:</p>
+<pre><code class="language-text">Worker A → создаёт PR #X
+KAT9I → формирует задачу QA(target = PR #X)
+QA Worker → считывает PR через коннектор GitHub</code></pre>
+<p>Это естественным образом гарантирует независимость проверки и минимизирует исходящий сетевой трафик.</p>
 <hr>
-<h2 id="18-rulesref">18. RulesRef</h2>
-<p>Effective Ruleset can also be reference-backed.</p>
-<p>Instead of passing a large resolved rules body every time:</p>
+<h2 id="18-ссылка-на-правила-rulesref">18. Ссылка на правила (RulesRef)</h2>
+<p>Действующий набор правил (Effective Ruleset) также может передаваться по ссылке.</p>
+<p>Вместо постоянной передачи полного тела всех правил:</p>
 <pre><code class="language-text">RulesRef
 ├── uri
 ├── revision
 ├── digest
 └── required</code></pre>
-<p>The worker/provider resolves the snapshot itself and records the digest used.</p>
-<p>This preserves provenance:</p>
-<div class="note"><strong>Примечание:</strong> Which exact rule snapshot governed the task?</div>
+<p>Исполнитель или провайдер сам разрешает снимок правил и фиксирует использованный дайджест (хэш).</p>
+<p>Это обеспечивает строгое сохранение происхождения данных (Provenance):</p>
+<div class="note"><strong>Примечание:</strong> Какой именно снимок правил управлял выполнением задачи?</div>
 <hr>
-<h2 id="19-inference-provider-layer">19. Inference / Provider layer</h2>
-<p>Model selection should be a dedicated platform component, separate from Coworker.</p>
-<p>Suggested structure:</p>
+<h2 id="19-уровень-инференса-и-провайдеров-inference-provider-layer">19. Уровень инференса и провайдеров (Inference / Provider Layer)</h2>
+<p>Выбор модели и способа вычисления должен быть выделенным компонентом платформы, отделённым от Coworker.</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">inference/
 ├── router/
 ├── model_registry/
@@ -12145,106 +12145,106 @@ QA Worker → reads PR through GitHub connector</code></pre>
     ├── api/
     ├── seat/
     └── remote_kat/</code></pre>
-<p>Key distinction:</p>
-<pre><code class="language-text">Coworker = who executes?
-Inference/Provider Router = which intelligence/runtime/provider route?</code></pre>
+<p>Ключевое различие обязанностей:</p>
+<pre><code class="language-text">Coworker                  = кто исполняет работу?
+Inference/Provider Router = какой вычислительный интеллект и маршрут провайдера выбрать?</code></pre>
 <hr>
-<h2 id="20-intelligence-tiers">20. Intelligence tiers</h2>
-<p>Keep a simple abstract quality classification:</p>
-<pre><code class="language-text">LOW
+<h2 id="20-уровни-интеллекта-моделей-intelligence-tiers">20. Уровни интеллекта моделей (Intelligence Tiers)</h2>
+<p>Используется простая абстрактная классификация качества моделей:</p>
+<pre><code class="language-text">LOW    (Низкий / Эконом)
+NORMAL (Стандартный / Нормальный)
+HIGH   (Высокий / Рассуждающий)</code></pre>
+<p>Примеры применения:</p>
+<h3 id="low-низкий-эконом">LOW (Низкий / Эконом)</h3>
+<ul>
+<li>классификация;</li>
+<li>тегирование;</li>
+<li>извлечение данных;</li>
+<li>простые сводки;</li>
+<li>сообщения коммитов;</li>
+<li>обнаружение дубликатов;</li>
+<li>проверка форматов;</li>
+<li>ранжирование фрагментов.</li>
+</ul>
+<h3 id="normal-стандартный-нормальный">NORMAL (Стандартный / Нормальный)</h3>
+<ul>
+<li>стандартная реализация задач и фич;</li>
+<li>стандартное ревью PR;</li>
+<li>написание тестов;</li>
+<li>ограниченный рефакторинг;</li>
+<li>инженерия промптов для Suno;</li>
+<li>синтез результатов исследований;</li>
+<li>подготовка документации;</li>
+<li>базовый контроль качества (QA).</li>
+</ul>
+<h3 id="high-высокий-рассуждающий">HIGH (Высокий / Рассуждающий)</h3>
+<ul>
+<li>системная архитектура;</li>
+<li>сложная отладка и поиск первопричин (Root-cause analysis);</li>
+<li>аудит безопасности;</li>
+<li>разрешение сложных конфликтов правил;</li>
+<li>межрепозиторное проектирование;</li>
+<li>критический контроль качества;</li>
+<li>принятие решений в условиях высокой неопределённости и рисков.</li>
+</ul>
+<p>Уровень HIGH должен быть путём эскалации при необходимости, а не выбором по умолчанию для всех промежуточных шагов.</p>
+<hr>
+<h2 id="21-выбор-модели-на-уровне-отдельных-стадий-stage-level-model-selection">21. Выбор модели на уровне отдельных стадий (Stage-level Model Selection)</h2>
+<p>Задача не должна быть жестко привязана к одному уровню интеллекта на всём своём протяжении.</p>
+<p>Пример распределения по стадиям:</p>
+<pre><code class="language-text">Приём и разбор задачи        → LOCAL / LOW
+Извлечение контекста         → детерминированный код / локально
+Планирование                 → NORMAL
+Архитектурное решение        → HIGH (при необходимости)
+Реализация кода              → NORMAL
+Форматирование и стили       → LOW
+Контроль качества (QA)       → NORMAL
+Критическая неопределённость → HIGH</code></pre>
+<p>Базовый принцип:</p>
+<div class="note"><strong>Примечание:</strong> Уровни HIGH / NORMAL / LOW являются свойством конкретной стадии задачи, а не постоянной характеристикой всей задачи или постоянным свойством агента.</div>
+<p>Модель эскалации:</p>
+<pre><code class="language-text">LOCAL / LOW
+  ↓ если результат недостаточен
 NORMAL
+  ↓ если результат недостаточен или возникла критическая неоднозначность
 HIGH</code></pre>
-<p>Examples:</p>
-<h3 id="low">LOW</h3>
-<ul>
-<li>classification;</li>
-<li>tagging;</li>
-<li>extraction;</li>
-<li>simple summaries;</li>
-<li>commit messages;</li>
-<li>duplicate detection;</li>
-<li>format checks;</li>
-<li>chunk ranking.</li>
-</ul>
-<h3 id="normal">NORMAL</h3>
-<ul>
-<li>ordinary issue implementation;</li>
-<li>ordinary PR review;</li>
-<li>tests;</li>
-<li>bounded refactoring;</li>
-<li>Suno prompt engineering;</li>
-<li>research synthesis;</li>
-<li>documentation;</li>
-<li>common QA.</li>
-</ul>
-<h3 id="high">HIGH</h3>
-<ul>
-<li>architecture;</li>
-<li>complex debugging/root-cause;</li>
-<li>security;</li>
-<li>difficult rule conflicts;</li>
-<li>cross-repository design;</li>
-<li>critical QA;</li>
-<li>ambiguous high-risk decisions.</li>
-</ul>
-<p>HIGH should be an escalation path, not the default for every stage.</p>
+<p>Политика безопасности определяет минимально допустимый уровень, который не может быть занижен более дешёвым классификатором.</p>
 <hr>
-<h2 id="21-stage-level-model-selection">21. Stage-level model selection</h2>
-<p>A task must not be tied to one intelligence tier.</p>
-<p>Example:</p>
-<pre><code class="language-text">Issue ingestion        → LOCAL/LOW
-Context retrieval      → deterministic/local
-Planning               → NORMAL
-Architecture decision  → HIGH if required
-Implementation         → NORMAL
-Formatting             → LOW
-QA                     → NORMAL
-Critical ambiguity     → HIGH</code></pre>
-<p>Core principle:</p>
-<div class="note"><strong>Примечание:</strong> HIGH/NORMAL/LOW is a property of a task stage, not of the whole task or a permanent property of an agent.</div>
-<p>Escalation model:</p>
-<pre><code class="language-text">LOCAL/LOW
-  ↓ if insufficient
-NORMAL
-  ↓ if insufficient / critical ambiguity
-HIGH</code></pre>
-<p>Security/policy defines the minimum floor and cannot be downgraded by a cheaper classifier.</p>
-<hr>
-<h2 id="22-provider-economic-classes">22. Provider economic classes</h2>
-<p>Provider selection must distinguish intelligence from economics.</p>
-<p>Proposed economic/runtime classes:</p>
-<pre><code class="language-text">LOCAL_FREE
-SUBSCRIPTION_INCLUDED
-METERED_API
-PREMIUM_API</code></pre>
-<p>A provider may be:</p>
+<h2 id="22-экономические-классы-провайдеров-provider-economic-classes">22. Экономические классы провайдеров (Provider Economic Classes)</h2>
+<p>При выборе провайдера необходимо разделять уровень интеллекта модели и экономическую модель доступа.</p>
+<p>Предлагаемые экономические классы среды выполнения:</p>
+<pre><code class="language-text">LOCAL_FREE            (Локальные бесплатные ресурсы)
+SUBSCRIPTION_INCLUDED (Включено в фиксированную подписку)
+METERED_API           (Тарифицируемый API с оплатой за токены)
+PREMIUM_API           (Премиальный API высокой стоимости)</code></pre>
+<p>Провайдер может характеризоваться так:</p>
 <pre><code class="language-text">intelligence = HIGH
 economic_class = SUBSCRIPTION_INCLUDED</code></pre>
-<p>or:</p>
+<p>или:</p>
 <pre><code class="language-text">intelligence = NORMAL
 economic_class = LOCAL_FREE</code></pre>
-<p>This matters because a web subscription or licensed seat may not require per-token API optimization in the same way a metered API does.</p>
+<p>Это принципиально важно, так как веб-подписка или выделенное рабочее место (Seat) не требуют поминутной экономии каждого токена так, как тарифицируемый API.</p>
 <hr>
-<h2 id="23-subscription-seat-providers">23. Subscription-seat providers</h2>
-<p>A provider can be an already-paid interactive environment:</p>
+<h2 id="23-провайдеры-рабочих-мест-по-подписке-subscription-seat-providers">23. Провайдеры рабочих мест по подписке (Subscription-seat Providers)</h2>
+<p>Провайдером может выступать уже оплаченная интерактивная среда:</p>
 <pre><code class="language-text">providers/seat/
 ├── chatgpt/
 ├── antigravity/
 └── other/</code></pre>
-<p>Conceptual provider type:</p>
+<p>Концептуальный тип провайдера:</p>
 <pre><code class="language-text">SUBSCRIPTION_SEAT</code></pre>
-<p>Examples:</p>
+<p>Примеры:</p>
 <ul>
-<li>ChatGPT web/Work environment;</li>
-<li>Antigravity;</li>
-<li>another AI web environment;</li>
-<li>a licensed coding agent environment.</li>
+<li>веб-среда ChatGPT / рабочий контекст;</li>
+<li>Google Antigravity;</li>
+<li>сторонние агентные веб-среды;</li>
+<li>лицензированные среды кодинг-агентов.</li>
 </ul>
-<p>Important constraint:</p>
-<div class="note"><strong>Примечание:</strong> A web subscription is not the same thing as an API.</div>
-<p>KAT must not assume it can automate a web product via arbitrary HTTP calls.</p>
-<p>Use a supported adapter for that seat/environment.</p>
-<p>A seat endpoint can advertise:</p>
+<p>Важное проектное ограничение:</p>
+<div class="note"><strong>Примечание:</strong> Доступ по веб-подписке принципиально отличается от вызова прямого API.</div>
+<p>KAT9I_OS не должна исходить из ложного предположения, что веб-продукт можно автоматически вызывать произвольными HTTP-запросами.</p>
+<p>Для таких рабочих мест используются поддерживаемые специализированные адаптеры.</p>
+<p>Конечная точка рабочего места сообщает:</p>
 <pre><code class="language-text">WorkerEndpoint
 ├── provider_type
 ├── intelligence
@@ -12254,20 +12254,20 @@ economic_class = LOCAL_FREE</code></pre>
 ├── availability
 └── restrictions</code></pre>
 <hr>
-<h2 id="24-connector-aware-provider-routing">24. Connector-aware provider routing</h2>
-<p>If the provider already has the required connector, KAT should prefer sending a reference instead of materializing context.</p>
-<p>Example:</p>
-<pre><code class="language-text">TASK source = Google Drive
+<h2 id="24-маршрутизация-провайдеров-с-учётом-коннекторов-connector-aware-provider-routing">24. Маршрутизация провайдеров с учётом коннекторов (Connector-aware Provider Routing)</h2>
+<p>Если провайдер уже имеет доступ к требуемому коннектору данных, KAT9I_OS должна предпочесть передачу ссылки вместо материализации и прокачки контекста через сеть.</p>
+<p>Пример:</p>
+<pre><code class="language-text">Источник задачи = Google Drive
 
 Worker A:
 HIGH
-Drive connector = YES
+Коннектор к Drive = ЕСТЬ
 
 Worker B:
 HIGH+
-Drive connector = NO</code></pre>
-<p>Worker A may be the better route because it has <strong>data affinity</strong>.</p>
-<p>Routing should consider:</p>
+Коннектор к Drive = НЕТ</code></pre>
+<p>Исполнитель Worker A может оказаться значительно более эффективным выбором, поскольку обладает <strong>близостью к данным (Data Affinity)</strong>.</p>
+<p>Формула оценки маршрута учитывает:</p>
 <pre><code class="language-text">RouteScore =
     capability_match
   + intelligence_fit
@@ -12279,11 +12279,11 @@ Drive connector = NO</code></pre>
   - metered_cost
   - transfer_cost
   - latency</code></pre>
-<p><code>transfer_cost</code> becomes a first-class routing concern.</p>
+<p>Стоимость передачи данных (<code>transfer_cost</code>) становится первоклассным фактором маршрутизации.</p>
 <hr>
-<h2 id="25-providerroute">25. ProviderRoute</h2>
-<p>The earlier &quot;Model Router&quot; concept should evolve into a broader provider/execution-intelligence router.</p>
-<p>Concept:</p>
+<h2 id="25-маршрут-провайдера-providerroute">25. Маршрут провайдера (ProviderRoute)</h2>
+<p>Ранее использовавшаяся концепция простого «маршрутизатора моделей» расширяется до полноценного маршрутизатора провайдеров и вычислительного интеллекта.</p>
+<p>Концепция:</p>
 <pre><code class="language-text">ProviderRoute
 ├── worker
 ├── model_class
@@ -12294,201 +12294,201 @@ Drive connector = NO</code></pre>
 ├── tool_transport
 ├── result_sink
 └── fallback</code></pre>
-<p>Possible route examples:</p>
+<p>Примеры возможных маршрутов:</p>
 <pre><code class="language-text">HIGH
-ChatGPT subscription
-GitHub connector
-result → GitHub PR</code></pre>
+Подписка ChatGPT
+Коннектор к GitHub
+Результат → GitHub PR</code></pre>
 <pre><code class="language-text">NORMAL
-Local AI
-local filesystem
-result → local artifact</code></pre>
+Локальный ИИ
+Локальная файловая система
+Результат → локальный артефакт</code></pre>
 <pre><code class="language-text">HIGH
-Metered API
-KAT-materialized context
-result → KAT</code></pre>
-<p>The last route can be more expensive even with similar intelligence because of context transfer.</p>
+Тарифицируемый API
+Контекст, материализованный KAT9I
+Результат → KAT9I</code></pre>
+<p>Последний маршрут может оказаться значительно дороже даже при схожем интеллекте из-за накладных расходов на передачу контекста.</p>
 <hr>
-<h2 id="26-local-ai-provider-layer">26. Local AI provider layer</h2>
-<p>Local models belong under:</p>
+<h2 id="26-уровень-локальных-провайдеров-ии-local-ai-provider-layer">26. Уровень локальных провайдеров ИИ (Local AI Provider Layer)</h2>
+<p>Локальные модели располагаются в каталоге:</p>
 <pre><code class="language-text">inference/providers/local/</code></pre>
-<p>Possible backend adapters:</p>
+<p>Возможные адаптеры бэкендов:</p>
 <pre><code class="language-text">Ollama
 llama.cpp
 LM Studio
 vLLM
-custom local API</code></pre>
-<p>Core should only see a stable inference contract.</p>
-<p>Local AI is useful for:</p>
+Пользовательский локальный API</code></pre>
+<p>Ядро видит только стабильный контракт инференса.</p>
+<p>Локальный ИИ эффективен для:</p>
 <ul>
-<li>private/local-only content;</li>
-<li>logs;</li>
-<li>repository inventory;</li>
-<li>classification;</li>
-<li>indexing;</li>
-<li>deduplication;</li>
-<li>secret detection;</li>
-<li>chunk ranking;</li>
-<li>context compression;</li>
-<li>repetitive low-cost analysis.</li>
+<li>приватного и строго локального контента;</li>
+<li>обработки логов;</li>
+<li>инвентаризации репозиториев;</li>
+<li>задач классификации;</li>
+<li>индексации;</li>
+<li>поиска дубликатов;</li>
+<li>поиска уязвимостей и утечек секретов;</li>
+<li>ранжирования текстовых фрагментов;</li>
+<li>сжатия контекста;</li>
+<li>рутинного низкозатратного анализа.</li>
 </ul>
-<p>A strong pattern:</p>
-<pre><code class="language-text">large local data
+<p>Эффективный паттерн применения:</p>
+<pre><code class="language-text">Большие локальные данные
    ↓
-deterministic parser
+Детерминированный парсер
    ↓
-local AI filtering/summary
+Локальный ИИ для фильтрации и суммаризации
    ↓
-small set of ContextRefs / summary
+Компактный набор ContextRefs / резюме
    ↓
-remote HIGH provider</code></pre>
+Удалённый провайдер уровня HIGH</code></pre>
 <hr>
-<h2 id="27-token-context-economy">27. Token/context economy</h2>
-<p>The priority order should not simply be &quot;use cheaper model&quot;.</p>
-<p>Recommended order:</p>
-<pre><code class="language-text">1. Avoid LLM where deterministic tools work.
-2. Avoid moving context at all; pass references.
-3. Minimize/limit context if materialization is required.
-4. Minimize exposed tools and skills.
-5. Use local inference where appropriate.
-6. Use cheaper cloud/API tier when quality/risk allow.</code></pre>
-<p>Examples of work that should not require LLM:</p>
+<h2 id="27-экономика-токенов-и-контекста-token-context-economy">27. Экономика токенов и контекста (Token/Context Economy)</h2>
+<p>Приоритетом оптимизации не должен быть банальный поиск «самой дешёвой модели».</p>
+<p>Рекомендуемый приоритетный порядок:</p>
+<pre><code class="language-text">1. Исключать вызовы LLM там, где работают детерминированные инструменты.
+2. Не передавать сам контекст; передавать ссылки на ресурсы.
+3. Минимизировать и ограничивать контекст, если материализация неизбежна.
+4. Минимизировать число передаваемых инструментов и навыков.
+5. Использовать локальный инференс, где это оправдано.
+6. Выбирать более экономный облачный тариф API, когда позволяют требования к качеству и риски.</code></pre>
+<p>Примеры задач, не требующих привлечения LLM:</p>
 <ul>
-<li>scope guard;</li>
-<li>hash comparison;</li>
-<li>schema validation;</li>
-<li>file change detection;</li>
-<li>AST/dependency extraction where tooling exists;</li>
-<li>deterministic diff checks.</li>
+<li>контроль границ изменений (Scope Guard);</li>
+<li>сравнение хэшей и контрольных сумм;</li>
+<li>валидация схем данных;</li>
+<li>обнаружение изменённых файлов;</li>
+<li>извлечение AST и графа зависимостей существующими парсерами;</li>
+<li>детерминированная проверка diff.</li>
 </ul>
-<p>Principle:</p>
-<div class="note"><strong>Примечание:</strong> Tool first, tokens second.</div>
+<p>Принцип:</p>
+<div class="note"><strong>Примечание:</strong> Сначала специализированный инструмент, потом токены нейросети.</div>
 <hr>
-<h2 id="28-skill-and-tool-progressive-disclosure">28. Skill and tool progressive disclosure</h2>
-<p>Workers should not receive the full skill/tool catalog.</p>
-<p>Task path:</p>
-<pre><code class="language-text">Task
+<h2 id="28-поэтапное-раскрытие-навыков-и-инструментов-progressive-disclosure">28. Поэтапное раскрытие навыков и инструментов (Progressive Disclosure)</h2>
+<p>Исполнители (Workers) не должны получать весь каталог навыков и инструментов сразу.</p>
+<p>Путь назначения задачи:</p>
+<pre><code class="language-text">Задача (Task)
  ↓
-Domain Router
+Маршрутизатор доменов (Domain Router)
  ↓
-Skill Router
+Маршрутизатор навыков (Skill Router)
  ↓
-relevant skills only
+Только релевантные навыки (relevant skills only)
  ↓
-Tool Broker
+Брокер инструментов (Tool Broker)
  ↓
-relevant tools only
+Только релевантные инструменты (relevant tools only)
  ↓
-Context Compiler
+Компилятор контекста (Context Compiler)
  ↓
-Worker</code></pre>
-<p>This reduces:</p>
+Исполнитель (Worker)</code></pre>
+<p>Это позволяет снизить:</p>
 <ul>
-<li>prompt size;</li>
-<li>tool-schema size;</li>
-<li>confusion;</li>
-<li>accidental tool usage.</li>
+<li>размер промпта (prompt size);</li>
+<li>размер схемы вызова инструментов (tool-schema size);</li>
+<li>путаницу (confusion);</li>
+<li>случайные ошибочные вызовы инструментов (accidental tool usage).</li>
 </ul>
 <hr>
-<h2 id="29-tool-broker">29. Tool Broker</h2>
-<p>Add a generic tool routing/broker component.</p>
-<p>One capability may be reachable through:</p>
-<pre><code class="language-text">native API
-MCP
-CLI
-local library</code></pre>
-<p>Domain asks for the capability, not the transport.</p>
-<p>Example:</p>
-<pre><code class="language-text">Domain:
+<h2 id="29-брокер-инструментов-tool-broker">29. Брокер инструментов (Tool Broker)</h2>
+<p>Вводится универсальный брокер вызова инструментов (Add a generic tool routing/broker component).</p>
+<p>Одна и та же функциональная возможность (capability) может быть доступна через:</p>
+<pre><code class="language-text">Нативный API (native API)
+Протокол MCP
+Интерфейс командной строки (CLI)
+Локальную библиотеку (local library)</code></pre>
+<p>Доменный модуль запрашивает саму возможность (capability), а не способ её вызова (transport).</p>
+<p>Пример:</p>
+<pre><code class="language-text">Домен (Domain):
   github.issue.read
 
         ↓
 
-Tool Broker
+   Брокер инструментов (Tool Broker)
 
  ┌──────┼──────┐
  ▼      ▼      ▼
 Native MCP    CLI</code></pre>
-<p>Policy chooses the allowed route.</p>
+<p>Политика (Policy) выбирает разрешённый способ вызова.</p>
 <hr>
-<h2 id="30-mcp-placement">30. MCP placement</h2>
-<p>MCP should live in integrations, not in Core/Coworker business logic.</p>
-<p>Suggested structure:</p>
+<h2 id="30-размещение-протокола-mcp-mcp-placement">30. Размещение протокола MCP (MCP placement)</h2>
+<p>Протокол MCP должен располагаться в модуле интеграций, а не проникать в бизнес-логику Core или Coworker.</p>
+<p>Предлагаемая структура:</p>
 <pre><code class="language-text">integrations/mcp/
 ├── client/
 ├── server/
 ├── registry/
 └── gateway/</code></pre>
-<p>Roles:</p>
-<h3 id="mcp-client">MCP client</h3>
-<p>KAT consumes external MCP servers.</p>
-<h3 id="mcp-server">MCP server</h3>
-<p>KAT exposes selected capabilities to external environments.</p>
-<h3 id="registry">Registry</h3>
-<p>Tracks approved servers/capabilities/trust/auth/version.</p>
-<h3 id="gateway">Gateway</h3>
-<p>Applies:</p>
-<pre><code class="language-text">request
+<p>Роли компонентов:</p>
+<h3 id="клиент-mcp-mcp-client">Клиент MCP (MCP client)</h3>
+<p>KAT потребляет (consumes) внешние серверы MCP.</p>
+<h3 id="сервер-mcp-mcp-server">Сервер MCP (MCP server)</h3>
+<p>KAT предоставляет (exposes) избранные возможности внешним средам.</p>
+<h3 id="реестр-registry">Реестр (Registry)</h3>
+<p>Отслеживает проверенные серверы, права (capabilities), доверие, аутентификацию и версии.</p>
+<h3 id="шлюз-gateway">Шлюз (Gateway)</h3>
+<p>Применяет пайплайн:</p>
+<pre><code class="language-text">запрос (request)
  ↓
-authentication
+аутентификация (authentication)
  ↓
-permissions
+проверка прав (permissions)
  ↓
-schema validation
+валидация схемы (schema validation)
  ↓
-policy
+политики безопасности (policy)
  ↓
-tool invocation
+вызов инструмента (tool invocation)
  ↓
-sanitized result</code></pre>
-<p>Internal monolith modules should normally use typed/internal calls.</p>
-<p>MCP is most useful when crossing:</p>
-<pre><code class="language-text">process boundary
-machine boundary
-product boundary</code></pre>
-<p>Do not turn every internal KAT module call into MCP; that would recreate distributed-system overhead inside the monolith.</p>
+санитизированный результат (sanitized result)</code></pre>
+<p>Внутренние монолитные модули должны взаимодействовать через типизированные программные вызовы.</p>
+<p>MCP наиболее эффективен при пересечении границ (crossing boundaries):</p>
+<pre><code class="language-text">граница процессов (process boundary)
+граница машин (machine boundary)
+граница программных продуктов (product boundary)</code></pre>
+<p>Не следует превращать каждый внутренний вызов модулей KAT в MCP; это приведёт к избыточным накладным расходам распределённых систем прямо внутри монолита.</p>
 <hr>
-<h2 id="31-mcp-as-resolver-transport-not-source-of-truth">31. MCP as resolver/transport, not source-of-truth</h2>
-<p>MCP fits naturally into Resource Fabric:</p>
+<h2 id="31-mcp-как-транспорт-и-преобразователь-а-не-источник-истины-mcp-as-resolver-transport-not-source-of-truth">31. MCP как транспорт и преобразователь, а не источник истины (MCP as resolver/transport, not source-of-truth)</h2>
+<p>Протокол MCP органично встраивается в Фабрику ресурсов (Resource Fabric):</p>
 <pre><code class="language-text">ContextRef
  ↓
-Resolver Registry
- ├── Native connector
+Реестр резолверов (Resolver Registry)
+ ├── Нативный коннектор (Native connector)
  ├── MCP
  ├── GitHub API
  ├── Google Drive API
- └── Local FS</code></pre>
-<p>Similarly, Coworker tasks may later be transported over MCP, but the KAT-native task contract should remain the stable internal SSoT.</p>
-<p>Pattern:</p>
+ └── Локальная файловая система (Local FS)</code></pre>
+<p>Аналогично, задачи Coworker в дальнейшем могут передаваться через MCP, но внутренний контракт задач KAT (KAT-native task contract) должен оставаться стабильным внутренним источником истины (SSoT).</p>
+<p>Паттерн:</p>
 <pre><code class="language-text">KAT CoworkerTask
         │
-        ├── local adapter
-        ├── GitHub adapter
-        ├── remote adapter
-        └── MCP adapter</code></pre>
-<p>MCP is a transport/adapter, not the core task model.</p>
+        ├── локальный адаптер (local adapter)
+        ├── адаптер GitHub (GitHub adapter)
+        ├── удалённый адаптер (remote adapter)
+        └── адаптер MCP (MCP adapter)</code></pre>
+<p>MCP выступает транспортом и адаптером, а не корневой моделью задач.</p>
 <hr>
-<h2 id="32-security-order">32. Security order</h2>
-<p>Economy must come after hard security/policy constraints.</p>
-<p>Routing order:</p>
-<pre><code class="language-text">1. Security classification
-2. Hard Rules
-3. Required capabilities
-4. Minimum quality floor
-5. Data locality/privacy
-6. Available providers/models
-7. Connector/source affinity
-8. Cost optimization
-9. Latency optimization
-10. Final route</code></pre>
-<p>Never:</p>
-<pre><code class="language-text">choose cheapest
-→ then see if it is safe</code></pre>
-<p>A local/cheap classifier may propose a route, but cannot lower a policy-enforced minimum.</p>
+<h2 id="32-приоритет-безопасности-security-order">32. Приоритет безопасности (Security order)</h2>
+<p>Экономия ресурсов должна оцениваться строго после соблюдения жёстких требований безопасности и политик.</p>
+<p>Очередность принятия решений при маршрутизации:</p>
+<pre><code class="language-text">1. Классификация безопасности (Security classification)
+2. Жёсткие правила (Hard Rules)
+3. Требуемые возможности (Required capabilities)
+4. Минимальный порог качества (Minimum quality floor)
+5. Локальность данных и приватность (Data locality/privacy)
+6. Доступные провайдеры и модели (Available providers/models)
+7. Близость к коннектору/источнику (Connector/source affinity)
+8. Оптимизация стоимости (Cost optimization)
+9. Оптимизация задержки (Latency optimization)
+10. Финальный маршрут (Final route)</code></pre>
+<p>Недопустим подход:</p>
+<pre><code class="language-text">выбрать самый дешёвый вариант
+→ затем проверять, безопасен ли он</code></pre>
+<p>Локальный или дешёвый классификатор может предложить маршрут, но не имеет права понизить уровень, требуемый политикой безопасности.</p>
 <hr>
-<h2 id="33-telemetry-and-cost-evidence">33. Telemetry and cost evidence</h2>
-<p>Add telemetry for both quality and economic routing.</p>
-<p>Example:</p>
+<h2 id="33-телеметрия-и-доказательства-стоимости-telemetry-and-cost-evidence">33. Телеметрия и доказательства стоимости (Telemetry and cost evidence)</h2>
+<p>Вводится сквозная телеметрия для оценки как качества, так и экономической эффективности маршрутизации.</p>
+<p>Пример структуры данных:</p>
 <pre><code class="language-text">InferenceEvidence
 ├── task_id
 ├── stage
@@ -12505,82 +12505,88 @@ Resolver Registry
 ├── retries
 ├── escalations
 └── result_quality</code></pre>
-<p>This allows future learning such as:</p>
+<p>Это даёт основу для будущего обучения системы (future learning):</p>
 <ul>
-<li>which tasks truly require HIGH;</li>
-<li>which work can move to local;</li>
-<li>which connectors reduce transfer;</li>
-<li>which providers are overloaded;</li>
-<li>which routes fail more often.</li>
+<li>какие задачи реально требуют уровня HIGH;</li>
+<li>какую работу можно перенести на локальный ИИ;</li>
+<li>какие коннекторы снижают передачу данных (transfer);</li>
+<li>какие провайдеры перегружены;</li>
+<li>какие маршруты чаще дают сбои.</li>
 </ul>
 <hr>
-<h2 id="34-task-budgets">34. Task budgets</h2>
-<p>A task may carry a budget:</p>
+<h2 id="34-бюджеты-задач-task-budgets">34. Бюджеты задач (Task budgets)</h2>
+<p>Задача может содержать бюджет:</p>
 <pre><code class="language-text">TaskBudget
 ├── max_cloud_tokens
 ├── max_high_calls
 ├── max_cost
 ├── max_duration
 └── local_preferred</code></pre>
-<p>For subscription providers, token cost pressure may be low, but usage/rate/availability constraints still matter.</p>
+<p>Для провайдеров по подписке (subscription providers) нагрузка по стоимости токенов может быть низкой, но лимиты использования, частота запросов и доступность по-прежнему имеют значение.</p>
 <hr>
-<h2 id="35-end-to-end-conceptual-architecture">35. End-to-end conceptual architecture</h2>
-<pre><code class="language-text">                         USER
-                          │
-              ┌───────────▼───────────┐
-              │     PERSONAL LAYER    │
-              │ Rules/Prefs/Settings  │
-              └───────────┬───────────┘
-                          │
-                          ▼
-                       CORE
-                          │
-                          ▼
-                       DOMAIN
-                          │
-                          ▼
-                   RESOURCE FABRIC
-             &quot;Where is the context/result?&quot;
-                          │
-        ┌─────────────────┼─────────────────┐
-        ▼                 ▼                 ▼
-     GitHub             Drive          Knowledge
-        │                 │                 │
-        └─────────────────┬─────────────────┘
-                          │ refs
-                          ▼
-                  CONTEXT ENGINE
-             select references / scope
-                          │
-                          ▼
-                  PROVIDER ROUTER
-                          │
-          ┌───────────────┼────────────────┐
-          ▼               ▼                ▼
-  Subscription Seat    Local AI      Metered API
-          │
-          ▼
-       COWORKER
-  choose worker / endpoint
-          │
-          ▼
-       EXECUTION
-          │
-          ▼
-      TOOL BROKER
-   Native / MCP / CLI
-          │
-          ▼
-       ResultSink
-  PR / Issue / Drive / Artifact
-          │
-          ▼
-       ResultRef
-          │
-          ▼
-         KAT</code></pre>
+<h2 id="35-сквозная-концептуальная-архитектура-end-to-end-conceptual-architecture">35. Сквозная концептуальная архитектура (End-to-End Conceptual Architecture)</h2>
+<pre><code class="language-text">                         ПОЛЬЗОВАТЕЛЬ (USER)
+                                  │
+                      ┌───────────▼───────────┐
+                      │  ПЕРСОНАЛЬНЫЙ СЛОЙ    │
+                      │ Rules/Prefs/Settings  │
+                      └───────────┬───────────┘
+                                  │
+                                  ▼
+                           ЯДРО (CORE)
+                                  │
+                                  ▼
+                       ПРЕДМЕТНАЯ ОБЛАСТЬ (DOMAIN)
+                                  │
+                                  ▼
+                        ФАБРИКА РЕСУРСОВ
+                        (RESOURCE FABRIC)
+                &quot;Где находится контекст/результат?&quot;
+                                  │
+                ┌─────────────────┼─────────────────┐
+                ▼                 ▼                 ▼
+             GitHub             Drive           Knowledge
+                │                 │                 │
+                └─────────────────┬─────────────────┘
+                                  │ ссылки (refs)
+                                  ▼
+                           ДВИЖОК КОНТЕКСТА
+                           (CONTEXT ENGINE)
+                      выбор ссылок / границ Scope
+                                  │
+                                  ▼
+                        МАРШРУТИЗАТОР ИНФЕРЕНСА
+                           (PROVIDER ROUTER)
+                                  │
+                  ┌───────────────┼────────────────┐
+                  ▼               ▼                ▼
+          Рабочее место        Локальный     Тарифицируемый
+          по подписке             ИИ              API
+                  │
+                  ▼
+              COWORKER
+          выбор исполнителя
+                  │
+                  ▼
+              EXECUTION
+          физический запуск
+                  │
+                  ▼
+             TOOL BROKER
+          Native / MCP / CLI
+                  │
+                  ▼
+              ResultSink
+          приёмник результата
+                  │
+                  ▼
+              ResultRef
+          ссылка на результат
+                  │
+                  ▼
+                KAT9I</code></pre>
 <hr>
-<h2 id="36-proposed-repository-shape">36. Proposed repository shape</h2>
+<h2 id="36-предлагаемая-структура-репозитория-repository-shape">36. Предлагаемая структура репозитория (Repository Shape)</h2>
 <pre><code class="language-text">KAT9I/
 │
 ├── core/
@@ -12711,59 +12717,59 @@ Resolver Registry
     ├── integration/
     └── e2e/</code></pre>
 <hr>
-<h2 id="37-main-architectural-invariants">37. Main architectural invariants</h2>
+<h2 id="37-основные-архитектурные-инварианты-main-architectural-invariants">37. Основные архитектурные инварианты (Main Architectural Invariants)</h2>
 <ol>
-<li><strong>Modular monolith, not an unstructured monolith.</strong></li>
-<li><strong>One repository/release/CI, strict internal boundaries.</strong></li>
-<li><strong>KAT is control plane, not bulk data transport.</strong></li>
-<li><strong>Reference-first context and result exchange.</strong></li>
-<li><strong>Materialize context only as fallback.</strong></li>
-<li><strong>ResourceRef says what; Connector says how.</strong></li>
-<li><strong>Domain owns domain semantics.</strong></li>
-<li><strong>Core owns generic task/rule/skill/policy semantics.</strong></li>
-<li><strong>Coworker chooses who; Execution runs how.</strong></li>
-<li><strong>Provider Router chooses intelligence/provider route.</strong></li>
-<li><strong>LOW/NORMAL/HIGH apply per stage, not per whole task.</strong></li>
-<li><strong>Subscription seats are valid provider routes distinct from metered APIs.</strong></li>
-<li><strong>Local AI is a first-class provider.</strong></li>
-<li><strong>MCP is an integration/transport boundary, not internal architecture SSoT.</strong></li>
-<li><strong>Tools/skills/context use progressive disclosure.</strong></li>
-<li><strong>Deterministic tools should replace LLM calls where possible.</strong></li>
-<li><strong>Security/rules define hard floors before economy.</strong></li>
-<li><strong>Independent QA is enforceable workflow policy.</strong></li>
-<li><strong>Personal Knowledge, Rules, Preferences and Settings are separate concepts.</strong></li>
-<li><strong>Physical personal knowledge remains outside the product Git repository.</strong></li>
-<li><strong>Results should be written to shared sinks and returned as ResultRef.</strong></li>
-<li><strong>Telemetry measures quality, execution and economic routing.</strong></li>
-<li><strong>AG25 functionality is redistributed into correct internal modules rather than duplicated.</strong></li>
-<li><strong>Suno is a domain application, not execution infrastructure.</strong></li>
+<li><strong>Модульный монолит, а не неструктурированный монолит.</strong></li>
+<li><strong>Один репозиторий, единый релиз, единый CI, строгие внутренние границы.</strong></li>
+<li><strong>KAT9I — это шина управления (Control Plane), а не транспорт больших данных.</strong></li>
+<li><strong>Обмен контекстом и результатами строится на приоритете ссылок (Reference-first).</strong></li>
+<li><strong>Материализация контекста допустима только при недоступности прямого разрешения ссылок.</strong></li>
+<li><strong>ResourceRef определяет ЧТО за ресурс; Connector определяет КАК его получить.</strong></li>
+<li><strong>Доменный модуль владеет предметной семантикой.</strong></li>
+<li><strong>Ядро (Core) владеет общими контрактами задач, правил, навыков и политик.</strong></li>
+<li><strong>Coworker определяет КТО исполняет; Execution определяет КАК физически исполнить.</strong></li>
+<li><strong>Provider Router выбирает вычислительный интеллект и маршрут исполнения.</strong></li>
+<li><strong>Уровни LOW / NORMAL / HIGH действуют на уровне отдельной стадии, а не на всю задачу целиком.</strong></li>
+<li><strong>Рабочие места по подписке — это валидные маршруты, отличные от тарифицируемых API.</strong></li>
+<li><strong>Локальный ИИ является первоклассным полноправным провайдером платформы.</strong></li>
+<li><strong>Протокол MCP — это внешняя транспортная интеграция, а не внутренний единый источник истины (SSoT).</strong></li>
+<li><strong>Навыки, инструменты и контекст раскрываются поэтапно (Progressive Disclosure).</strong></li>
+<li><strong>Детерминированные инструменты должны заменять вызовы LLM везде, где это возможно.</strong></li>
+<li><strong>Требования безопасности и правил формируют жёсткий порог до оптимизации стоимости.</strong></li>
+<li><strong>Независимый контроль качества (Independent QA) является неотменяемой политикой процесса.</strong></li>
+<li><strong>Персональные знания, правила, предпочтения и настройки строго разделены.</strong></li>
+<li><strong>Физические файлы персональных знаний остаются за пределами продуктового Git-репозитория.</strong></li>
+<li><strong>Результаты работы сохраняются в общие приёмники (Shared ResultSinks) и возвращаются как ResultRef.</strong></li>
+<li><strong>Телеметрия фиксирует качество выполнения, ход исполнения и экономику маршрутизации.</strong></li>
+<li><strong>Функционал AG25 распределяется по соответствующим внутренним модулям, а не дублируется.</strong></li>
+<li><strong>Suno — это прикладной домен, а не базовая инфраструктура исполнения.</strong></li>
 </ol>
 <hr>
-<h2 id="38-current-design-status">38. Current design status</h2>
-<p>This file captures the architecture discussion only.</p>
-<p>Not yet decided/implemented:</p>
+<h2 id="38-текущий-статус-проектирования-current-design-status">38. Текущий статус проектирования (Current Design Status)</h2>
+<p>Этот документ фиксирует исключительно результаты архитектурного проектирования.</p>
+<p>По состоянию на данный момент ещё не финализированы в коде:</p>
 <ul>
-<li>exact programming language/package boundaries;</li>
-<li>concrete TaskContract schema;</li>
-<li>concrete ResourceRef / ContextRef / ResultRef schema;</li>
-<li>concrete ProviderRoute scoring formula;</li>
-<li>exact subscription-seat adapter mechanism per provider;</li>
-<li>exact MCP exposure surface;</li>
-<li>storage backend for personal rules/preferences/settings;</li>
-<li>migration plan from canonical KAT9I + AG25;</li>
-<li>compatibility strategy during migration;</li>
-<li>first minimal executable vertical slice;</li>
-<li>exact GitHub governance/branch-protection policy for KAT9I_OS.</li>
+<li>точные границы пакетов и язык программирования;</li>
+<li>детальная схема контракта задачи (<code>TaskContract</code>);</li>
+<li>детальные схемы <code>ResourceRef</code>, <code>ContextRef</code>, <code>ResultRef</code>;</li>
+<li>конкретная формула расчёта рейтинга маршрута (<code>ProviderRoute score</code>);</li>
+<li>точные адаптеры для рабочих мест по подписке;</li>
+<li>точный состав внешних интерфейсов MCP;</li>
+<li>бэкенд хранения персональных правил, настроек и предпочтений;</li>
+<li>пошаговый план миграции с канонических репозиториев KAT9I и AG25;</li>
+<li>стратегия обратной совместимости на период миграции;</li>
+<li>первый минимальный исполняемый сквозной срез (Vertical Slice);</li>
+<li>точная политика защиты веток и управления правами GitHub для KAT9I_OS.</li>
 </ul>
-<p>The recommended next design step is to turn this architecture context into:</p>
+<p>Рекомендуемые следующие шаги проектирования:</p>
 <ol>
-<li>architecture decision records (ADRs);</li>
-<li>a minimal repository skeleton;</li>
-<li>canonical contracts;</li>
-<li>a migration plan;</li>
-<li>one real vertical slice such as:</li>
+<li>Оформление архитектурных решений (ADR);</li>
+<li>Создание минимального скелета репозитория;</li>
+<li>Фиксация канонических контрактов;</li>
+<li>Подготовка плана миграции;</li>
+<li>Реализация одного сквозного вертикального среза:</li>
 </ol>
-<p><code>GitHub Issue → ContextRefs → ProviderRoute → Coworker → Worker → PR ResultRef → independent QA</code>.</p>
+<p><code>GitHub Issue → ContextRefs → ProviderRoute → Coworker → Worker → PR ResultRef → независимый QA</code>.</p>
     </section>
         
   </main>
