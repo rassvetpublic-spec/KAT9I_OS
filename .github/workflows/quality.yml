@@ -52,6 +52,7 @@ jobs:
           test -f tests/test_docs_ssot.py
           test -f tests/test_graveyard.py
           test -f tests/test_graveyard_context.py
+          test -f tests/test_graveyard_codex_regressions.py
           test -f graveyard/README.md
           test -f graveyard/MANIFEST.json
           test -f schemas/v1/ContextRef.json
@@ -144,6 +145,7 @@ jobs:
           python scripts/verify_module_registry.py
           python -m unittest tests/test_graveyard.py
           python -m unittest tests/test_graveyard_context.py
+          python -m unittest tests/test_graveyard_codex_regressions.py
           python scripts/graveyard_excavate.py --help >/dev/null
 
       - name: Проверить Graveyard как DATA-only append-only слой
