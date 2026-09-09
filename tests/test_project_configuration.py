@@ -1,11 +1,14 @@
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "configure_project.ps1"
 WORKFLOW_DOC = ROOT / "docs" / "GITHUB_WORKFLOW.md"
+BEHAVIOR_TEST = ROOT / "tests" / "test_project_views.ps1"
 
 CANONICAL_VIEWS = [
     "00 — Все задачи",
@@ -29,18 +32,31 @@ class ProjectConfigurationTests(unittest.TestCase):
         names = re.findall(r"@\{n='([^']+)'", active_block)
         self.assertEqual(CANONICAL_VIEWS, names)
         self.assertEqual(5, len(names))
+        self.assertIn('Статус:\"Проверка QA\"', active_block)
 
-    def test_documentation_matches_canonical_views(self):
+    def test_documentation_matches_canonical_views_and_status(self):
         text = WORKFLOW_DOC.read_text(encoding="utf-8")
         self.assertIn("ровно пять", text.lower())
+        self.assertIn("`Проверка QA`", text)
         for name in CANONICAL_VIEWS:
             self.assertIn(f"`{name}`", text)
 
-    def test_unknown_views_are_fail_closed(self):
-        text = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("$unexpected", text)
-        self.assertIn("неизвестные дополнительные представления", text)
-        self.assertNotIn("$blank=", text)
+    def test_fail_closed_behavior_is_executed(self):
+        pwsh = shutil.which("pwsh")
+        self.assertIsNotNone(pwsh, "PowerShell 7 (pwsh) обязателен для поведенческой проверки Project policy")
+        result = subprocess.run(
+            [pwsh, "-NoProfile", "-File", str(BEHAVIOR_TEST)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(
+            0,
+            result.returncode,
+            msg=f"PowerShell behavior test упал.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}",
+        )
+        self.assertIn("PASS: Project policy fail-closed", result.stdout)
 
 
 if __name__ == "__main__":
