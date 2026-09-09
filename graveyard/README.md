@@ -54,11 +54,44 @@ Graveyard не заменяет Discussion для новых идей и не з
 - обязательность новой явной команды владельца для возвращения идеи в рабочий контур;
 - SHA-256, Git blob SHA-1 и размер каждого импортированного архива.
 
-Эти признаки позволяют проверять границу DATA/CONTROL автоматически, но сами по себе ещё не означают интеграцию Graveyard с будущим Context Engine или Planner.
+## ContextRef — как Graveyard попадает в контекст
+
+Канонический машинный контракт `schemas/v1/ContextRef.json` материализует ссылку на источник вместе с provenance, trust, freshness и DATA/CONTROL-признаками.
+
+Для `source_class=graveyard` схема fail-closed требует:
+
+- `actionable=false`;
+- `control=false`;
+- `canonical=false`;
+- `freshness=ARCHIVED`;
+- `access=read`.
+
+Минимальный мост `scripts/graveyard_context.py` разрешает архив через `MANIFEST.json` и сохраняет эти признаки после retrieval. Graveyard ContextRef нельзя использовать как основание для автоматического создания новой работы, даже если входные DATA пытаются подделать `actionable=true` или `control=true`.
+
+## GraveyardCandidate — безопасное «раскапывание»
+
+Возвращение старой идеи разделено на явные стадии:
+
+`Graveyard DATA → GraveyardCandidate → сверка с current canon → подтверждение владельца → обычный workflow`
+
+`GraveyardCandidate` описан схемой `schemas/v1/GraveyardCandidate.json`.
+
+Инварианты:
+
+- кандидат всегда `actionable=false` и `control=false`;
+- он хранит `resurrected_from=<Archive ID>`;
+- до сверки с current canon состояние остаётся `CANDIDATE`;
+- `CONFLICT`, `SUPERSEDED` и `UNKNOWN` дают `BLOCKED_BY_CANON`;
+- только `COMPATIBLE` переводит его в `AWAITING_OWNER_CONFIRMATION`;
+- без отдельного явного `owner_confirmation_ref` дальнейший переход запрещён;
+- даже `APPROVED_FOR_NORMAL_WORKFLOW` **не является Issue/TaskContract** и не создаёт работу автоматически;
+- разрешён только следующий обычный актуальный workflow с переносом provenance.
+
+Таким образом Archive ID сохраняется как происхождение идеи, но Graveyard никогда не становится SSoT новой работы.
 
 ## Автоматическая защита
 
-Quality Gate запускает `scripts/check_graveyard.py` и негативные тесты `tests/test_graveyard.py`.
+Quality Gate запускает `scripts/check_graveyard.py`, `tests/test_graveyard.py` и `tests/test_graveyard_context.py`.
 
 Проверяется минимум:
 
@@ -67,8 +100,12 @@ Quality Gate запускает `scripts/check_graveyard.py` и негативн
 - SHA-256, Git blob SHA-1 и byte size;
 - `actionable/control/canonical=false`;
 - отсутствие незарегистрированных архивов;
-- отсутствие прямой зависимости канонического `README.md`, `docs/`, `schemas/` и `config/` от конкретного `graveyard/GY-*` файла;
-- append-only правило для уже существующих архивов при PR/push сравнении.
+- отсутствие прямой зависимости канонического/управляющего контура от конкретного `graveyard/GY-*`;
+- append-only правило для уже существующих архивов при PR/push сравнении;
+- сохранение DATA/CONTROL-флагов после Context retrieval;
+- запрет Graveyard seed для Planner;
+- блокировка reactivation при конфликте/устаревании/неопределённости канона;
+- обязательность отдельного подтверждения владельца перед переходом в normal workflow.
 
 Проверка fail-closed: неоднозначность или нарушение границы приводит к FAIL Quality Gate.
 
@@ -83,19 +120,13 @@ Quality Gate запускает `scripts/check_graveyard.py` и негативн
 
 Сам импорт архива не означает принятие содержащихся в нём идей.
 
-## Как вернуть старую идею в работу
+## Что пока не реализовано
 
-Graveyard сам ничего не «воскрешает».
+- пользовательская кнопка/команда интерфейса «Раскопать идею»;
+- реальное создание GitHub Issue из одобренного candidate;
+- полноценная реализация Context Engine/Planner в Rust Core, использующая эти контракты в production runtime.
 
-Нужна новая явная команда владельца. После неё необходимо:
-
-1. перечитать конкретную Graveyard-запись как исторический источник;
-2. заново проверить актуальный `main`, Issues/PR и текущий канон;
-3. определить, не реализована ли идея уже и не стала ли она устаревшей;
-4. оформить новую текущую работу обычным способом, если она всё ещё нужна;
-5. сохранить provenance на Graveyard-запись, не меняя исторический оригинал.
-
-Пользовательская команда «Раскопать идею» как отдельная функция интерфейса пока не реализована.
+Текущая реализация — **контракт + fail-closed reference implementation + CI Evidence**, без автоматического side effect.
 
 ## Импортированные архивы
 
