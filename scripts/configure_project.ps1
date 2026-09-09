@@ -1,7 +1,8 @@
 param(
   [string]$Owner='rassvetpublic-spec',
   [string]$Repository='KAT9I_OS',
-  [int]$ProjectNumber=2
+  [int]$ProjectNumber=2,
+  [switch]$LibraryMode
 )
 
 Set-StrictMode -Version Latest
@@ -165,7 +166,7 @@ mutation($input:CreateProjectV2FieldInput!){
     $existing=@($f.options)|Where-Object{Is-Alias $_.name @($d.aliases + $d.name)}|Select-Object -First 1
     if(-not $existing){
       $missing+=$d.name
-    } elseif($existing.name -ne $d.name){
+    } elseif($existing.name -cne $d.name){
       $legacy+="$($existing.name) -> $($d.name)"
     }
   }
@@ -177,7 +178,7 @@ mutation($input:CreateProjectV2FieldInput!){
     throw "Поле '$($f.name)' требует изменения option ID ($($details -join '; ')). GitHub API не позволяет доказуемо сохранить привязки Items при таком переименовании, поэтому скрипт остановлен без изменения значений. Выполните явную миграцию данных и повторите запуск."
   }
 
-  if($f.name -ne $Name){
+  if($f.name -cne $Name){
 $q=@'
 mutation($input:UpdateProjectV2FieldInput!){
  updateProjectV2Field(input:$input){
@@ -202,21 +203,13 @@ function EnsureIteration{
   $f=Find-Field $p.fields.nodes @('Итерация')
   if($f){
     if($f.__typename -ne 'ProjectV2IterationField'){throw "Поле '$($f.name)' существует с другим типом."}
-    $needsRename=($f.name -ne 'Итерация')
-    $needsDuration=([int]$f.configuration.duration -ne 3)
-    if(-not $needsRename -and -not $needsDuration){
-      Write-Host 'Проверено поле: Итерация (3 дня)'
-      return
+    if($f.name -cne 'Итерация'){
+      throw "Поле Итерация имеет неканоническое имя '$($f.name)'. Безопасная миграция существующих периодов не доказана; изменение остановлено."
     }
-$q=@'
-mutation($input:UpdateProjectV2FieldInput!){
- updateProjectV2Field(input:$input){
-   projectV2Field{... on ProjectV2IterationField{id name configuration{duration}}}
- }
-}
-'@
-    $null=Gql $q @{input=@{fieldId=$f.id;name='Итерация';iterationConfiguration=@{startDate=(Start-Date3Days);duration=3;iterations=@()}}}
-    Write-Host "Исправлено поле Итерация: длительность 3 дня."
+    if([int]$f.configuration.duration -ne 3){
+      throw "Поле Итерация уже существует с длительностью $($f.configuration.duration) дней. Настройщик не сбрасывает существующие периоды и привязки Items; выполните явную безопасную миграцию к 3 дням и повторите запуск."
+    }
+    Write-Host 'Проверено поле: Итерация (3 дня)'
     return
   }
 
@@ -350,14 +343,15 @@ function EnsureViews{
     @{n='00 — Все задачи';l='table';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
     @{n='01 — Готово к работе';l='table';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"';s=@(@($id['Приоритет'],'asc'))},
     @{n='02 — В работе';l='board';f='is:open Статус:"В работе"';s=@(@($id['Приоритет'],'asc'));v=@($id['Исполнитель'])},
-    @{n='03 — Проверка';l='board';f='is:open Статус:"Проверка качества"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
+    @{n='03 — Проверка';l='board';f='is:open Статус:"Проверка QA"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
     @{n='04 — Заблокировано';l='table';f='is:open Статус:"Заблокировано"';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'))}
   )
 
   $p=(Snapshot).user.projectV2
   foreach($v in $views){
-    $exists=@($p.views.nodes)|Where-Object{$_.name -eq $v['n']}|Select-Object -First 1
-    if($exists){continue}
+    $matches=@($p.views.nodes|Where-Object{$_.name -ceq $v['n']})
+    if($matches.Count -gt 1){throw "Project содержит дубли канонического представления '$($v['n'])'. Автоматическое удаление дублей запрещено."}
+    if($matches.Count -eq 1){continue}
 
     $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f'];visible_fields=$vid}
     if($v.ContainsKey('s')){$b.sort_by=$v['s']}
@@ -369,12 +363,13 @@ function EnsureViews{
 
   $p=(Snapshot).user.projectV2
   $canonicalNames=@($views|ForEach-Object{$_.n})
-  $missingCanonical=@()
+  $invalidCanonical=@()
   foreach($name in $canonicalNames){
-    if(-not (@($p.views.nodes)|Where-Object{$_.name -eq $name}|Select-Object -First 1)){$missingCanonical+=$name}
+    $matches=@($p.views.nodes|Where-Object{$_.name -ceq $name})
+    if($matches.Count -ne 1){$invalidCanonical+="$name (экземпляров: $($matches.Count))"}
   }
-  if($missingCanonical.Count -gt 0){
-    throw "Не удалось создать обязательные представления: $(($missingCanonical)-join ', '). Старые представления не удалены."
+  if($invalidCanonical.Count -gt 0){
+    throw "Канонические представления не созданы однозначно: $(($invalidCanonical)-join ', '). Старые представления не удалены."
   }
 
   $legacyViewNames=@(
@@ -390,7 +385,7 @@ function EnsureViews{
     '09 — Без классификации'
   )
 
-  foreach($legacy in @($p.views.nodes|Where-Object{$legacyViewNames -contains $_.name})){
+  foreach($legacy in @($p.views.nodes|Where-Object{$legacyViewNames -ccontains $_.name})){
 $q=@'
 mutation($input:DeleteProjectV2ViewInput!){
  deleteProjectV2View(input:$input){projectV2View{id}}
@@ -401,13 +396,24 @@ mutation($input:DeleteProjectV2ViewInput!){
   }
 
   $p=(Snapshot).user.projectV2
-  $unexpected=@($p.views.nodes|Where-Object{$canonicalNames -notcontains $_.name})
+  $canonicalViews=@($p.views.nodes|Where-Object{$canonicalNames -ccontains $_.name})
+  if($canonicalViews.Count -ne 5){
+    throw "После очистки Project содержит $($canonicalViews.Count) канонических представлений вместо 5. Автоматическая коррекция остановлена."
+  }
+  foreach($name in $canonicalNames){
+    $matches=@($canonicalViews|Where-Object{$_.name -ceq $name})
+    if($matches.Count -ne 1){throw "Каноническое представление '$name' должно существовать ровно в одном экземпляре."}
+  }
+
+  $unexpected=@($p.views.nodes|Where-Object{$canonicalNames -cnotcontains $_.name})
   if($unexpected.Count -gt 0){
     throw "Project содержит неизвестные дополнительные представления: $(($unexpected.name)-join ', '). Они не удалены автоматически; требуется ручной разбор."
   }
 
-  Write-Host 'Проверено: в Project ровно 5 канонических рабочих представлений.'
+  Write-Host 'Проверено: в Project ровно 5 канонических рабочих представлений с точным написанием.'
 }
+
+if($LibraryMode){return}
 
 if(-not(Get-Command gh -ErrorAction SilentlyContinue)){throw 'GitHub CLI (gh) не найден.'}
 $null=& gh auth status 2>&1
@@ -422,7 +428,7 @@ EnsureSelect 'Статус' @('Статус','Status') @(
  (Opt 'Нужно разобрать' 'YELLOW' 'Нужно определить этап, приоритет, границы работы и зависимости.' @('Нужно разобрать','Разбор')),
  (Opt 'Готово к работе' 'BLUE' 'Задачу можно брать.'),
  (Opt 'В работе' 'ORANGE' 'Идёт активная работа.' @('В работе','In Progress')),
- (Opt 'Проверка качества' 'PURPLE' 'Результат проходит проверку.' @('Проверка качества','Проверка QA','QA')),
+ (Opt 'Проверка QA' 'PURPLE' 'Результат проходит review / независимую проверку качества.' @('Проверка QA','Проверка качества','QA')),
  (Opt 'Заблокировано' 'RED' 'Есть блокер.' @('Заблокировано','Blocked')),
  (Opt 'Готово' 'GREEN' 'Работа завершена по правилам.' @('Готово','Done'))
 )
