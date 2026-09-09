@@ -17,6 +17,7 @@
     "actionable",
     "control",
     "requires_owner_confirmation",
+    "activation_ref",
     "owner_confirmation_ref",
     "created_at"
   ],
@@ -60,7 +61,7 @@
         },
         "checked_revision": {
           "type": ["string", "null"],
-          "description": "Revision актуального канона, с которым сверялся кандидат."
+          "description": "Revision актуального канона, с которым сверялся кандидат. После завершённой проверки обязана быть непустой строкой."
         },
         "evidence_ref": {
           "type": ["string", "null"],
@@ -93,9 +94,13 @@
     "requires_owner_confirmation": {
       "const": true
     },
+    "activation_ref": {
+      "type": ["string", "null"],
+      "description": "Идентификатор GraveyardActivationTicket, с которым был связан точный ApprovalRecord."
+    },
     "owner_confirmation_ref": {
       "type": ["string", "null"],
-      "description": "Provenance доверенного явного подтверждения владельца. Не является самим ApprovalRecord."
+      "description": "approval_id проверенного ApprovalRecord. Произвольная строка подтверждения не допускается."
     },
     "created_at": {
       "type": "string",
@@ -111,8 +116,12 @@
       "then": {
         "properties": {
           "canon_check": {
-            "properties": {"status": {"const": "NOT_CHECKED"}}
+            "properties": {
+              "status": {"const": "NOT_CHECKED"},
+              "checked_revision": {"type": "null"}
+            }
           },
+          "activation_ref": {"type": "null"},
           "owner_confirmation_ref": {"type": "null"}
         }
       }
@@ -125,8 +134,12 @@
       "then": {
         "properties": {
           "canon_check": {
-            "properties": {"status": {"const": "COMPATIBLE"}}
+            "properties": {
+              "status": {"const": "COMPATIBLE"},
+              "checked_revision": {"type": "string", "minLength": 1}
+            }
           },
+          "activation_ref": {"type": "null"},
           "owner_confirmation_ref": {"type": "null"}
         }
       }
@@ -139,11 +152,18 @@
       "then": {
         "properties": {
           "canon_check": {
-            "properties": {"status": {"const": "COMPATIBLE"}}
+            "properties": {
+              "status": {"const": "COMPATIBLE"},
+              "checked_revision": {"type": "string", "minLength": 1}
+            }
+          },
+          "activation_ref": {
+            "type": "string",
+            "pattern": "^gya-[a-f0-9]{16}$"
           },
           "owner_confirmation_ref": {
             "type": "string",
-            "minLength": 1
+            "pattern": "^appr-[a-zA-Z0-9_-]{8,64}$"
           }
         }
       }
@@ -157,9 +177,11 @@
         "properties": {
           "canon_check": {
             "properties": {
-              "status": {"enum": ["CONFLICT", "SUPERSEDED", "UNKNOWN"]}
+              "status": {"enum": ["CONFLICT", "SUPERSEDED", "UNKNOWN"]},
+              "checked_revision": {"type": "string", "minLength": 1}
             }
           },
+          "activation_ref": {"type": "null"},
           "owner_confirmation_ref": {"type": "null"}
         }
       }
@@ -171,6 +193,7 @@
       },
       "then": {
         "properties": {
+          "activation_ref": {"type": "null"},
           "owner_confirmation_ref": {"type": "null"}
         }
       }
