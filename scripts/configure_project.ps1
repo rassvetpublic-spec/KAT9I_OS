@@ -340,38 +340,14 @@ function EnsureViews{
   $uid=[string]$u.id
 
   $views=@(
-    @{n='00 — Все задачи';l='table';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
-    @{n='01 — Готово к работе';l='table';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"';s=@(@($id['Приоритет'],'asc'))},
-    @{n='02 — В работе';l='board';f='is:open Статус:"В работе"';s=@(@($id['Приоритет'],'asc'));v=@($id['Исполнитель'])},
-    @{n='03 — Проверка';l='board';f='is:open Статус:"Проверка QA"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
-    @{n='04 — Заблокировано';l='table';f='is:open Статус:"Заблокировано"';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'))}
+    @{n='00 — Все задачи';l='table';gl='TABLE_LAYOUT';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
+    @{n='01 — Готово к работе';l='table';gl='TABLE_LAYOUT';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"';s=@(@($id['Приоритет'],'asc'))},
+    @{n='02 — В работе';l='board';gl='BOARD_LAYOUT';f='is:open Статус:"В работе"';s=@(@($id['Приоритет'],'asc'));v=@($id['Исполнитель'])},
+    @{n='03 — Проверка';l='board';gl='BOARD_LAYOUT';f='is:open Статус:"Проверка QA"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
+    @{n='04 — Заблокировано';l='table';gl='TABLE_LAYOUT';f='is:open Статус:"Заблокировано"';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'))}
   )
 
-  $p=(Snapshot).user.projectV2
-  foreach($v in $views){
-    $matches=@($p.views.nodes|Where-Object{$_.name -ceq $v['n']})
-    if($matches.Count -gt 1){throw "Project содержит дубли канонического представления '$($v['n'])'. Автоматическое удаление дублей запрещено."}
-    if($matches.Count -eq 1){continue}
-
-    $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f'];visible_fields=$vid}
-    if($v.ContainsKey('s')){$b.sort_by=$v['s']}
-    if($v.ContainsKey('v')){$b.vertical_group_by=$v['v']}
-
-    $null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b
-    Write-Host "Создано представление: $($v['n'])"
-  }
-
-  $p=(Snapshot).user.projectV2
   $canonicalNames=@($views|ForEach-Object{$_.n})
-  $invalidCanonical=@()
-  foreach($name in $canonicalNames){
-    $matches=@($p.views.nodes|Where-Object{$_.name -ceq $name})
-    if($matches.Count -ne 1){$invalidCanonical+="$name (экземпляров: $($matches.Count))"}
-  }
-  if($invalidCanonical.Count -gt 0){
-    throw "Канонические представления не созданы однозначно: $(($invalidCanonical)-join ', '). Старые представления не удалены."
-  }
-
   $legacyViewNames=@(
     '00 — Центр управления',
     '01 — Архитектура G1',
@@ -384,8 +360,56 @@ function EnsureViews{
     '08 — Доказательства',
     '09 — Без классификации'
   )
+  $knownNames=@($canonicalNames + $legacyViewNames)
 
-  foreach($legacy in @($p.views.nodes|Where-Object{$legacyViewNames -ccontains $_.name})){
+  $initialViews=@((Snapshot).user.projectV2.views.nodes)
+  $unexpected=@($initialViews|Where-Object{$knownNames -cnotcontains $_.name})
+  if($unexpected.Count -gt 0){
+    throw "Project содержит неизвестные или регистрово отличающиеся представления: $(($unexpected.name)-join ', '). Preflight остановлен до любых изменений."
+  }
+
+  foreach($name in @($knownNames|Select-Object -Unique)){
+    $matches=@($initialViews|Where-Object{$_.name -ceq $name})
+    if($matches.Count -gt 1){
+      throw "Project содержит дубли представления '$name'. Preflight остановлен до любых изменений."
+    }
+  }
+
+  foreach($v in $views){
+    $matches=@($initialViews|Where-Object{$_.name -ceq $v['n']})
+    if($matches.Count -eq 1){
+      $existing=$matches[0]
+      if($existing.layout -cne $v['gl'] -or [string]$existing.filter -cne [string]$v['f']){
+        throw "Представление '$($v['n'])' нарушает контракт: ожидаются layout=$($v['gl']) и filter='$($v['f'])', фактически layout=$($existing.layout) и filter='$($existing.filter)'. Preflight остановлен до любых изменений."
+      }
+    }
+  }
+
+  foreach($v in $views){
+    $matches=@($initialViews|Where-Object{$_.name -ceq $v['n']})
+    if($matches.Count -eq 1){continue}
+
+    $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f'];visible_fields=$vid}
+    if($v.ContainsKey('s')){$b.sort_by=$v['s']}
+    if($v.ContainsKey('v')){$b.vertical_group_by=$v['v']}
+
+    $null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b
+    Write-Host "Создано представление: $($v['n'])"
+  }
+
+  $afterCreate=@((Snapshot).user.projectV2.views.nodes)
+  foreach($v in $views){
+    $matches=@($afterCreate|Where-Object{$_.name -ceq $v['n']})
+    if($matches.Count -ne 1){
+      throw "После создания представление '$($v['n'])' существует неоднозначно: экземпляров $($matches.Count). Старые представления не удалены."
+    }
+    $existing=$matches[0]
+    if($existing.layout -cne $v['gl'] -or [string]$existing.filter -cne [string]$v['f']){
+      throw "После создания представление '$($v['n'])' не соответствует контракту. Старые представления не удалены."
+    }
+  }
+
+  foreach($legacy in @($afterCreate|Where-Object{$legacyViewNames -ccontains $_.name})){
 $q=@'
 mutation($input:DeleteProjectV2ViewInput!){
  deleteProjectV2View(input:$input){projectV2View{id}}
@@ -395,22 +419,26 @@ mutation($input:DeleteProjectV2ViewInput!){
     Write-Host "Удалено устаревшее представление: $($legacy.name)"
   }
 
-  $p=(Snapshot).user.projectV2
-  $canonicalViews=@($p.views.nodes|Where-Object{$canonicalNames -ccontains $_.name})
-  if($canonicalViews.Count -ne 5){
-    throw "После очистки Project содержит $($canonicalViews.Count) канонических представлений вместо 5. Автоматическая коррекция остановлена."
-  }
-  foreach($name in $canonicalNames){
-    $matches=@($canonicalViews|Where-Object{$_.name -ceq $name})
-    if($matches.Count -ne 1){throw "Каноническое представление '$name' должно существовать ровно в одном экземпляре."}
+  $finalViews=@((Snapshot).user.projectV2.views.nodes)
+  if($finalViews.Count -ne 5){
+    throw "После очистки Project содержит $($finalViews.Count) представлений вместо 5. Автоматическая коррекция остановлена."
   }
 
-  $unexpected=@($p.views.nodes|Where-Object{$canonicalNames -cnotcontains $_.name})
+  foreach($v in $views){
+    $matches=@($finalViews|Where-Object{$_.name -ceq $v['n']})
+    if($matches.Count -ne 1){throw "Каноническое представление '$($v['n'])' должно существовать ровно в одном экземпляре."}
+    $existing=$matches[0]
+    if($existing.layout -cne $v['gl'] -or [string]$existing.filter -cne [string]$v['f']){
+      throw "Каноническое представление '$($v['n'])' не соответствует контракту layout/filter."
+    }
+  }
+
+  $unexpected=@($finalViews|Where-Object{$canonicalNames -cnotcontains $_.name})
   if($unexpected.Count -gt 0){
     throw "Project содержит неизвестные дополнительные представления: $(($unexpected.name)-join ', '). Они не удалены автоматически; требуется ручной разбор."
   }
 
-  Write-Host 'Проверено: в Project ровно 5 канонических рабочих представлений с точным написанием.'
+  Write-Host 'Проверено: в Project ровно 5 канонических рабочих представлений; имя, layout и filter соответствуют контракту.'
 }
 
 if($LibraryMode){return}
