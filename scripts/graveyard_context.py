@@ -113,7 +113,10 @@ def _find_archive(manifest: dict[str, Any], archive_id: str) -> dict[str, Any]:
 def _normalized_repo_uri(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
-    normalized = posixpath.normpath(value.strip().replace("\\", "/"))
+    raw = value.strip().replace("\\", "/")
+    if raw.casefold().startswith("file://"):
+        raw = raw[7:]
+    normalized = posixpath.normpath(raw)
     while normalized.startswith("./"):
         normalized = normalized[2:]
     return normalized
@@ -121,8 +124,15 @@ def _normalized_repo_uri(value: Any) -> str | None:
 
 def _is_graveyard_uri(value: Any) -> bool:
     normalized = _normalized_repo_uri(value)
-    folded = normalized.casefold() if normalized else None
-    return bool(folded and folded.startswith("graveyard/gy-") and folded.endswith(".md"))
+    if not normalized:
+        return False
+    parts = [part for part in normalized.casefold().split("/") if part not in {"", "."}]
+    return bool(
+        len(parts) >= 2
+        and parts[-2] == "graveyard"
+        and parts[-1].startswith("gy-")
+        and parts[-1].endswith(".md")
+    )
 
 
 def _looks_like_graveyard_ref(context_ref: dict[str, Any]) -> bool:
