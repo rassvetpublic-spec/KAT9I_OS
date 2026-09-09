@@ -288,6 +288,60 @@ function Find-MapField($Map,[string[]]$Aliases){
   return $null
 }
 
+function PreflightViews{
+  $views=@(
+    @{n='00 — Все задачи';gl='TABLE_LAYOUT';f='is:open'},
+    @{n='01 — Готово к работе';gl='TABLE_LAYOUT';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"'},
+    @{n='02 — В работе';gl='BOARD_LAYOUT';f='is:open Статус:"В работе"'},
+    @{n='03 — Проверка';gl='BOARD_LAYOUT';f='is:open Статус:"Проверка QA"'},
+    @{n='04 — Заблокировано';gl='TABLE_LAYOUT';f='is:open Статус:"Заблокировано"'}
+  )
+  $canonicalNames=@($views|ForEach-Object{$_.n})
+  $legacyViewNames=@(
+    '00 — Центр управления',
+    '01 — Архитектура G1',
+    '02 — Готово к работе',
+    '03 — Активные исполнители',
+    '04 — Очередь проверки',
+    '05 — Заблокировано',
+    '06 — План v0.1',
+    '07 — Безопасность',
+    '08 — Доказательства',
+    '09 — Без классификации'
+  )
+  $knownNames=@($canonicalNames + $legacyViewNames)
+  $initialViews=@((Snapshot).user.projectV2.views.nodes)
+
+  $unexpected=@($initialViews|Where-Object{$knownNames -cnotcontains $_.name})
+  if($unexpected.Count -gt 0){
+    throw "Project содержит неизвестные или регистрово отличающиеся представления: $(($unexpected.name)-join ', '). Preflight остановлен до любых изменений."
+  }
+
+  foreach($name in @($knownNames|Select-Object -Unique)){
+    $matches=@($initialViews|Where-Object{$_.name -ceq $name})
+    if($matches.Count -gt 1){
+      throw "Project содержит дубли представления '$name'. Preflight остановлен до любых изменений."
+    }
+  }
+
+  foreach($v in $views){
+    $matches=@($initialViews|Where-Object{$_.name -ceq $v['n']})
+    if($matches.Count -eq 1){
+      $existing=$matches[0]
+      if($existing.layout -cne $v['gl'] -or [string]$existing.filter -cne [string]$v['f']){
+        throw "Представление '$($v['n'])' нарушает контракт: ожидаются layout=$($v['gl']) и filter='$($v['f'])', фактически layout=$($existing.layout) и filter='$($existing.filter)'. Preflight остановлен до любых изменений."
+      }
+    }
+  }
+
+  return $initialViews
+}
+
+function Invoke-ProjectConfiguration([scriptblock]$Apply){
+  $null=PreflightViews
+  & $Apply
+}
+
 function EnsureViews{
   Start-Sleep -Seconds 2
 
@@ -449,6 +503,7 @@ if($LASTEXITCODE -ne 0){throw 'GitHub CLI не авторизован.'}
 $null=& gh project view $ProjectNumber --owner $Owner --format json 2>&1
 if($LASTEXITCODE -ne 0){throw 'Нужен scope project. Авторизуйте GitHub CLI с разрешением project.'}
 
+Invoke-ProjectConfiguration {
 EnsureLink
 
 EnsureSelect 'Статус' @('Статус','Status') @(
@@ -550,6 +605,7 @@ EnsureSelect 'Доказательство' @('Доказательство','Ev
 EnsureIteration
 EnsureItems
 EnsureViews
+}
 
 Write-Host ''
 Write-Host 'Готово: Project #2 приведён к русской схеме, итерация = 3 дня, рабочих представлений = 5.'
