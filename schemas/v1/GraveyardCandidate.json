@@ -22,34 +22,20 @@
     "created_at"
   ],
   "properties": {
-    "candidate_id": {
-      "type": "string",
-      "pattern": "^gyc-[a-f0-9]{16}$"
-    },
+    "candidate_id": {"type": "string", "pattern": "^gyc-[a-f0-9]{16}$"},
     "source_ref": {
       "type": "string",
       "pattern": "^ctx-[a-zA-Z0-9_-]{8,160}$",
       "description": "ContextRef исходной Graveyard-записи."
     },
-    "archive_id": {
-      "type": "string",
-      "pattern": "^GY-[a-zA-Z0-9._-]{3,120}$"
-    },
+    "archive_id": {"type": "string", "pattern": "^GY-[a-zA-Z0-9._-]{3,120}$"},
     "resurrected_from": {
       "type": "string",
       "pattern": "^GY-[a-zA-Z0-9._-]{3,120}$",
-      "description": "Provenance: Archive ID Graveyard, из которого извлечена идея."
+      "description": "Provenance Archive ID Graveyard."
     },
-    "selector": {
-      "type": "string",
-      "default": "",
-      "description": "Фрагмент/раздел/идентификатор идеи внутри архива."
-    },
-    "idea_summary": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 4096
-    },
+    "selector": {"type": "string", "default": ""},
+    "idea_summary": {"type": "string", "minLength": 1, "maxLength": 4096},
     "canon_check": {
       "type": "object",
       "additionalProperties": false,
@@ -59,18 +45,9 @@
           "type": "string",
           "enum": ["NOT_CHECKED", "COMPATIBLE", "CONFLICT", "SUPERSEDED", "UNKNOWN"]
         },
-        "checked_revision": {
-          "type": ["string", "null"],
-          "description": "Revision актуального канона, с которым сверялся кандидат. После завершённой проверки обязана быть непустой строкой."
-        },
-        "evidence_ref": {
-          "type": ["string", "null"],
-          "description": "Ссылка на Evidence сверки, если оно зафиксировано отдельно."
-        },
-        "notes": {
-          "type": "string",
-          "maxLength": 4096
-        }
+        "checked_revision": {"type": ["string", "null"]},
+        "evidence_ref": {"type": ["string", "null"]},
+        "notes": {"type": "string", "maxLength": 4096}
       }
     },
     "state": {
@@ -83,114 +60,81 @@
         "REJECTED"
       ]
     },
-    "actionable": {
-      "const": false,
-      "description": "Сам кандидат никогда не является рабочей задачей."
-    },
-    "control": {
-      "const": false,
-      "description": "Кандидат остаётся DATA даже после разрешения перейти в обычный workflow."
-    },
-    "requires_owner_confirmation": {
-      "const": true
-    },
-    "activation_ref": {
-      "type": ["string", "null"],
-      "description": "Идентификатор GraveyardActivationTicket, с которым был связан точный ApprovalRecord."
-    },
-    "owner_confirmation_ref": {
-      "type": ["string", "null"],
-      "description": "approval_id проверенного ApprovalRecord. Произвольная строка подтверждения не допускается."
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    }
+    "actionable": {"const": false},
+    "control": {"const": false},
+    "requires_owner_confirmation": {"const": true},
+    "activation_ref": {"type": ["string", "null"]},
+    "owner_confirmation_ref": {"type": ["string", "null"]},
+    "created_at": {"type": "string", "format": "date-time"}
   },
   "allOf": [
     {
       "if": {
-        "properties": {"state": {"const": "CANDIDATE"}},
-        "required": ["state"]
+        "properties": {
+          "canon_check": {
+            "properties": {"status": {"const": "NOT_CHECKED"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["canon_check"]
       },
       "then": {
         "properties": {
           "canon_check": {
-            "properties": {
-              "status": {"const": "NOT_CHECKED"},
-              "checked_revision": {"type": "null"}
-            }
-          },
-          "activation_ref": {"type": "null"},
-          "owner_confirmation_ref": {"type": "null"}
+            "properties": {"checked_revision": {"type": "null"}}
+          }
         }
-      }
-    },
-    {
-      "if": {
-        "properties": {"state": {"const": "AWAITING_OWNER_CONFIRMATION"}},
-        "required": ["state"]
       },
-      "then": {
+      "else": {
         "properties": {
           "canon_check": {
-            "properties": {
-              "status": {"const": "COMPATIBLE"},
-              "checked_revision": {"type": "string", "minLength": 1}
-            }
-          },
-          "activation_ref": {"type": "null"},
-          "owner_confirmation_ref": {"type": "null"}
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {"state": {"const": "APPROVED_FOR_NORMAL_WORKFLOW"}},
-        "required": ["state"]
-      },
-      "then": {
-        "properties": {
-          "canon_check": {
-            "properties": {
-              "status": {"const": "COMPATIBLE"},
-              "checked_revision": {"type": "string", "minLength": 1}
-            }
-          },
-          "activation_ref": {
-            "type": "string",
-            "pattern": "^gya-[a-f0-9]{16}$"
-          },
-          "owner_confirmation_ref": {
-            "type": "string",
-            "pattern": "^appr-[a-zA-Z0-9_-]{8,64}$"
+            "properties": {"checked_revision": {"type": "string", "minLength": 1}}
           }
         }
       }
     },
     {
-      "if": {
-        "properties": {"state": {"const": "BLOCKED_BY_CANON"}},
-        "required": ["state"]
-      },
+      "if": {"properties": {"state": {"const": "CANDIDATE"}}, "required": ["state"]},
       "then": {
         "properties": {
-          "canon_check": {
-            "properties": {
-              "status": {"enum": ["CONFLICT", "SUPERSEDED", "UNKNOWN"]},
-              "checked_revision": {"type": "string", "minLength": 1}
-            }
-          },
+          "canon_check": {"properties": {"status": {"const": "NOT_CHECKED"}}},
           "activation_ref": {"type": "null"},
           "owner_confirmation_ref": {"type": "null"}
         }
       }
     },
     {
-      "if": {
-        "properties": {"state": {"const": "REJECTED"}},
-        "required": ["state"]
-      },
+      "if": {"properties": {"state": {"const": "AWAITING_OWNER_CONFIRMATION"}}, "required": ["state"]},
+      "then": {
+        "properties": {
+          "canon_check": {"properties": {"status": {"const": "COMPATIBLE"}}},
+          "activation_ref": {"type": "null"},
+          "owner_confirmation_ref": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"state": {"const": "APPROVED_FOR_NORMAL_WORKFLOW"}}, "required": ["state"]},
+      "then": {
+        "properties": {
+          "canon_check": {"properties": {"status": {"const": "COMPATIBLE"}}},
+          "activation_ref": {"type": "string", "pattern": "^gya-[a-f0-9]{16}$"},
+          "owner_confirmation_ref": {"type": "string", "pattern": "^appr-[a-zA-Z0-9_-]{8,64}$"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"state": {"const": "BLOCKED_BY_CANON"}}, "required": ["state"]},
+      "then": {
+        "properties": {
+          "canon_check": {"properties": {"status": {"enum": ["CONFLICT", "SUPERSEDED", "UNKNOWN"]}}},
+          "activation_ref": {"type": "null"},
+          "owner_confirmation_ref": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"state": {"const": "REJECTED"}}, "required": ["state"]},
       "then": {
         "properties": {
           "activation_ref": {"type": "null"},
