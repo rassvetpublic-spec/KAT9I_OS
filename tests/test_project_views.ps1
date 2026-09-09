@@ -10,12 +10,32 @@ $script:Required=@('Статус','Этап','Приоритет','Област�
 $script:MockViews=@()
 $script:GqlCalls=0
 $script:RestWrites=0
+$script:IterationMode=$false
+$script:IterationDuration=3
 
 function New-View([string]$Name,[string]$Id){
   [pscustomobject]@{id=$Id;name=$Name;layout='TABLE';filter=''}
 }
 
 function Snapshot {
+  if($script:IterationMode){
+    $iteration=[pscustomobject]@{
+      id='ITER'
+      name='Итерация'
+      __typename='ProjectV2IterationField'
+      configuration=[pscustomobject]@{duration=$script:IterationDuration;startDay=1}
+    }
+    return [pscustomobject]@{
+      user=[pscustomobject]@{
+        projectV2=[pscustomobject]@{
+          id='PROJECT'
+          fields=[pscustomobject]@{nodes=@($iteration)}
+          views=[pscustomobject]@{nodes=@()}
+        }
+      }
+    }
+  }
+
   $fields=@()
   $i=1
   foreach($name in $script:Required){
@@ -56,7 +76,7 @@ function Rest {
 function Gql {
   param([string]$Query,[hashtable]$Variables)
   $script:GqlCalls++
-  throw 'Удаление/GraphQL mutation не должно выполняться в fail-closed сценарии.'
+  throw 'GraphQL mutation не должна выполняться в fail-closed сценарии.'
 }
 
 $canonical=@(
@@ -67,7 +87,8 @@ $canonical=@(
   '04 — Заблокировано'
 )
 
-function Assert-FailClosed([object[]]$Views,[string]$ExpectedMessage){
+function Assert-ViewsFailClosed([object[]]$Views,[string]$ExpectedMessage){
+  $script:IterationMode=$false
   $script:MockViews=$Views
   $script:GqlCalls=0
   $script:RestWrites=0
@@ -89,12 +110,27 @@ $caseVariant=@()
 $i=1
 foreach($name in $canonical){$caseVariant+=New-View $name "C$i";$i++}
 $caseVariant+=New-View '00 — все задачи' 'CASE'
-Assert-FailClosed $caseVariant 'неизвестные дополнительные представления'
+Assert-ViewsFailClosed $caseVariant 'неизвестные дополнительные представления'
 
 $duplicate=@()
 $i=1
 foreach($name in $canonical){$duplicate+=New-View $name "D$i";$i++}
 $duplicate+=New-View '00 — Все задачи' 'DUP'
-Assert-FailClosed $duplicate 'дубли канонического представления'
+Assert-ViewsFailClosed $duplicate 'дубли канонического представления'
 
-Write-Host 'PASS: EnsureViews fail-closed для case-variant и дубля без mutation/delete.'
+$script:IterationMode=$true
+$script:IterationDuration=7
+$script:GqlCalls=0
+$thrown=$false
+try {
+  EnsureIteration
+} catch {
+  $thrown=$true
+  if($_.Exception.Message -notmatch 'не сбрасывает существующие периоды'){
+    throw "Получена другая ошибка итерации: $($_.Exception.Message)"
+  }
+}
+if(-not $thrown){throw 'Ожидалась fail-closed ошибка для существующей 7-дневной итерации.'}
+if($script:GqlCalls -ne 0){throw "Итерация была изменена через GraphQL: calls = $($script:GqlCalls)"}
+
+Write-Host 'PASS: Project policy fail-closed для case-variant, дубля и небезопасной миграции итерации.'
