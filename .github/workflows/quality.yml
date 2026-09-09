@@ -21,6 +21,16 @@ jobs:
       - name: Получить репозиторий
         uses: actions/checkout@v4
 
+      - name: Получить base revision PR для append-only Graveyard
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
+
+      - name: Получить предыдущую revision main для append-only Graveyard
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        shell: bash
+        run: git fetch --no-tags --depth=1 origin "${{ github.event.before }}"
+
       - name: Проверить обязательную структуру репозитория
         shell: bash
         run: |
@@ -36,7 +46,11 @@ jobs:
           test -f docs/architecture/MODULE_RESPONSIBILITY_MAP.md
           test -f docs/GLOSSARY.md
           test -f scripts/generate_html_docs.py
+          test -f scripts/check_graveyard.py
           test -f tests/test_docs_ssot.py
+          test -f tests/test_graveyard.py
+          test -f graveyard/README.md
+          test -f graveyard/MANIFEST.json
           test -f .github/ISSUE_TEMPLATE/feedback.yml
           test -f .github/PULL_REQUEST_TEMPLATE.md
           test -f .github/CODEOWNERS
@@ -112,12 +126,21 @@ jobs:
           print(f"Успешно проверено {len(yaml_files)} YAML-файлов.")
           PY
 
-      - name: Запустить модульные тесты SSoT, документации и triage
+      - name: Запустить модульные тесты SSoT, документации, triage и Graveyard
         shell: bash
         run: |
           set -euo pipefail
           python tests/test_docs_ssot.py
           python -m unittest tests/test_triage_helper.py
+          python -m unittest tests/test_graveyard.py
+
+      - name: Проверить Graveyard как DATA-only append-only слой
+        shell: bash
+        env:
+          GRAVEYARD_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'push' && github.event.before || '' }}
+        run: |
+          set -euo pipefail
+          python scripts/check_graveyard.py
 
       - name: Проверить генератор HTML и синхронизацию единого источника истины (SSOT)
         shell: bash
