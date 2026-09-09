@@ -186,6 +186,19 @@ class TestGraveyardContextBoundary(unittest.TestCase):
         early_confirmation["owner_confirmation_ref"] = "owner://forged-before-canon-check"
         self.assertFalse(validator.is_valid(early_confirmation))
 
+    def test_context_module_is_the_single_owner_of_graveyard_contracts(self):
+        registry = json.loads((REPO_ROOT / "modules_registry.json").read_text(encoding="utf-8"))
+        providers = {
+            contract: [m["module_id"] for m in registry["modules"] if contract in m.get("provides_contracts", [])]
+            for contract in ("ContextRef", "GraveyardCandidate")
+        }
+        self.assertEqual(providers["ContextRef"], ["Context"])
+        self.assertEqual(providers["GraveyardCandidate"], ["Context"])
+
+        context = next(m for m in registry["modules"] if m["module_id"] == "Context")
+        self.assertIn("NON_ACTIONABLE_CONTEXT_FILTERING", context["capabilities"])
+        self.assertIn("GRAVEYARD_REACTIVATION_CANDIDATE", context["capabilities"])
+
 
 if __name__ == "__main__":
     unittest.main()
