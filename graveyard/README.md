@@ -43,7 +43,7 @@ Graveyard не заменяет Discussion для новых идей и не з
 
 `graveyard/MANIFEST.json` является техническим паспортом архивного слоя, а не новым SSoT проекта.
 
-Он фиксирует для Graveyard:
+Он фиксирует:
 
 - `source_class=graveyard`;
 - `actionable=false`;
@@ -58,21 +58,23 @@ Graveyard не заменяет Discussion для новых идей и не з
 
 Канонический машинный контракт `schemas/v1/ContextRef.json` материализует ссылку на источник вместе с provenance, trust, freshness и DATA/CONTROL-признаками.
 
-Для `source_class=graveyard` схема fail-closed требует:
+Для Graveyard fail-closed обязательны:
 
+- `source_class=graveyard`;
 - `actionable=false`;
 - `control=false`;
 - `canonical=false`;
 - `freshness=ARCHIVED`;
-- `access=read`.
+- `access=read`;
+- resolver `graveyard_manifest`.
 
-Минимальный мост `scripts/graveyard_context.py` разрешает архив через `MANIFEST.json` и сохраняет эти признаки после retrieval. Graveyard ContextRef нельзя использовать как основание для автоматического создания новой работы, даже если входные DATA пытаются подделать `actionable=true` или `control=true`.
+`scripts/graveyard_context.py` распознаёт Graveyard не только по полю `source_class`, но и по связанным `ref_id`, resolver, URI и provenance URI. Поэтому попытка переименовать класс источника и выставить `actionable/control=true` всё равно не позволяет использовать архив как seed для Planner.
 
 ## GraveyardCandidate — безопасное «раскапывание»
 
 Возвращение старой идеи разделено на явные стадии:
 
-`Graveyard DATA → GraveyardCandidate → сверка с current canon → подтверждение владельца → обычный workflow`
+`Graveyard DATA → ContextRef → GraveyardCandidate → сверка с current canon → activation ticket → Human Approval → обычный workflow`
 
 `GraveyardCandidate` описан схемой `schemas/v1/GraveyardCandidate.json`.
 
@@ -81,17 +83,63 @@ Graveyard не заменяет Discussion для новых идей и не з
 - кандидат всегда `actionable=false` и `control=false`;
 - он хранит `resurrected_from=<Archive ID>`;
 - до сверки с current canon состояние остаётся `CANDIDATE`;
+- после любой завершённой сверки обязательна непустая `checked_revision`;
 - `CONFLICT`, `SUPERSEDED` и `UNKNOWN` дают `BLOCKED_BY_CANON`;
 - только `COMPATIBLE` переводит его в `AWAITING_OWNER_CONFIRMATION`;
-- без отдельного явного `owner_confirmation_ref` дальнейший переход запрещён;
-- даже `APPROVED_FOR_NORMAL_WORKFLOW` **не является Issue/TaskContract** и не создаёт работу автоматически;
-- разрешён только следующий обычный актуальный workflow с переносом provenance.
+- произвольная строка «подтверждения владельца» больше не принимается;
+- `APPROVED_FOR_NORMAL_WORKFLOW` требует точный `GraveyardActivationTicket` и проверенный `ApprovalRecord`;
+- даже после Approval кандидат **не является Issue/TaskContract/CONTROL** и не создаёт работу автоматически.
 
-Таким образом Archive ID сохраняется как происхождение идеи, но Graveyard никогда не становится SSoT новой работы.
+## Команда «Раскопать идею»
+
+Типизированный контракт команды находится в `schemas/v1/GraveyardExcavateRequest.json`, а безопасный исполняемый reference handler — в `scripts/graveyard_excavate.py`.
+
+Команда работает в рамках **уже существующей user-initiated review-задачи**. Graveyard не создаёт эту задачу сам.
+
+Reference handler умеет:
+
+1. принять Archive ID, selector и формулировку идеи;
+2. создать non-actionable `GraveyardCandidate`;
+3. применить переданный результат сверки с current canon;
+4. при `COMPATIBLE` сформировать exact `GraveyardActivationTicket`;
+5. вычислить `ApprovalRecord.action_hash` для этого exact ticket;
+6. после валидного Human Approval вернуть только provenance для обычного workflow.
+
+Он **не создаёт** GitHub Issue, ADR, TaskContract, PR и не выполняет другие внешние side effects.
+
+## GraveyardActivationTicket и ApprovalRecord
+
+`schemas/v1/GraveyardActivationTicket.json` запечатывает точные параметры предлагаемого перехода:
+
+- candidate;
+- Archive ID и ContextRef;
+- точную revision канона, на которой получен `COMPATIBLE`;
+- тип предлагаемой будущей работы (`ISSUE`, `ADR` или `TASK_CONTRACT`);
+- target;
+- время выдачи и истечения.
+
+Ticket остаётся `actionable=false`, `control=false`, `requires_approval=true`.
+
+Human Approval использует уже существующие канонические `schemas/v1/Identity.json` и `schemas/v1/ApprovalRecord.json`.
+
+Перед разрешением перехода проверяются:
+
+- `ApprovalRecord.action_hash == SHA-256(exact ActivationTicket)`;
+- `task_id` совпадает;
+- `approver_identity_id` совпадает с Identity;
+- субъект — `HUMAN_USER`;
+- роль действительно принадлежит Identity;
+- Trust = `AUTHENTICATED` или `FULL_LOCAL_TRUST`;
+- есть Windows binding;
+- `LOCAL_ADMIN` требует `is_elevated=true`;
+- ticket и Approval не истекли;
+- nonce ещё не использовался.
+
+Повтор того же nonce блокируется как replay.
 
 ## Автоматическая защита
 
-Quality Gate запускает `scripts/check_graveyard.py`, `tests/test_graveyard.py` и `tests/test_graveyard_context.py`.
+Quality Gate запускает `scripts/check_graveyard.py`, контрактные проверки и `tests/test_graveyard_context.py`.
 
 Проверяется минимум:
 
@@ -102,10 +150,16 @@ Quality Gate запускает `scripts/check_graveyard.py`, `tests/test_gravey
 - отсутствие незарегистрированных архивов;
 - отсутствие прямой зависимости канонического/управляющего контура от конкретного `graveyard/GY-*`;
 - append-only правило для уже существующих архивов при PR/push сравнении;
-- сохранение DATA/CONTROL-флагов после Context retrieval;
-- запрет Graveyard seed для Planner;
-- блокировка reactivation при конфликте/устаревании/неопределённости канона;
-- обязательность отдельного подтверждения владельца перед переходом в normal workflow.
+- сохранение DATA/CONTROL после Context retrieval;
+- запрет seed для Planner даже после подмены `source_class`;
+- обязательность `checked_revision` после canon-check;
+- блокировка reactivation при конфликте/устаревании/неопределённости;
+- exact ticket hash;
+- Identity/role/Trust/elevation;
+- task binding;
+- expiry;
+- replay nonce;
+- отсутствие side effect в reference handler.
 
 Проверка fail-closed: неоднозначность или нарушение границы приводит к FAIL Quality Gate.
 
@@ -120,13 +174,20 @@ Quality Gate запускает `scripts/check_graveyard.py`, `tests/test_gravey
 
 Сам импорт архива не означает принятие содержащихся в нём идей.
 
-## Что пока не реализовано
+## Граница текущей реализации
 
-- пользовательская кнопка/команда интерфейса «Раскопать идею»;
-- реальное создание GitHub Issue из одобренного candidate;
-- полноценная реализация Context Engine/Planner в Rust Core, использующая эти контракты в production runtime.
+Сейчас реализованы **машинные контракты + исполняемый reference handler + fail-closed CI Evidence**.
 
-Текущая реализация — **контракт + fail-closed reference implementation + CI Evidence**, без автоматического side effect.
+Не реализованы и сознательно не маскируются под готовые:
+
+- Electron-кнопка/экран «Раскопать идею»;
+- production Rust Core Context/Planner integration;
+- реальный UI → Core IPC для этой команды;
+- реальное создание GitHub Issue/ADR/TaskContract;
+- durable replay-store nonce после перезапуска;
+- проверка Windows token/SID непосредственно в Rust Core.
+
+Причина — это Runtime/Product scope G3. Управляющий Gate #62 запрещает новый Runtime/Product-код до PASS предшествующих Gate; #41 является профильным Rust Core/Electron контуром. Поэтому текущий PR #97 не обходит Gate и не создаёт фальшивый параллельный runtime.
 
 ## Импортированные архивы
 
