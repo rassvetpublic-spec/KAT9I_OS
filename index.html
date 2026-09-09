@@ -620,7 +620,25 @@ QA Worker: @auditor_login
 <p data-detail-level="worker"><strong>Рабочее объяснение:</strong> стоимость, время, токены, качество, число повторов, эффективность кэша и другие измеримые показатели.</p>
 <h2 id="независимый-qa">Независимый QA</h2>
 <p data-detail-level="simple"><strong>Очень просто:</strong> один сделал — другой проверил.</p>
-<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> квалифицирующая проверка значимого результата выполняется другим Worker (<code>Implementation Worker != QA Worker</code>) и относится к точной revision.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> квалифицирующая проверка значимого результата выполняется другим Worker (<code>Implementation Worker != QA Worker</code>). QA сохраняет точную source revision и проверенный ChangeSet; новый SHA сам по себе не означает обязательный повтор полного QA.</p>
+<h2 id="набор-изменений-changeset">Набор изменений (ChangeSet)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> конкретно то, что изменилось.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> проверяемое отличие результата от определённой основы. Идентичность ChangeSet устанавливается детерминированно, а не решением модели.</p>
+<h2 id="доказательство-изменения-change-evidence">Доказательство изменения (Change Evidence)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> доказательство, что само изменение проверено и соответствует требованиям.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> QA verdict для конкретного ChangeSet с source revision, Scope, Rules/Policy и областью применимости.</p>
+<h2 id="доказательство-интеграции-integration-evidence">Доказательство интеграции (Integration Evidence)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> доказательство, что уже проверенное изменение работает с текущей основной версией.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> merge/conflict check, tests, schema, build, lint и другие технические проверки конкретной комбинации проверенного изменения и target/base.</p>
+<h2 id="оценка-влияния-impact-assessment">Оценка влияния (Impact Assessment)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> проверка, изменилось ли что-то, способное сломать старый вывод QA.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> сравнивает новый delta, Rules/Policy и связанный Scope с областью применимости прежнего QA и определяет REUSE, DELTA QA, FULL QA или неопределённость.</p>
+<h2 id="дельта-проверка-delta-qa">Дельта-проверка (DELTA QA)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> повторно проверяют только то, что действительно изменилось.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> независимый QA нового delta и его влияния на прежний verdict вместо полного чтения и проверки неизменившейся части.</p>
+<h2 id="повторное-использование-qa-qa-reuse">Повторное использование QA (QA REUSE)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> старую успешную проверку не делают заново, если доказано, что её вывод всё ещё подходит.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> повторное использование прежнего Change Evidence допускается только после детерминированного сравнения и Impact Assessment; неопределённость не даёт права на REUSE.</p>
 <h2 id="issue-задача-github">Issue — задача GitHub</h2>
 <p data-detail-level="simple"><strong>Очень просто:</strong> карточка того, что нужно сделать.</p>
 <p data-detail-level="worker"><strong>Рабочее объяснение:</strong> каноническое место состояния работы в GitHub-процессе KAT9I_OS.</p>
@@ -631,7 +649,7 @@ QA Worker: @auditor_login
 <p data-detail-level="simple"><strong>Очень просто:</strong> проверенное изменение становится частью основной версии.</p>
 <h2 id="revision-точная-версия">Revision — точная версия</h2>
 <p data-detail-level="simple"><strong>Очень просто:</strong> точный снимок того, что мы проверяли.</p>
-<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> commit SHA, версия файла или другой идентификатор конкретного состояния. Если revision изменилась, старый QA не переносится автоматически.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> commit SHA, версия файла или другой идентификатор конкретного состояния. Revision всегда сохраняется как Provenance проверки, но её изменение само по себе не требует FULL QA: сначала сравниваются ChangeSet, Rules/Policy и Impact Scope.</p>
 <h2 id="безопасный-отказ-при-неопределённости-fail-closed">Безопасный отказ при неопределённости (Fail-Closed)</h2>
 <p data-detail-level="simple"><strong>Очень просто:</strong> если не уверен в безопасности — остановись и заблокируй действие.</p>
 <p data-detail-level="worker"><strong>Рабочее объяснение:</strong> фундаментальный архитектурный принцип, при котором любая неопределённость в правах, правилах, целостности или проверках приводит к блокировке операции, а не к её разрешению.</p>
@@ -1561,7 +1579,9 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Ответы моделей могут повторно использоваться только если совпадают существенные входы, Rules, версии Skill/Workflow, политика безопасности и требования актуальности.</p>
 <p>Не допускается слепое повторное использование Security Decision, USER/ADMIN approval, текущего GitHub status, QA для изменившегося head, прав, секретов и одноразовых токенов.</p>
 <h2 id="кэш-проверок-качества-qa-cache">Кэш проверок качества (QA Cache)</h2>
-<p>QA привязан к точной revision. Изменение head SHA инвалидирует действующий QA. Старый QA может использоваться только как вспомогательный источник.</p>
+<p>QA Evidence всегда сохраняет точную <code>source revision</code> как Provenance и проверенный ChangeSet. Изменение head SHA само по себе не инвалидирует Change Evidence и не является достаточным основанием для повторного FULL QA.</p>
+<p>Перед повторным использованием проверяются идентичность ChangeSet, совместимость значимых Rules/Policy и Scope, отсутствие конфликтующего Evidence и Impact Assessment согласно §23. Если изменился target/base, пересчитывается Integration Evidence. <code>INDETERMINATE</code> не даёт права на QA REUSE: действует Fail-Closed.</p>
+<p>QA Cache является только механизмом хранения и поиска ранее полученного Evidence и не может обходить каноническое решение <code>QA REUSE</code> / <code>DELTA QA</code> / <code>FULL QA</code>.</p>
 <h2 id="прогрев-и-вытеснение-кэша-cache-warming-и-eviction">Прогрев и вытеснение кэша (Cache Warming и Eviction)</h2>
 <p>Часто используемые разрешённые данные могут предварительно кэшироваться, если выгода доказана. Удаление учитывает TTL, размер, частоту использования, стоимость пересчёта, чувствительность, устаревание, Context Drift и лимиты диска.</p>
 <h2 id="экономика">Экономика</h2>
@@ -2426,23 +2446,33 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li>независимым QA (независимой проверкой качества);</li>
 <li>измеримыми критериями качества.</li>
 </ul>
-<h2 id="23-2-проверка-относится-к-точной-версии">23.2. Проверка относится к точной версии</h2>
-<p>Любой PASS (успешное прохождение проверки) должен быть привязан к:</p>
+<h2 id="23-2-точная-revision-и-область-применимости-evidence">23.2. Точная revision и область применимости Evidence</h2>
+<p>Любой PASS (успешное прохождение проверки) обязан сохранять точную <code>source revision</code> — версию, на которой проверка реально выполнялась. Для воспроизводимости также фиксируются применимые версии файла, модуля, Workflow (исполняемого процесса), конфигурации и системных контрактов.</p>
+<p>Точная revision является обязательным Provenance (происхождением доказательства), но не является единственным критерием необходимости повторного содержательного QA.</p>
+<p>Для изменения различаются:</p>
 <ul>
-<li>commit SHA (точному идентификатору коммита);</li>
-<li>версии файла;</li>
-<li>версии модуля;</li>
-<li>версии Workflow (исполняемого процесса);</li>
-<li>версии конфигурации;</li>
-<li>версии системных контрактов.</li>
+<li><code>ChangeSet</code> — фактическое проверяемое изменение; его идентичность определяется детерминированно, а не решением LLM;</li>
+<li><code>Change Evidence</code> — QA-доказательство соответствия конкретного ChangeSet требованиям в зафиксированных Scope и Rules/Policy;</li>
+<li><code>Integration Evidence</code> — технические доказательства совместимости уже проверенного изменения с конкретным target/base: merge/conflict check, tests, schema, build, lint и другие детерминированные проверки;</li>
+<li><code>Impact Assessment</code> — оценка того, влияет ли новое отличие на область применимости прежнего QA.</li>
 </ul>
-<p>Если проверенный объект изменился:</p>
-<div class="note"><strong>Примечание:</strong> предыдущий PASS не переносится автоматически на новую версию.</div>
+<p>Предыдущий PASS <strong>никогда не переносится слепо</strong>. После изменения revision система сначала устанавливает, что именно изменилось, и выбирает одну из реакций:</p>
+<ul>
+<li><code>QA REUSE</code> — прежний Change Evidence остаётся применимым;</li>
+<li><code>DELTA QA</code> — независимый QA проверяет только изменившуюся часть и её влияние на прежний verdict;</li>
+<li><code>FULL QA</code> — полная независимая содержательная проверка выполняется заново.</li>
+</ul>
+<p>Все строки таблицы, допускающие <code>QA REUSE</code>, применяются только если значимые Rules/Policy и Scope совместимы с прежним verdict, новый Evidence ему не противоречит, а Impact Assessment доказал применимость (<code>APPLICABLE</code>). При невыполнении этих условий выбирается <code>DELTA QA</code>, <code>FULL QA</code> или <code>BLOCKED</code> согласно policy.</p>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Событие после QA</th><th>Реакция</th></tr></thead><tbody><tr><td>Повторный CI при неизменном ChangeSet</td><td>QA REUSE только при доказанной применимости прежнего Change Evidence</td></tr><tr><td>Новый commit SHA при детерминированно том же ChangeSet</td><td>QA REUSE только при совместимых Rules/Policy/Scope и Impact Assessment = APPLICABLE</td></tr><tr><td>Rebase или изменение target/base без изменения ChangeSet</td><td>новый Integration Evidence; Change Evidence не инвалидируется автоматически</td></tr><tr><td>Изменение target вне Impact Scope</td><td>новый Integration Evidence; QA REUSE допустим после Impact Assessment</td></tr><tr><td>Небольшое локальное исправление по замечанию QA</td><td>Impact Assessment → DELTA QA по применимой policy</td></tr><tr><td>Изменение проверенной логики или контракта</td><td>FULL QA</td></tr><tr><td>Значимое для вывода QA изменение Security/Rules/Policy</td><td>FULL QA</td></tr><tr><td>Новый Evidence противоречит прежнему PASS</td><td>FULL QA или BLOCKED</td></tr><tr><td>Влияние нельзя определить</td><td>FULL QA</td></tr></tbody></table></div>
+<p><code>INDETERMINATE</code> (неопределённое влияние) не даёт права на QA REUSE: действует Fail-Closed.</p>
+<p>Повторный FULL QA после ранее полученного PASS должен иметь явную причину из канонического закрытого набора либо его последующей совместимой версии: <code>MATERIAL_CHANGESET_CHANGE</code>, <code>MATERIAL_POLICY_CHANGE</code>, <code>MATERIAL_IMPACT_FROM_TARGET</code>, <code>EVIDENCE_CONFLICT</code>, <code>QA_SCOPE_WAS_INSUFFICIENT</code>, <code>USER_FORCED_FULL_QA</code>.</p>
+<p>Новый SHA без такой причины сам по себе не является достаточным основанием для повторного FULL QA.</p>
 <h2 id="23-3-независимый-qa">23.3. Независимый QA</h2>
 <p>Сохраняется системный инвариант:</p>
 <div class="note"><strong>Примечание:</strong> <strong>Implementation Worker (исполнитель реализации) ≠ QA Worker (независимый проверяющий).</strong></div>
 <p>Worker, который создал изменение, может запускать собственные тесты.</p>
 <p>Но квалифицирующий QA выполняется отдельным исполнителем.</p>
+<p>Этот инвариант действует как для FULL QA, так и для DELTA QA там, где policy требует независимой проверки. Implementation Worker может подготовить delta, Evidence и объяснение исправления, но не может объявить собственную квалифицирующую DELTA-проверку независимым QA.</p>
 <h2 id="23-3a-систематические-оценки-evals-и-регрессионный-набор-для-агентного-поведения">23.3a. Систематические оценки (Evals) и регрессионный набор для агентного поведения</h2>
 <p>QA и Evals являются принципиально разными сущностями с разным назначением:</p>
 <ul>
@@ -2471,10 +2501,12 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Другой Worker:</p>
 <ul>
 <li>получает ResultRef (ссылку на результат);</li>
-<li>получает точную revision (версию);</li>
-<li>получает требования;</li>
+<li>получает точную source revision (версию, на которой сформирован Evidence);</li>
+<li>получает проверяемый ChangeSet или ссылку на него;</li>
+<li>получает требования, RulesRef/PolicyRef, Scope и доступный технический Evidence;</li>
 <li>независимо проверяет результат.</li>
 </ul>
+<p>Для DELTA QA независимый Worker получает прежний QA verdict, новый delta и Impact Assessment и проверяет только изменение и его влияние на прежний вывод, если этого достаточно по policy.</p>
 <p>Самопроверка обязательна, но не заменяет независимый QA там, где он требуется.</p>
 <h2 id="23-5-уровни-тестирования">23.5. Уровни тестирования</h2>
 <p>KAT9I_OS должна поддерживать несколько уровней проверки.</p>
@@ -2823,6 +2855,8 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li>ссылки на Logs;</li>
 <li>при необходимости Artifact (артефакт результата).</li>
 </ul>
+<p>Если это QA Evidence, дополнительно должны быть доступны source revision, идентификатор/дайджест проверенного ChangeSet, Scope и Rules/Policy проверки, область применимости verdict и, при повторном использовании, объяснимый Impact Assessment. История исходной проверки не переписывается даже если её PASS впоследствии был безопасно переиспользован.</p>
+<p>FAIL никогда не переиспользуется как PASS через QA REUSE или DELTA QA.</p>
 <h2 id="23-29-fail-нельзя-превращать-в-pass-объяснением-модели">23.29. FAIL нельзя превращать в PASS объяснением модели</h2>
 <p>Если тест реально завершился с ошибкой:</p>
 <div class="note"><strong>Примечание:</strong> модель не может объявить его успешным, потому что «ошибка выглядит несущественной».</div>
@@ -3200,7 +3234,9 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <h2 id="24-12-независимый-qa">24.12. Независимый QA</h2>
 <p>Для значимых изменений сохраняется инвариант:</p>
 <div class="note"><strong>Примечание:</strong> Implementation Worker (исполнитель изменения) != QA Worker (независимый проверяющий).</div>
-<p>QA относится к точной revision. После изменения head прежний QA не считается действующим для новой revision.</p>
+<p>QA обязательно фиксирует точную source revision, которую реально проверял, и проверенный ChangeSet. Изменение PR head требует сравнить прежний и новый ChangeSet, но само по себе не означает автоматический повтор FULL QA.</p>
+<p>Если изменился только base/main, а проверенный ChangeSet не изменился, пересчитывается Integration Evidence для нового base и выполняется Impact Assessment. Прежний Change Evidence может быть переиспользован только при доказанной применимости; неопределённость означает DELTA QA, FULL QA или BLOCKED согласно §23.</p>
+<p>До появления автоматического Promotion Bridge решение <code>QA REUSE</code> / <code>DELTA QA</code> / <code>FULL QA</code> и причина повторного FULL QA должны оставлять явный аудируемый Evidence в PR. Этот раздел не даёт права на auto-merge и не изменяет действующий финальный Gate владельца.</p>
 <h2 id="24-13-actions-автоматические-проверки">24.13. Actions — автоматические проверки</h2>
 <p>Проверка качества репозитория и публикация Pages являются разными процессами.</p>
 <p><strong>Контроль качества</strong> отвечает за корректность проекта.</p>
@@ -4997,9 +5033,10 @@ Learning (самообучение)
 <p>Если политика требует независимый QA:</p>
 <div class="note"><strong>Примечание:</strong> <strong>Implementation Worker != QA Worker.</strong></div>
 <p>Это должно проверяться системой, а не только записываться в инструкции.</p>
-<h2 id="11-25-exact-head-qa-проверка-точной-версии">11.25. Exact-head QA — проверка точной версии</h2>
-<p>QA должен быть привязан к конкретной revision.</p>
-<p>Если после QA head изменился, предыдущий QA больше не считается действительным и назначается повторная проверка.</p>
+<h2 id="11-25-точная-revision-и-применимость-qa">11.25. Точная revision и применимость QA</h2>
+<p>QA Result всегда сохраняет точную <code>source revision</code> и проверенный ChangeSet. Coworker использует эту revision для маршрутизации и аудита, но не определяет самостоятельно содержательную применимость QA verdict.</p>
+<p>Если после QA изменился head, Coworker не назначает автоматически повторный FULL QA только из-за нового SHA. Изменение передаётся в канонический процесс §23 / §20.34, который сравнивает ChangeSet, Rules/Policy, Scope и Impact Assessment и выбирает <code>QA REUSE</code>, <code>DELTA QA</code>, <code>FULL QA</code> или <code>BLOCKED</code>.</p>
+<p>Независимость сохраняется: если policy требует DELTA или FULL QA, Implementation Worker не может выполнять квалифицирующий независимый QA собственного изменения.</p>
 <h2 id="11-26-пользователь-как-участник-taskgraph">11.26. Пользователь как участник TaskGraph</h2>
 <p>Пользователь может быть полноценным узлом графа.</p>
 <p>Например:</p>
@@ -6280,9 +6317,18 @@ Learning (самообучение)
 <div class="note"><strong>Примечание:</strong> Implementation Worker != QA Worker.</div>
 <p>QA получает точную revision, ResultRef, Evidence и RulesRef.</p>
 <p>Самооценка исполнителя не считается независимой проверкой.</p>
-<h2 id="20-34-изменение-revision-после-qa">20.34. Изменение revision после QA</h2>
-<p>Если проверенная revision изменилась, старый QA не считается действующим для новой версии.</p>
-<p>Требуется новый QA согласно политике.</p>
+<h2 id="20-34-применимость-qa-после-изменения-revision">20.34. Применимость QA после изменения revision</h2>
+<p>Точная source revision прежнего QA всегда сохраняется как Provenance, но изменение revision само по себе не означает обязательный новый FULL QA.</p>
+<p>После изменения система последовательно:</p>
+<ol>
+<li>детерминированно сравнивает проверенный и текущий ChangeSet;</li>
+<li>проверяет изменение применимых Rules/Policy;</li>
+<li>выполняет Impact Assessment для области применимости прежнего QA;</li>
+<li>выбирает <code>QA REUSE</code>, <code>DELTA QA</code> или <code>FULL QA</code> согласно §23.</li>
+</ol>
+<p>Если изменился только target/base, а проверенный ChangeSet не изменился, прежний Change Evidence не инвалидируется автоматически. Для нового target/base пересчитывается Integration Evidence; FULL QA нужен только при материальном влиянии target на прежний содержательный вывод или при неопределённости такого влияния.</p>
+<p><code>INDETERMINATE</code> не разрешает QA REUSE. Существенное изменение ChangeSet, значимой Security/Rules/Policy, конфликт нового Evidence с прежним PASS или недостаточность прежнего QA Scope требуют FULL QA либо BLOCKED согласно policy.</p>
+<p>Новый commit SHA без материального изменения и без зафиксированной причины не является самостоятельным основанием повторного FULL QA.</p>
 <h2 id="20-35-публикация">20.35. Публикация</h2>
 <p>После успешных обязательных проверок результат публикуется в ResultSink, указанный TaskContract.</p>
 <p>Например:</p>
@@ -8595,9 +8641,11 @@ Learning (самообучение)
 <p>Они не решают, разрешён ли вызов, не определяют предметную задачу и не становятся владельцами ResourceRef.</p>
 <p>Каноническое владение: транспорт и техническая адаптация внешних возможностей.</p>
 <h2 id="27-17-qa-независимая-проверка">27.17. QA — независимая проверка</h2>
-<p>QA доказывает, что конкретная revision соответствует требованиям, используя Validators, tests, Evidence, OutputContract и точную revision.</p>
-<p>Исполнитель не может исправить результат и одновременно считать своё же исправление независимым QA.</p>
-<p>Каноническое владение: QA Result.</p>
+<p>QA доказывает, что проверенный ChangeSet соответствует требованиям, используя Validators, tests, Evidence, OutputContract, точную source revision, Scope и применимые Rules/Policy.</p>
+<p>Точная revision остаётся обязательным Provenance, но QA также фиксирует область применимости verdict. При последующих изменениях QA отвечает за содержательное решение о применимости прежнего Change Evidence и, согласно policy и Impact Assessment, за <code>QA REUSE</code>, <code>DELTA QA</code> или <code>FULL QA</code>.</p>
+<p>Execution остаётся владельцем фактических технических Evidence выполнения и Integration Evidence; Integrations остаются транспортом и не становятся владельцем QA-семантики.</p>
+<p>Исполнитель не может исправить результат и одновременно считать своё же исправление независимым FULL или требуемым DELTA QA.</p>
+<p>Каноническое владение: QA Result / Change Evidence и содержательная применимость QA verdict.</p>
 <h2 id="27-18-recovery-восстановление">27.18. Recovery — восстановление</h2>
 <p>Recovery определяет, что фактически произошло до сбоя и как безопасно продолжить. Использует Checkpoints, Event Journal, TaskRuntimeState, Lease, Evidence и реальное состояние внешних ресурсов.</p>
 <p>Recovery не восстанавливает состояние по догадке LLM, не расширяет права и не повторяет опасную операцию без проверки operation_id.</p>
@@ -8704,9 +8752,9 @@ Learning (самообучение)
 <p>Domain знает, что нужен PR; Resources знает репозиторий; Security разрешает запись; Coworker назначает исполнителя; Execution инициирует действие; Integration вызывает GitHub; Evidence подтверждает созданный PR.</p>
 <p>Каждый модуль выполняет только свою часть.</p>
 <h2 id="27-35-матрица-ключевых-контрактов">27.35. Матрица ключевых контрактов</h2>
-<div class="table-container"><table class="doc-table"><thead><tr><th>Контракт</th><th>Канонический владелец</th><th>Основные потребители</th></tr></thead><tbody><tr><td>TaskContract</td><td>Core</td><td>Domain, Context, Coworker, Execution, QA</td></tr><tr><td>TaskRuntimeState</td><td>Core / состояние задач</td><td>Coworker, Execution, Recovery, Visualization</td></tr><tr><td>TaskGraph</td><td>Core</td><td>Coworker, Execution, Visualization</td></tr><tr><td>Effective Ruleset</td><td>Rule Manager</td><td>Core, Security, Execution</td></tr><tr><td>Security Decision</td><td>Security</td><td>Core, Execution, Integrations</td></tr><tr><td>Capability Grant</td><td>Security</td><td>Coworker, Execution, Integrations</td></tr><tr><td>Context Pack</td><td>Context</td><td>Worker, Inference</td></tr><tr><td>ResourceRef</td><td>Resources</td><td>Context, Execution, Integrations</td></tr><tr><td>KnowledgeRef</td><td>Knowledge</td><td>Context, Domain, Learning</td></tr><tr><td>TaskEstimate</td><td>Planning</td><td>Inference, Coworker, Visualization</td></tr><tr><td>Provider Route</td><td>Inference</td><td>Coworker, Execution</td></tr><tr><td>Claim / Lease</td><td>Coworker</td><td>Execution, Recovery</td></tr><tr><td>Integration Request</td><td>Integrations</td><td>Execution</td></tr><tr><td>EvidenceRef</td><td>Execution</td><td>QA, Core, Learning</td></tr><tr><td>ResultRef</td><td>Execution</td><td>Core, QA, следующий Worker</td></tr><tr><td>QA Result</td><td>QA</td><td>Core, Learning</td></tr><tr><td>Telemetry Event</td><td>Telemetry</td><td>Metrics, Visualization</td></tr><tr><td>MetricsSnapshot</td><td>Metrics</td><td>Learning, Planning, Visualization</td></tr><tr><td>Learning Proposal</td><td>Learning</td><td>владелец изменяемой функции</td></tr><tr><td>Human Decision</td><td>Personal/Core</td><td>Security, Core, Workflow</td></tr><tr><td>UI Command</td><td>Desktop Shell / Core boundary</td><td>Identity, Security, Core</td></tr></tbody></table></div>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Контракт</th><th>Канонический владелец</th><th>Основные потребители</th></tr></thead><tbody><tr><td>TaskContract</td><td>Core</td><td>Domain, Context, Coworker, Execution, QA</td></tr><tr><td>TaskRuntimeState</td><td>Core / состояние задач</td><td>Coworker, Execution, Recovery, Visualization</td></tr><tr><td>TaskGraph</td><td>Core</td><td>Coworker, Execution, Visualization</td></tr><tr><td>Effective Ruleset</td><td>Rule Manager</td><td>Core, Security, Execution</td></tr><tr><td>Security Decision</td><td>Security</td><td>Core, Execution, Integrations</td></tr><tr><td>Capability Grant</td><td>Security</td><td>Coworker, Execution, Integrations</td></tr><tr><td>Context Pack</td><td>Context</td><td>Worker, Inference</td></tr><tr><td>ResourceRef</td><td>Resources</td><td>Context, Execution, Integrations</td></tr><tr><td>KnowledgeRef</td><td>Knowledge</td><td>Context, Domain, Learning</td></tr><tr><td>TaskEstimate</td><td>Planning</td><td>Inference, Coworker, Visualization</td></tr><tr><td>Provider Route</td><td>Inference</td><td>Coworker, Execution</td></tr><tr><td>Claim / Lease</td><td>Coworker</td><td>Execution, Recovery</td></tr><tr><td>Integration Request</td><td>Integrations</td><td>Execution</td></tr><tr><td>EvidenceRef</td><td>Execution</td><td>QA, Core, Learning</td></tr><tr><td>ResultRef</td><td>Execution</td><td>Core, QA, следующий Worker</td></tr><tr><td>QA Result / Change Evidence</td><td>QA</td><td>Core, Execution, Learning</td></tr><tr><td>Telemetry Event</td><td>Telemetry</td><td>Metrics, Visualization</td></tr><tr><td>MetricsSnapshot</td><td>Metrics</td><td>Learning, Planning, Visualization</td></tr><tr><td>Learning Proposal</td><td>Learning</td><td>владелец изменяемой функции</td></tr><tr><td>Human Decision</td><td>Personal/Core</td><td>Security, Core, Workflow</td></tr><tr><td>UI Command</td><td>Desktop Shell / Core boundary</td><td>Identity, Security, Core</td></tr></tbody></table></div>
 <h2 id="27-36-матрица-источников-истины">27.36. Матрица источников истины</h2>
-<div class="table-container"><table class="doc-table"><thead><tr><th>Сущность</th><th>Источник истины</th></tr></thead><tbody><tr><td>Архитектура</td><td>канонические Markdown-документы</td></tr><tr><td>Схема контракта</td><td>канонический каталог схем</td></tr><tr><td>Код</td><td>Git</td></tr><tr><td>GitHub-задача</td><td>GitHub Issue</td></tr><tr><td>Внутреннее исполнение задачи</td><td>TaskRuntimeState</td></tr><tr><td>Обязательные правила</td><td>Rule Manager</td></tr><tr><td>Проверенные знания</td><td>Knowledge Base</td></tr><tr><td>Ресурс</td><td>исходная система + ResourceRef</td></tr><tr><td>Решение о повторном использовании и runtime-кэш</td><td>CacheEngine</td></tr><tr><td>Worker registration</td><td>Worker Registry</td></tr><tr><td>Lease</td><td>Coworker</td></tr><tr><td>Безопасность действия</td><td>Security Decision</td></tr><tr><td>Фактическое выполнение</td><td>Evidence</td></tr><tr><td>QA</td><td>QA Result точной revision</td></tr><tr><td>Сырые события</td><td>Telemetry</td></tr><tr><td>Числовые показатели</td><td>Metrics</td></tr><tr><td>Прогноз</td><td>TaskEstimate</td></tr><tr><td>Learning state</td><td>Learning Store</td></tr><tr><td>Секрет</td><td>Secret Store</td></tr><tr><td>UI-состояние</td><td>производное представление системного состояния</td></tr><tr><td>HTML-документация</td><td>производное представление Markdown</td></tr></tbody></table></div>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Сущность</th><th>Источник истины</th></tr></thead><tbody><tr><td>Архитектура</td><td>канонические Markdown-документы</td></tr><tr><td>Схема контракта</td><td>канонический каталог схем</td></tr><tr><td>Код</td><td>Git</td></tr><tr><td>GitHub-задача</td><td>GitHub Issue</td></tr><tr><td>Внутреннее исполнение задачи</td><td>TaskRuntimeState</td></tr><tr><td>Обязательные правила</td><td>Rule Manager</td></tr><tr><td>Проверенные знания</td><td>Knowledge Base</td></tr><tr><td>Ресурс</td><td>исходная система + ResourceRef</td></tr><tr><td>Решение о повторном использовании и runtime-кэш</td><td>CacheEngine</td></tr><tr><td>Worker registration</td><td>Worker Registry</td></tr><tr><td>Lease</td><td>Coworker</td></tr><tr><td>Безопасность действия</td><td>Security Decision</td></tr><tr><td>Фактическое выполнение</td><td>Evidence</td></tr><tr><td>QA</td><td>QA Result / Change Evidence с source revision, ChangeSet и областью применимости</td></tr><tr><td>Сырые события</td><td>Telemetry</td></tr><tr><td>Числовые показатели</td><td>Metrics</td></tr><tr><td>Прогноз</td><td>TaskEstimate</td></tr><tr><td>Learning state</td><td>Learning Store</td></tr><tr><td>Секрет</td><td>Secret Store</td></tr><tr><td>UI-состояние</td><td>производное представление системного состояния</td></tr><tr><td>HTML-документация</td><td>производное представление Markdown</td></tr></tbody></table></div>
 <h2 id="27-37-порядок-ключевых-решений">27.37. Порядок ключевых решений</h2>
 <p>Рекомендуемый базовый порядок:</p>
 <ol>
@@ -10979,9 +11027,16 @@ Learning (самообучение)
 <p>Применимый обязательный запрет имеет приоритет над разрешением.</p>
 <p>Неоднозначность критического обязательного правила приводит к BLOCKED.</p>
 <h2 id="32-17-adr-009-независимый-qa">32.17. ADR-009 — независимый QA</h2>
+<p><strong>Статус:</strong> SUPERSEDED by ADR-040.</p>
+<p>Сохраняется исторически принятое требование независимости: Worker, реализовавший изменение, не выполняет квалифицирующий независимый QA собственного изменения.</p>
+<p>Старая универсальная формулировка «изменение revision делает старый QA неактуальным» заменена ADR-040, потому что она смешивала Provenance проверки с решением о необходимости повторного содержательного QA.</p>
+<h2 id="32-17a-adr-040-применимость-qa-evidence-после-изменения-revision">32.17a. ADR-040 — применимость QA Evidence после изменения revision</h2>
 <p><strong>Статус:</strong> ACCEPTED.</p>
-<p>Worker, реализовавший изменение, не выполняет квалифицирующий независимый QA той же revision.</p>
-<p>Изменение revision делает старый QA неактуальным.</p>
+<p>QA Evidence всегда хранит точную <code>source revision</code> как Provenance и проверенный ChangeSet. Изменение SHA/rebase/target само по себе не является достаточным основанием для повторного FULL QA.</p>
+<p>После изменения система проверяет ChangeSet, значимые Rules/Policy, Scope, новый Evidence и Impact Assessment и выбирает <code>QA REUSE</code>, <code>DELTA QA</code>, <code>FULL QA</code> или <code>BLOCKED</code> согласно каноническому §23 и §20.34. Если изменился только target/base, пересчитывается Integration Evidence; Change Evidence не инвалидируется автоматически.</p>
+<p><code>INDETERMINATE</code> не разрешает QA REUSE. Независимость квалифицирующего DELTA/FULL QA сохраняется: Implementation Worker != QA Worker там, где policy требует независимую проверку.</p>
+<p><strong>Причина пересмотра:</strong> уменьшить повторный дорогой QA без ослабления Fail-Closed и без слепого переноса PASS на новую revision.</p>
+<p><strong>Затронутые каноны:</strong> §23, §20.34, §11.25, <code>docs/spec/13_CACHE_POLICY.md</code>, <code>docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md</code>, §27.17.</p>
 <h2 id="32-18-adr-010-github-issue-является-ssot-работы-проекта">32.18. ADR-010 — GitHub Issue является SSoT работы проекта</h2>
 <p><strong>Статус:</strong> ACCEPTED.</p>
 <p>Для разработки KAT9I_OS:</p>

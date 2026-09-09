@@ -86,7 +86,11 @@ Semantic Cache по возможности реализуется локальн
 
 ## Кэш проверок качества (QA Cache)
 
-QA привязан к точной revision. Изменение head SHA инвалидирует действующий QA. Старый QA может использоваться только как вспомогательный источник.
+QA Evidence всегда сохраняет точную `source revision` как Provenance и проверенный ChangeSet. Изменение head SHA само по себе не инвалидирует Change Evidence и не является достаточным основанием для повторного FULL QA.
+
+Перед повторным использованием проверяются идентичность ChangeSet, совместимость значимых Rules/Policy и Scope, отсутствие конфликтующего Evidence и Impact Assessment согласно §23. Если изменился target/base, пересчитывается Integration Evidence. `INDETERMINATE` не даёт права на QA REUSE: действует Fail-Closed.
+
+QA Cache является только механизмом хранения и поиска ранее полученного Evidence и не может обходить каноническое решение `QA REUSE` / `DELTA QA` / `FULL QA`.
 
 ## Прогрев и вытеснение кэша (Cache Warming и Eviction)
 
