@@ -3,8 +3,11 @@
 
 import copy
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,6 +23,7 @@ from scripts.graveyard_context import (
     validate_candidate_policy,
     verified_work_provenance,
 )
+from scripts.graveyard_excavate import _trusted_now_iso
 
 
 class TestLatestCodexRegressions(unittest.TestCase):
@@ -89,6 +93,18 @@ class TestLatestCodexRegressions(unittest.TestCase):
         }
         self.assertFalse(can_seed_planning(forged))
 
+    def test_windows_case_variant_graveyard_uri_cannot_seed_planning(self):
+        forged = {
+            "ref_id": "ctx-history12345678",
+            "uri": "GRAVEYARD/GY-test.md",
+            "source_class": "history",
+            "resolver": "history_store",
+            "actionable": True,
+            "control": True,
+            "provenance": {"source_uri": "GrAvEyArD/GY-test.md"},
+        }
+        self.assertFalse(can_seed_planning(forged))
+
     def test_verified_outcome_exposes_only_copies_not_mutable_sealed_state(self):
         candidate = self._checked_candidate()
         ticket = build_activation_ticket(
@@ -141,6 +157,28 @@ class TestLatestCodexRegressions(unittest.TestCase):
             bat.write_text("type graveyard\\GY-test.md\n", encoding="utf-8")
             yielded = {p.name for p in _iter_control_text_files(root)}
             self.assertEqual(yielded, {"auto_plan.cmd", "auto_plan.bat"})
+
+    def test_extensionless_script_is_scanned_as_control_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            helper = scripts / "auto_plan"
+            helper.write_text("cat graveyard/GY-test.md\n", encoding="utf-8")
+            yielded = {p.name for p in _iter_control_text_files(root)}
+            self.assertIn("auto_plan", yielded)
+
+    def test_cli_approval_does_not_accept_user_supplied_now(self):
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "graveyard_excavate.py"), "approve", "--help"],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertNotIn("--now", proc.stdout)
+        parsed = datetime.fromisoformat(_trusted_now_iso().replace("Z", "+00:00"))
+        self.assertIsNotNone(parsed.tzinfo)
 
 
 if __name__ == "__main__":
