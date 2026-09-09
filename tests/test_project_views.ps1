@@ -11,7 +11,6 @@ $script:MockViews=@()
 $script:GqlCalls=0
 $script:RestWrites=0
 $script:ItemAddCalls=0
-$script:ApplyCalls=0
 $script:IterationMode=$false
 $script:IterationDuration=3
 
@@ -27,6 +26,68 @@ function New-CanonicalViews {
     (New-View '03 — Проверка' 'C3' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'),
     (New-View '04 — Заблокировано' 'C4' 'TABLE_LAYOUT' 'is:open Статус:"Заблокировано"')
   )
+}
+
+$tokens=$null
+$parseErrors=$null
+$productionAst=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$tokens,[ref]$parseErrors)
+if(@($parseErrors).Count -gt 0){
+  throw "Production configure_project.ps1 не разбирается PowerShell Parser: $((@($parseErrors)|ForEach-Object{$_.Message}) -join '; ')"
+}
+
+$entrypointCommands=@($productionAst.FindAll({
+  param($node)
+  if($node -isnot [System.Management.Automation.Language.CommandAst]){return $false}
+  return $node.GetCommandName() -ceq 'Invoke-ProjectConfiguration'
+},$true))
+if($entrypointCommands.Count -ne 1){
+  throw "В production-скрипте должна быть ровно одна фактическая команда Invoke-ProjectConfiguration; найдено $($entrypointCommands.Count)."
+}
+
+$applyExpressions=@($entrypointCommands[0].CommandElements|Where-Object{$_ -is [System.Management.Automation.Language.ScriptBlockExpressionAst]})
+if($applyExpressions.Count -ne 1){
+  throw 'Production Invoke-ProjectConfiguration должен получать ровно одно фактическое тело Apply.'
+}
+$script:ProductionApplyAst=$applyExpressions[0].ScriptBlock
+$script:ProductionApply=$script:ProductionApplyAst.GetScriptBlock()
+
+$mutationEntryCommands=@('EnsureLink','EnsureSelect','EnsureIteration','EnsureItems','EnsureViews')
+$allMutationEntryCalls=@($productionAst.FindAll({
+  param($node)
+  if($node -isnot [System.Management.Automation.Language.CommandAst]){return $false}
+  $name=$node.GetCommandName()
+  return $mutationEntryCommands -ccontains $name
+},$true))
+
+foreach($call in $allMutationEntryCalls){
+  $insideApply=($call.Extent.StartOffset -ge $script:ProductionApplyAst.Extent.StartOffset -and $call.Extent.EndOffset -le $script:ProductionApplyAst.Extent.EndOffset)
+  $insideFunction=$false
+  $parent=$call.Parent
+  while($null -ne $parent){
+    if($parent -is [System.Management.Automation.Language.FunctionDefinitionAst]){
+      $insideFunction=$true
+      break
+    }
+    $parent=$parent.Parent
+  }
+  if(-not $insideFunction -and -not $insideApply){
+    throw "Production mutation-команда '$($call.GetCommandName())' находится вне защищённого тела Invoke-ProjectConfiguration."
+  }
+}
+
+$productionApplyCalls=@($script:ProductionApplyAst.FindAll({
+  param($node)
+  if($node -isnot [System.Management.Automation.Language.CommandAst]){return $false}
+  return $mutationEntryCommands -ccontains $node.GetCommandName()
+},$true)|ForEach-Object{$_.GetCommandName()})
+if($productionApplyCalls.Count -ne 16){
+  throw "Фактическое production-тело entrypoint изменилось: ожидаются 16 управляющих вызовов, найдено $($productionApplyCalls.Count)."
+}
+if($productionApplyCalls[0] -cne 'EnsureLink' -or $productionApplyCalls[-3] -cne 'EnsureIteration' -or $productionApplyCalls[-2] -cne 'EnsureItems' -or $productionApplyCalls[-1] -cne 'EnsureViews'){
+  throw "Нарушен порядок фактического production entrypoint: EnsureLink должен быть первым, затем поля, затем EnsureIteration -> EnsureItems -> EnsureViews."
+}
+if(@($productionApplyCalls|Where-Object{$_ -ceq 'EnsureSelect'}).Count -ne 12){
+  throw 'Фактическое production-тело entrypoint должно содержать 12 вызовов EnsureSelect.'
 }
 
 function Snapshot {
@@ -57,10 +118,14 @@ function Snapshot {
   [pscustomobject]@{
     user=[pscustomobject]@{
       projectV2=[pscustomobject]@{
+        id='PROJECT'
+        title='KAT9I_OS — разработка'
+        repositories=[pscustomobject]@{nodes=@([pscustomobject]@{id='REPO';nameWithOwner='rassvetpublic-spec/KAT9I_OS'})}
         fields=[pscustomobject]@{nodes=$fields}
         views=[pscustomobject]@{nodes=$script:MockViews}
       }
     }
+    repository=[pscustomobject]@{id='REPO';nameWithOwner='rassvetpublic-spec/KAT9I_OS'}
   }
 }
 
@@ -91,6 +156,17 @@ function Gql {
   throw 'GraphQL mutation не должна выполняться в fail-closed сценарии.'
 }
 
+function gh {
+  $global:LASTEXITCODE=0
+  if($args.Count -ge 2 -and $args[0] -eq 'issue' -and $args[1] -eq 'list'){return '[]'}
+  if($args.Count -ge 2 -and $args[0] -eq 'pr' -and $args[1] -eq 'list'){return '[]'}
+  if($args.Count -ge 2 -and $args[0] -eq 'project' -and $args[1] -eq 'item-add'){
+    $script:ItemAddCalls++
+    return '{}'
+  }
+  throw "Неожиданный вызов gh в тесте production entrypoint: $($args -join ' ')"
+}
+
 function Assert-ViewsFailClosed([object[]]$Views,[string]$ExpectedMessage){
   $script:IterationMode=$false
   $script:MockViews=$Views
@@ -116,26 +192,19 @@ function Assert-EntrypointFailClosed([object[]]$Views,[string]$ExpectedMessage){
   $script:GqlCalls=0
   $script:RestWrites=0
   $script:ItemAddCalls=0
-  $script:ApplyCalls=0
   $thrown=$false
   try {
-    Invoke-ProjectConfiguration {
-      $script:ApplyCalls++
-      $script:GqlCalls++
-      $script:RestWrites++
-      $script:ItemAddCalls++
-    }
+    Invoke-ProjectConfiguration $script:ProductionApply
   } catch {
     $thrown=$true
     if($_.Exception.Message -notmatch $ExpectedMessage){
-      throw "Получена другая ошибка entrypoint: $($_.Exception.Message)"
+      throw "Получена другая ошибка production entrypoint: $($_.Exception.Message)"
     }
   }
-  if(-not $thrown){throw 'Ожидалась fail-closed ошибка entrypoint, но Apply был разрешён.'}
-  if($script:ApplyCalls -ne 0){throw "Entrypoint fail-closed нарушен: Apply calls = $($script:ApplyCalls)"}
-  if($script:GqlCalls -ne 0){throw "Entrypoint fail-closed нарушен: GraphQL mutations = $($script:GqlCalls)"}
-  if($script:RestWrites -ne 0){throw "Entrypoint fail-closed нарушен: REST writes = $($script:RestWrites)"}
-  if($script:ItemAddCalls -ne 0){throw "Entrypoint fail-closed нарушен: item-add calls = $($script:ItemAddCalls)"}
+  if(-not $thrown){throw 'Ожидалась fail-closed ошибка production entrypoint, но фактическое тело Apply было разрешено.'}
+  if($script:GqlCalls -ne 0){throw "Production entrypoint fail-closed нарушен: GraphQL mutations = $($script:GqlCalls)"}
+  if($script:RestWrites -ne 0){throw "Production entrypoint fail-closed нарушен: REST writes = $($script:RestWrites)"}
+  if($script:ItemAddCalls -ne 0){throw "Production entrypoint fail-closed нарушен: item-add calls = $($script:ItemAddCalls)"}
 }
 
 $caseVariant=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
@@ -172,4 +241,4 @@ try {
 if(-not $thrown){throw 'Ожидалась fail-closed ошибка для существующей 7-дневной итерации.'}
 if($script:GqlCalls -ne 0){throw "Итерация была изменена через GraphQL: calls = $($script:GqlCalls)"}
 
-Write-Host 'PASS: Project policy fail-closed выполняет read-only preflight в реальной entrypoint до Apply; case-variant, старый QA filter и дубль дают 0 REST writes / 0 GraphQL mutations / 0 item-add.'
+Write-Host 'PASS: Project policy запускает фактическое production-тело entrypoint под read-only preflight; mutation-вызовы вне защищённого Apply запрещены, а case-variant, старый QA filter и дубль дают 0 REST writes / 0 GraphQL mutations / 0 item-add.'
