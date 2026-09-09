@@ -37,6 +37,7 @@ jobs:
           test -f docs/GLOSSARY.md
           test -f scripts/generate_html_docs.py
           test -f tests/test_docs_ssot.py
+          test -f tests/test_project_configuration.py
           test -f .github/ISSUE_TEMPLATE/feedback.yml
           test -f .github/PULL_REQUEST_TEMPLATE.md
           test -f .github/CODEOWNERS
@@ -112,11 +113,12 @@ jobs:
           print(f"Успешно проверено {len(yaml_files)} YAML-файлов.")
           PY
 
-      - name: Запустить модульные тесты SSoT, документации и triage
+      - name: Запустить модульные тесты SSoT, документации, Project и triage
         shell: bash
         run: |
           set -euo pipefail
           python tests/test_docs_ssot.py
+          python -m unittest tests/test_project_configuration.py
           python -m unittest tests/test_triage_helper.py
 
       - name: Проверить генератор HTML и синхронизацию единого источника истины (SSOT)
