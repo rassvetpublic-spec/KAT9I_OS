@@ -159,31 +159,35 @@ mutation($input:CreateProjectV2FieldInput!){
     throw "Поле '$($f.name)' содержит действительно неизвестные значения: $(($unknown.name)-join ', '). Скрипт ничего не удалил."
   }
 
-  $opts=@()
+  $missing=@()
+  $legacy=@()
   foreach($d in $Defs){
-    $old=$null
-    foreach($existing in @($f.options)){
-      if(Is-Alias $existing.name @($d.aliases + $d.name)){
-        $old=$existing
-        break
-      }
+    $existing=@($f.options)|Where-Object{Is-Alias $_.name @($d.aliases + $d.name)}|Select-Object -First 1
+    if(-not $existing){
+      $missing+=$d.name
+    } elseif($existing.name -ne $d.name){
+      $legacy+="$($existing.name) -> $($d.name)"
     }
-    $o=[ordered]@{name=$d.name;color=$d.color;description=$d.description}
-    if($old){$o.id=$old.id}
-    $opts+=$o
   }
 
+  if($missing.Count -gt 0 -or $legacy.Count -gt 0){
+    $details=@()
+    if($missing.Count -gt 0){$details+="отсутствуют: $(($missing)-join ', ')"}
+    if($legacy.Count -gt 0){$details+="нужна миграция значений: $(($legacy)-join ', ')"}
+    throw "Поле '$($f.name)' требует изменения option ID ($($details -join '; ')). GitHub API не позволяет доказуемо сохранить привязки Items при таком переименовании, поэтому скрипт остановлен без изменения значений. Выполните явную миграцию данных и повторите запуск."
+  }
+
+  if($f.name -ne $Name){
 $q=@'
 mutation($input:UpdateProjectV2FieldInput!){
  updateProjectV2Field(input:$input){
-   projectV2Field{... on ProjectV2SingleSelectField{id name options{id name}}}
+   projectV2Field{... on ProjectV2SingleSelectField{id name}}
  }
 }
 '@
-  $oldName=$f.name
-  $null=Gql $q @{input=@{fieldId=$f.id;name=$Name;singleSelectOptions=$opts}}
-  if($oldName -ne $Name){
-    Write-Host "Исправлено поле: $oldName -> $Name"
+    $oldName=$f.name
+    $null=Gql $q @{input=@{fieldId=$f.id;name=$Name}}
+    Write-Host "Исправлено имя поля без изменения option ID: $oldName -> $Name"
   } else {
     Write-Host "Проверено поле: $Name"
   }
@@ -259,10 +263,12 @@ function EnsureItems{
   $urls=@()
 
   $j=& gh issue list --repo $repo --state open --limit 1000 --json url
-  if($LASTEXITCODE -eq 0 -and $j){$urls+=@((($j -join "`n")|ConvertFrom-Json).url)}
+  if($LASTEXITCODE -ne 0){throw 'Не удалось получить полный список открытых Issues. Project не изменён дальше.'}
+  if($j){$urls+=@((($j -join "`n")|ConvertFrom-Json).url)}
 
   $j=& gh pr list --repo $repo --state open --limit 1000 --json url
-  if($LASTEXITCODE -eq 0 -and $j){$urls+=@((($j -join "`n")|ConvertFrom-Json).url)}
+  if($LASTEXITCODE -ne 0){throw 'Не удалось получить полный список открытых PR. Project не изменён дальше.'}
+  if($j){$urls+=@((($j -join "`n")|ConvertFrom-Json).url)}
 
   $urls+="https://github.com/$repo/issues/62"
 
@@ -353,8 +359,7 @@ function EnsureViews{
     $exists=@($p.views.nodes)|Where-Object{$_.name -eq $v['n']}|Select-Object -First 1
     if($exists){continue}
 
-    $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f']}
-    $b.visible_fields=$vid
+    $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f'];visible_fields=$vid}
     if($v.ContainsKey('s')){$b.sort_by=$v['s']}
     if($v.ContainsKey('v')){$b.vertical_group_by=$v['v']}
 
@@ -393,18 +398,6 @@ mutation($input:DeleteProjectV2ViewInput!){
 '@
     $null=Gql $q @{input=@{viewId=$legacy.id}}
     Write-Host "Удалено устаревшее представление: $($legacy.name)"
-  }
-
-  $p=(Snapshot).user.projectV2
-  $blank=@($p.views.nodes)|Where-Object{$_.name -eq 'View 1' -and $_.layout -eq 'TABLE' -and [string]::IsNullOrWhiteSpace($_.filter)}|Select-Object -First 1
-  if($blank){
-$q=@'
-mutation($input:DeleteProjectV2ViewInput!){
- deleteProjectV2View(input:$input){projectV2View{id}}
-}
-'@
-    $null=Gql $q @{input=@{viewId=$blank.id}}
-    Write-Host 'Удалено пустое представление View 1.'
   }
 
   $p=(Snapshot).user.projectV2
