@@ -10,6 +10,8 @@ $script:Required=@('Статус','Этап','Приоритет','Област�
 $script:MockViews=@()
 $script:GqlCalls=0
 $script:RestWrites=0
+$script:ItemAddCalls=0
+$script:ApplyCalls=0
 $script:IterationMode=$false
 $script:IterationDuration=3
 
@@ -108,9 +110,38 @@ function Assert-ViewsFailClosed([object[]]$Views,[string]$ExpectedMessage){
   if($script:RestWrites -ne 0){throw "Fail-closed нарушен: REST writes = $($script:RestWrites)"}
 }
 
+function Assert-EntrypointFailClosed([object[]]$Views,[string]$ExpectedMessage){
+  $script:IterationMode=$false
+  $script:MockViews=$Views
+  $script:GqlCalls=0
+  $script:RestWrites=0
+  $script:ItemAddCalls=0
+  $script:ApplyCalls=0
+  $thrown=$false
+  try {
+    Invoke-ProjectConfiguration {
+      $script:ApplyCalls++
+      $script:GqlCalls++
+      $script:RestWrites++
+      $script:ItemAddCalls++
+    }
+  } catch {
+    $thrown=$true
+    if($_.Exception.Message -notmatch $ExpectedMessage){
+      throw "Получена другая ошибка entrypoint: $($_.Exception.Message)"
+    }
+  }
+  if(-not $thrown){throw 'Ожидалась fail-closed ошибка entrypoint, но Apply был разрешён.'}
+  if($script:ApplyCalls -ne 0){throw "Entrypoint fail-closed нарушен: Apply calls = $($script:ApplyCalls)"}
+  if($script:GqlCalls -ne 0){throw "Entrypoint fail-closed нарушен: GraphQL mutations = $($script:GqlCalls)"}
+  if($script:RestWrites -ne 0){throw "Entrypoint fail-closed нарушен: REST writes = $($script:RestWrites)"}
+  if($script:ItemAddCalls -ne 0){throw "Entrypoint fail-closed нарушен: item-add calls = $($script:ItemAddCalls)"}
+}
+
 $caseVariant=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
 $caseVariant+=New-View '00 — все задачи' 'CASE' 'TABLE_LAYOUT' 'is:open'
 Assert-ViewsFailClosed $caseVariant 'неизвестные или регистрово отличающиеся представления'
+Assert-EntrypointFailClosed $caseVariant 'неизвестные или регистрово отличающиеся представления'
 
 $oldQaFilter=@(New-CanonicalViews)
 $oldQaFilter=@($oldQaFilter|ForEach-Object{
@@ -119,10 +150,12 @@ $oldQaFilter=@($oldQaFilter|ForEach-Object{
   } else {$_}
 })
 Assert-ViewsFailClosed $oldQaFilter 'нарушает контракт'
+Assert-EntrypointFailClosed $oldQaFilter 'нарушает контракт'
 
 $missingEarlyDuplicateLate=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
 $missingEarlyDuplicateLate+=New-View '03 — Проверка' 'DUP' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'
 Assert-ViewsFailClosed $missingEarlyDuplicateLate 'дубли представления'
+Assert-EntrypointFailClosed $missingEarlyDuplicateLate 'дубли представления'
 
 $script:IterationMode=$true
 $script:IterationDuration=7
@@ -139,4 +172,4 @@ try {
 if(-not $thrown){throw 'Ожидалась fail-closed ошибка для существующей 7-дневной итерации.'}
 if($script:GqlCalls -ne 0){throw "Итерация была изменена через GraphQL: calls = $($script:GqlCalls)"}
 
-Write-Host 'PASS: Project policy fail-closed выполняет полный preflight имени/layout/filter, дублей и небезопасной миграции итерации.'
+Write-Host 'PASS: Project policy fail-closed выполняет read-only preflight в реальной entrypoint до Apply; case-variant, старый QA filter и дубль дают 0 REST writes / 0 GraphQL mutations / 0 item-add.'
