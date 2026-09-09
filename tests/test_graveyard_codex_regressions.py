@@ -11,7 +11,12 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.check_graveyard import CONTROL_TEXT_SUFFIXES, _iter_control_text_files
+from scripts.check_graveyard import (
+    CONTROL_TEXT_SUFFIXES,
+    _find_concrete_graveyard_ref,
+    _iter_control_text_files,
+    _read_control_text,
+)
 from scripts.graveyard_context import (
     REPO_ROOT,
     activation_action_hash,
@@ -23,7 +28,7 @@ from scripts.graveyard_context import (
     validate_candidate_policy,
     verified_work_provenance,
 )
-from scripts.graveyard_excavate import _trusted_now_iso
+from scripts.graveyard_excavate import _trusted_nonce_state_path, _trusted_now_iso
 
 
 class TestLatestCodexRegressions(unittest.TestCase):
@@ -105,6 +110,24 @@ class TestLatestCodexRegressions(unittest.TestCase):
         }
         self.assertFalse(can_seed_planning(forged))
 
+    def test_absolute_and_file_graveyard_uri_cannot_seed_planning(self):
+        variants = (
+            "C:\\workspace\\KAT9I_OS\\graveyard\\GY-test.md",
+            "file:///workspace/KAT9I_OS/graveyard/GY-test.md",
+        )
+        for uri in variants:
+            forged = {
+                "ref_id": "ctx-history12345678",
+                "uri": uri,
+                "source_class": "history",
+                "resolver": "history_store",
+                "actionable": True,
+                "control": True,
+                "provenance": {"source_uri": uri},
+            }
+            with self.subTest(uri=uri):
+                self.assertFalse(can_seed_planning(forged))
+
     def test_verified_outcome_exposes_only_copies_not_mutable_sealed_state(self):
         candidate = self._checked_candidate()
         ticket = build_activation_ticket(
@@ -168,7 +191,24 @@ class TestLatestCodexRegressions(unittest.TestCase):
             yielded = {p.name for p in _iter_control_text_files(root)}
             self.assertIn("auto_plan", yielded)
 
-    def test_cli_approval_does_not_accept_user_supplied_now(self):
+    def test_concrete_ref_guard_normalizes_dot_segments(self):
+        self.assertEqual(
+            _find_concrete_graveyard_ref("type graveyard/./GY-test.md"),
+            "graveyard/./GY-test.md",
+        )
+        self.assertEqual(
+            _find_concrete_graveyard_ref("type graveyard\\.\\GY-test.md"),
+            "graveyard\\.\\GY-test.md",
+        )
+
+    def test_utf16_windows_control_file_is_decoded_and_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "auto_plan.cmd"
+            path.write_text("type graveyard\\GY-test.md\r\n", encoding="utf-16")
+            text = _read_control_text(path)
+            self.assertIsNotNone(_find_concrete_graveyard_ref(text))
+
+    def test_cli_approval_uses_trusted_clock_and_single_replay_store(self):
         proc = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts" / "graveyard_excavate.py"), "approve", "--help"],
             cwd=REPO_ROOT,
@@ -177,8 +217,13 @@ class TestLatestCodexRegressions(unittest.TestCase):
             capture_output=True,
         )
         self.assertNotIn("--now", proc.stdout)
+        self.assertNotIn("--used-nonces", proc.stdout)
         parsed = datetime.fromisoformat(_trusted_now_iso().replace("Z", "+00:00"))
         self.assertIsNotNone(parsed.tzinfo)
+        self.assertEqual(
+            _trusted_nonce_state_path(REPO_ROOT),
+            REPO_ROOT / ".kat9i-runtime" / "graveyard-used-nonces.json",
+        )
 
 
 if __name__ == "__main__":
