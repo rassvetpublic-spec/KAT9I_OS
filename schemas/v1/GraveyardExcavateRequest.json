@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/GraveyardExcavateRequest.json",
+  "title": "GraveyardExcavateRequest",
+  "description": "Типизированный запрос интерфейса/Core для команды «Раскопать идею». Запрос инициируется человеком в уже существующей review-задаче, не создаёт рабочий Issue/Task автоматически и только подготавливает DATA-кандидат и activation ticket.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "command",
+    "task_id",
+    "requester_identity_id",
+    "archive_id",
+    "idea_summary",
+    "proposed_work",
+    "requested_at"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "pattern": "^gyreq-[a-f0-9]{16}$"
+    },
+    "command": {
+      "const": "EXCAVATE_IDEA"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор уже существующей user-initiated review-задачи."
+    },
+    "requester_identity_id": {
+      "type": "string",
+      "pattern": "^id-[a-zA-Z0-9_-]{8,64}$"
+    },
+    "archive_id": {
+      "type": "string",
+      "pattern": "^GY-[a-zA-Z0-9._-]{3,120}$"
+    },
+    "selector": {
+      "type": "string",
+      "default": "",
+      "maxLength": 1024
+    },
+    "idea_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "proposed_work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "summary", "target"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ISSUE", "ADR", "TASK_CONTRACT"]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
