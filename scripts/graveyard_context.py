@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import posixpath
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,13 +30,42 @@ TRUSTED_HUMAN_LEVELS = {"AUTHENTICATED", "FULL_LOCAL_TRUST"}
 _APPROVAL_SEAL = object()
 
 
+def _canonical_json_bytes(value: dict[str, Any]) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _json_from_bytes(value: bytes) -> dict[str, Any]:
+    parsed = json.loads(value.decode("utf-8"))
+    if not isinstance(parsed, dict):
+        raise ValueError("Sealed payload должен быть JSON object")
+    return parsed
+
+
 @dataclass(frozen=True)
 class _VerifiedApprovalOutcome:
-    candidate: dict[str, Any]
-    activation_ticket: dict[str, Any]
-    approval_record: dict[str, Any]
-    identity: dict[str, Any]
+    """Immutable approval evidence: canonical JSON bytes cannot be mutated in-place."""
+
+    _candidate_bytes: bytes
+    _activation_ticket_bytes: bytes
+    _approval_record_bytes: bytes
+    _identity_bytes: bytes
     seal: object
+
+    @property
+    def candidate(self) -> dict[str, Any]:
+        return _json_from_bytes(self._candidate_bytes)
+
+    @property
+    def activation_ticket(self) -> dict[str, Any]:
+        return _json_from_bytes(self._activation_ticket_bytes)
+
+    @property
+    def approval_record(self) -> dict[str, Any]:
+        return _json_from_bytes(self._approval_record_bytes)
+
+    @property
+    def identity(self) -> dict[str, Any]:
+        return _json_from_bytes(self._identity_bytes)
 
 
 def _now_iso() -> str:
@@ -56,10 +86,6 @@ def _parse_iso(value: str) -> datetime:
     if parsed.tzinfo is None:
         _fail("Timestamp обязан содержать timezone")
     return parsed.astimezone(timezone.utc)
-
-
-def _canonical_json_bytes(value: dict[str, Any]) -> bytes:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def _schema(root: Path, name: str) -> dict[str, Any]:
@@ -84,14 +110,28 @@ def _find_archive(manifest: dict[str, Any], archive_id: str) -> dict[str, Any]:
     return matches[0]
 
 
+def _normalized_repo_uri(value: Any) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = posixpath.normpath(value.strip().replace("\\", "/"))
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def _is_graveyard_uri(value: Any) -> bool:
+    normalized = _normalized_repo_uri(value)
+    return bool(normalized and normalized.startswith("graveyard/GY-") and normalized.endswith(".md"))
+
+
 def _looks_like_graveyard_ref(context_ref: dict[str, Any]) -> bool:
     provenance = context_ref.get("provenance") or {}
     return any((
         context_ref.get("source_class") == "graveyard",
         context_ref.get("resolver") == "graveyard_manifest",
         isinstance(context_ref.get("ref_id"), str) and context_ref["ref_id"].startswith("ctx-GY-"),
-        isinstance(context_ref.get("uri"), str) and context_ref["uri"].replace("\\", "/").startswith("graveyard/GY-"),
-        isinstance(provenance.get("source_uri"), str) and provenance["source_uri"].replace("\\", "/").startswith("graveyard/GY-"),
+        _is_graveyard_uri(context_ref.get("uri")),
+        _is_graveyard_uri(provenance.get("source_uri")),
     ))
 
 
@@ -141,21 +181,34 @@ def can_seed_planning(context_ref: dict[str, Any]) -> bool:
     return context_ref.get("actionable") is True and context_ref.get("control") is True
 
 
-def _candidate_id(archive_id: str, selector: str, idea_summary: str) -> str:
-    return "gyc-" + hashlib.sha256(f"{archive_id}\n{selector}\n{idea_summary}".encode("utf-8")).hexdigest()[:16]
+def _archive_binding(entry: dict[str, Any]) -> str:
+    """Stable immutable binding of Archive ID to its manifest path/content revision."""
+    fields = {
+        "path": entry.get("path"),
+        "sha256": entry.get("sha256"),
+        "git_blob_sha1": entry.get("git_blob_sha1"),
+        "byte_size": entry.get("byte_size"),
+    }
+    return hashlib.sha256(_canonical_json_bytes(fields)).hexdigest()
+
+
+def _candidate_id(archive_id: str, selector: str, idea_summary: str, archive_binding: str) -> str:
+    payload = f"{archive_id}\n{archive_binding}\n{selector}\n{idea_summary}".encode("utf-8")
+    return "gyc-" + hashlib.sha256(payload).hexdigest()[:16]
 
 
 def _validate_candidate_origin(candidate: dict[str, Any], *, root: Path) -> None:
     archive_id = candidate.get("archive_id")
     if not isinstance(archive_id, str) or not archive_id.startswith("GY-"):
         _fail("Некорректный archive_id кандидата")
-    _find_archive(load_manifest(root), archive_id)
+    entry = _find_archive(load_manifest(root), archive_id)
     selector = candidate.get("selector", "")
     idea_summary = candidate.get("idea_summary")
     if not isinstance(selector, str) or not isinstance(idea_summary, str) or not idea_summary.strip():
         _fail("Кандидат обязан содержать selector и непустой idea_summary")
-    if candidate.get("candidate_id") != _candidate_id(archive_id, selector, idea_summary):
-        _fail("candidate_id не соответствует Archive ID/selector/idea_summary")
+    expected_id = _candidate_id(archive_id, selector, idea_summary, _archive_binding(entry))
+    if candidate.get("candidate_id") != expected_id:
+        _fail("candidate_id не соответствует текущей immutable manifest-привязке Archive ID/path/hash")
     if candidate.get("resurrected_from") != archive_id:
         _fail("resurrected_from должен совпадать с Archive ID")
     if candidate.get("source_ref") != f"ctx-{archive_id}":
@@ -172,9 +225,11 @@ def create_reactivation_candidate(
 ) -> dict[str, Any]:
     if not idea_summary.strip():
         _fail("idea_summary не может быть пустым")
+    manifest = load_manifest(root)
+    entry = _find_archive(manifest, archive_id)
     source_ref = resolve_archive_context(archive_id, root=root, retrieved_at=created_at)
     candidate = {
-        "candidate_id": _candidate_id(archive_id, selector, idea_summary),
+        "candidate_id": _candidate_id(archive_id, selector, idea_summary, _archive_binding(entry)),
         "source_ref": source_ref["ref_id"], "archive_id": archive_id,
         "resurrected_from": archive_id, "selector": selector, "idea_summary": idea_summary,
         "canon_check": {"status": "NOT_CHECKED", "checked_revision": None, "evidence_ref": None, "notes": ""},
@@ -312,7 +367,8 @@ def validate_approval_for_activation(
     if approval.get("action_hash") != activation_action_hash(ticket, root=root):
         _fail("ApprovalRecord.action_hash не совпадает с exact ticket")
     ticket_issued, ticket_expires = _parse_iso(ticket["issued_at"]), _parse_iso(ticket["expires_at"])
-    approval_issued, approval_expires, current = _parse_iso(approval["issued_at"]), _parse_iso(approval["expires_at"]), _parse_iso(now)
+    approval_issued = _parse_iso(approval["issued_at"])
+    approval_expires, current = _parse_iso(approval["expires_at"]), _parse_iso(now)
     if approval_issued < ticket_issued:
         _fail("ApprovalRecord выдан раньше ticket")
     if not (ticket_issued <= current < ticket_expires):
@@ -355,10 +411,10 @@ def confirm_for_normal_workflow(
     validate_candidate_policy(updated, root=root)
     _validate_schema(root, "GraveyardCandidate.json", updated)
     return _VerifiedApprovalOutcome(
-        candidate=updated,
-        activation_ticket=copy.deepcopy(activation_ticket),
-        approval_record=copy.deepcopy(approval_record),
-        identity=copy.deepcopy(identity),
+        _candidate_bytes=_canonical_json_bytes(updated),
+        _activation_ticket_bytes=_canonical_json_bytes(copy.deepcopy(activation_ticket)),
+        _approval_record_bytes=_canonical_json_bytes(copy.deepcopy(approval_record)),
+        _identity_bytes=_canonical_json_bytes(copy.deepcopy(identity)),
         seal=_APPROVAL_SEAL,
     )
 
@@ -374,14 +430,17 @@ def reject_candidate(candidate: dict[str, Any], *, root: Path = REPO_ROOT) -> di
 
 
 def verified_work_provenance(outcome: _VerifiedApprovalOutcome, *, root: Path = REPO_ROOT) -> dict[str, str]:
-    """Build provenance only from an outcome sealed by confirm_for_normal_workflow."""
+    """Build provenance only from immutable evidence sealed by confirm_for_normal_workflow."""
     if not isinstance(outcome, _VerifiedApprovalOutcome) or outcome.seal is not _APPROVAL_SEAL:
         _fail("Provenance требует внутренний verified Approval outcome")
-    candidate, ticket, approval = outcome.candidate, outcome.activation_ticket, outcome.approval_record
+    candidate = _json_from_bytes(outcome._candidate_bytes)
+    ticket = _json_from_bytes(outcome._activation_ticket_bytes)
+    approval = _json_from_bytes(outcome._approval_record_bytes)
+    identity = _json_from_bytes(outcome._identity_bytes)
     validate_candidate_policy(candidate, root=root)
     _validate_schema(root, "GraveyardActivationTicket.json", ticket)
     _validate_schema(root, "ApprovalRecord.json", approval)
-    validate_identity_for_approval(outcome.identity, approval, root=root)
+    validate_identity_for_approval(identity, approval, root=root)
     _validate_ticket_matches_candidate(candidate, ticket)
     if candidate.get("state") != "APPROVED_FOR_NORMAL_WORKFLOW":
         _fail("Verified outcome содержит не-approved candidate")
