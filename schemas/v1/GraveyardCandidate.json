@@ -27,7 +27,7 @@
     },
     "source_ref": {
       "type": "string",
-      "pattern": "^ctx-[a-zA-Z0-9_-]{8,96}$",
+      "pattern": "^ctx-[a-zA-Z0-9_-]{8,160}$",
       "description": "ContextRef исходной Graveyard-записи."
     },
     "archive_id": {
@@ -105,6 +105,20 @@
   "allOf": [
     {
       "if": {
+        "properties": {"state": {"const": "CANDIDATE"}},
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "canon_check": {
+            "properties": {"status": {"const": "NOT_CHECKED"}}
+          },
+          "owner_confirmation_ref": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
         "properties": {"state": {"const": "AWAITING_OWNER_CONFIRMATION"}},
         "required": ["state"]
       },
@@ -112,7 +126,8 @@
         "properties": {
           "canon_check": {
             "properties": {"status": {"const": "COMPATIBLE"}}
-          }
+          },
+          "owner_confirmation_ref": {"type": "null"}
         }
       }
     },
@@ -144,7 +159,19 @@
             "properties": {
               "status": {"enum": ["CONFLICT", "SUPERSEDED", "UNKNOWN"]}
             }
-          }
+          },
+          "owner_confirmation_ref": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"state": {"const": "REJECTED"}},
+        "required": ["state"]
+      },
+      "then": {
+        "properties": {
+          "owner_confirmation_ref": {"type": "null"}
         }
       }
     }
