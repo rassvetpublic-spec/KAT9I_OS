@@ -47,10 +47,14 @@ jobs:
           test -f docs/GLOSSARY.md
           test -f scripts/generate_html_docs.py
           test -f scripts/check_graveyard.py
+          test -f scripts/graveyard_context.py
           test -f tests/test_docs_ssot.py
           test -f tests/test_graveyard.py
+          test -f tests/test_graveyard_context.py
           test -f graveyard/README.md
           test -f graveyard/MANIFEST.json
+          test -f schemas/v1/ContextRef.json
+          test -f schemas/v1/GraveyardCandidate.json
           test -f .github/ISSUE_TEMPLATE/feedback.yml
           test -f .github/PULL_REQUEST_TEMPLATE.md
           test -f .github/CODEOWNERS
@@ -133,6 +137,7 @@ jobs:
           python tests/test_docs_ssot.py
           python -m unittest tests/test_triage_helper.py
           python -m unittest tests/test_graveyard.py
+          python -m unittest tests/test_graveyard_context.py
 
       - name: Проверить Graveyard как DATA-only append-only слой
         shell: bash
