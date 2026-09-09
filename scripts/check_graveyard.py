@@ -18,7 +18,10 @@ CONTROL_TEXT_SUFFIXES = {
     ".html", ".xml", ".ini", ".cfg", ".txt",
 }
 CONTROL_EXTENSIONLESS_DIRS = {"scripts", "tools", "bin", ".github"}
-CONCRETE_GRAVEYARD_REF = re.compile(r"graveyard[\\/]+GY-[A-Za-z0-9._-]+\.md", re.IGNORECASE)
+CONCRETE_GRAVEYARD_REF = re.compile(
+    r"graveyard(?:[\\/]+(?:\.)?)*[\\/]+GY-[A-Za-z0-9._-]+\.md",
+    re.IGNORECASE,
+)
 # Этот тест обязан содержать заведомо плохую concrete-reference строку, иначе
 # невозможно доказать, что guard её ловит. Это единственное осознанное исключение.
 CONTROL_SCAN_ALLOWLIST = {Path("tests/test_graveyard.py"), Path("tests/test_graveyard_codex_regressions.py")}
@@ -64,6 +67,33 @@ def _iter_control_text_files(root: Path):
         )
         if suffix_known or extensionless_control:
             yield path
+
+
+def _read_control_text(path: Path) -> str:
+    """Decode known control text formats; selected control files fail closed if undecodable."""
+    data = path.read_bytes()
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return data.decode("utf-16")
+    if data.startswith(b"\xef\xbb\xbf"):
+        return data.decode("utf-8-sig")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        # Common Windows scripts may be UTF-16LE without BOM.
+        if b"\x00" in data:
+            for encoding in ("utf-16-le", "utf-16-be"):
+                try:
+                    text = data.decode(encoding)
+                except UnicodeDecodeError:
+                    continue
+                if text:
+                    return text
+        _fail(f"Control-файл не удалось безопасно декодировать как текст: {path}")
+
+
+def _find_concrete_graveyard_ref(text: str) -> str | None:
+    match = CONCRETE_GRAVEYARD_REF.search(text)
+    return match.group(0) if match else None
 
 
 def validate_graveyard(root: Path) -> None:
@@ -149,15 +179,12 @@ def validate_graveyard(root: Path) -> None:
         _fail(f"Manifest не совпадает с архивами: missing={missing}, unregistered={unregistered}")
 
     for path in _iter_control_text_files(root):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        match = CONCRETE_GRAVEYARD_REF.search(text)
-        if match:
+        text = _read_control_text(path)
+        concrete_ref = _find_concrete_graveyard_ref(text)
+        if concrete_ref:
             _fail(
                 "Канонический/исполняемый контур ссылается на конкретный Graveyard archive: "
-                f"{path.relative_to(root)} -> {match.group(0)}"
+                f"{path.relative_to(root)} -> {concrete_ref}"
             )
 
 
