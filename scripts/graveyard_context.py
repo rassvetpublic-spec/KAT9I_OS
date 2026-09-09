@@ -121,7 +121,8 @@ def _normalized_repo_uri(value: Any) -> str | None:
 
 def _is_graveyard_uri(value: Any) -> bool:
     normalized = _normalized_repo_uri(value)
-    return bool(normalized and normalized.startswith("graveyard/GY-") and normalized.endswith(".md"))
+    folded = normalized.casefold() if normalized else None
+    return bool(folded and folded.startswith("graveyard/gy-") and folded.endswith(".md"))
 
 
 def _looks_like_graveyard_ref(context_ref: dict[str, Any]) -> bool:
