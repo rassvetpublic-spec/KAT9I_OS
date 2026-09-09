@@ -1,27 +1,23 @@
 #!/usr/bin/env python3
 """Безопасный reference handler команды «Раскопать идею».
 
-Скрипт не создаёт GitHub Issue, ADR или TaskContract и не выполняет внешних
-side effects. Он только валидирует запрос, готовит GraveyardCandidate,
-проводит machine state transition после переданного результата canon-check,
-запечатывает GraveyardActivationTicket и проверяет Human Approval.
-
-Production Electron/Rust wiring намеренно отсутствует до разблокировки G3.
+No GitHub Issue/ADR/TaskContract side effects. Production Electron/Rust wiring is
+still gated by G3. CLI approval consumes replay nonce under a cross-process lock
+and atomically replaces the nonce-state file.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
-# При прямом запуске `python scripts/graveyard_excavate.py` Python добавляет в
-# sys.path каталог scripts/, а не корень репозитория. Явно добавляем repo root,
-# чтобы тот же файл одинаково работал как CLI и как импортируемый test module.
 _REPO_ROOT_FOR_IMPORT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT_FOR_IMPORT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORT))
@@ -50,8 +46,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _validate_request(request: dict[str, Any], root: Path) -> None:
     schema = _load_json(root / "schemas" / "v1" / "GraveyardExcavateRequest.json")
-    validator = Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(request), key=lambda e: list(e.path))
+    errors = sorted(Draft202012Validator(schema).iter_errors(request), key=lambda e: list(e.path))
     if errors:
         _fail(f"GraveyardExcavateRequest: {errors[0].message}")
 
@@ -66,9 +61,7 @@ def prepare_excavate_request(
     notes: str = "",
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """Готовит candidate/ticket без side effect и без Human Approval."""
     _validate_request(request, root)
-
     candidate = create_reactivation_candidate(
         request["archive_id"],
         request["idea_summary"],
@@ -84,7 +77,6 @@ def prepare_excavate_request(
         notes=notes,
         root=root,
     )
-
     if checked["state"] == "BLOCKED_BY_CANON":
         return {
             "status": "BLOCKED_BY_CANON",
@@ -93,7 +85,6 @@ def prepare_excavate_request(
             "approval_action_hash": None,
             "side_effect_performed": False,
         }
-
     ticket = build_activation_ticket(
         checked,
         task_id=request["task_id"],
@@ -120,9 +111,9 @@ def approve_excavate_request(
     now: str,
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """Проверяет exact Human Approval и возвращает только provenance normal workflow."""
+    """In-memory approval helper. Caller owns serialization of used_nonces."""
     if prepared.get("status") != "AWAITING_OWNER_CONFIRMATION":
-        _fail("Approve разрешён только для подготовленного AWAITING_OWNER_CONFIRMATION bundle")
+        _fail("Approve разрешён только для AWAITING_OWNER_CONFIRMATION bundle")
     candidate = prepared.get("candidate")
     ticket = prepared.get("activation_ticket")
     if not isinstance(candidate, dict) or not isinstance(ticket, dict):
@@ -137,12 +128,89 @@ def approve_excavate_request(
         now=now,
         root=root,
     )
+    provenance = build_work_provenance(
+        approved,
+        activation_ticket=ticket,
+        approval_record=approval_record,
+        identity=identity,
+        used_nonces=used_nonces,
+        now=now,
+        root=root,
+    )
     return {
         "status": "APPROVED_FOR_NORMAL_WORKFLOW",
         "candidate": approved,
-        "provenance": build_work_provenance(approved),
+        "provenance": provenance,
         "side_effect_performed": False,
     }
+
+
+def _nonce_state_to_set(state: dict[str, Any]) -> set[str]:
+    nonces = state.get("used_nonces")
+    if not isinstance(nonces, list) or not all(isinstance(x, str) for x in nonces):
+        _fail("used-nonces JSON должен содержать массив строк used_nonces")
+    return set(nonces)
+
+
+def _acquire_lock(lock_path: Path, *, attempts: int = 200, delay: float = 0.01) -> int:
+    """Acquire fail-closed cross-process lock using atomic O_EXCL creation."""
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    for _ in range(attempts):
+        try:
+            fd = os.open(lock_path, flags, 0o600)
+            os.write(fd, str(os.getpid()).encode("ascii"))
+            return fd
+        except FileExistsError:
+            time.sleep(delay)
+    _fail(f"Не удалось получить replay lock: {lock_path}")
+
+
+def _atomic_write_json(path: Path, value: dict[str, Any]) -> None:
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    text = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    try:
+        with tmp.open("w", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def approve_excavate_request_with_nonce_file(
+    prepared: dict[str, Any],
+    *,
+    approval_record: dict[str, Any],
+    identity: dict[str, Any],
+    nonce_state_path: Path,
+    now: str,
+    root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    """Serialize replay check+consume+persist as one critical section."""
+    lock_path = nonce_state_path.with_name(nonce_state_path.name + ".lock")
+    lock_fd = _acquire_lock(lock_path)
+    try:
+        state = _load_json(nonce_state_path)
+        used = _nonce_state_to_set(state)
+        result = approve_excavate_request(
+            prepared,
+            approval_record=approval_record,
+            identity=identity,
+            used_nonces=used,
+            now=now,
+            root=root,
+        )
+        state["used_nonces"] = sorted(used)
+        _atomic_write_json(nonce_state_path, state)
+        return result
+    finally:
+        os.close(lock_fd)
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _write_json(value: dict[str, Any], output: Path | None) -> None:
@@ -154,10 +222,10 @@ def _write_json(value: dict[str, Any], output: Path | None) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Reference handler команды «Раскопать идею» без side effects")
+    parser = argparse.ArgumentParser(description="Reference handler «Раскопать идею» без side effects")
     sub = parser.add_subparsers(dest="mode", required=True)
 
-    prepare = sub.add_parser("prepare", help="Подготовить candidate и activation ticket")
+    prepare = sub.add_parser("prepare", help="Подготовить candidate и exact activation ticket")
     prepare.add_argument("--request", type=Path, required=True)
     prepare.add_argument("--canon-status", required=True)
     prepare.add_argument("--checked-revision", required=True)
@@ -166,7 +234,7 @@ def main() -> int:
     prepare.add_argument("--notes", default="")
     prepare.add_argument("--output", type=Path)
 
-    approve = sub.add_parser("approve", help="Проверить ApprovalRecord и вернуть provenance")
+    approve = sub.add_parser("approve", help="Проверить ApprovalRecord и атомарно потребить nonce")
     approve.add_argument("--prepared", type=Path, required=True)
     approve.add_argument("--approval", type=Path, required=True)
     approve.add_argument("--identity", type=Path, required=True)
@@ -175,7 +243,6 @@ def main() -> int:
     approve.add_argument("--output", type=Path)
 
     args = parser.parse_args()
-
     if args.mode == "prepare":
         result = prepare_excavate_request(
             _load_json(args.request),
@@ -188,23 +255,13 @@ def main() -> int:
         _write_json(result, args.output)
         return 0
 
-    prepared = _load_json(args.prepared)
-    approval = _load_json(args.approval)
-    identity = _load_json(args.identity)
-    nonce_state = _load_json(args.used_nonces)
-    nonces = nonce_state.get("used_nonces")
-    if not isinstance(nonces, list) or not all(isinstance(x, str) for x in nonces):
-        _fail("used-nonces JSON должен содержать массив строк used_nonces")
-    used = set(nonces)
-    result = approve_excavate_request(
-        prepared,
-        approval_record=approval,
-        identity=identity,
-        used_nonces=used,
+    result = approve_excavate_request_with_nonce_file(
+        _load_json(args.prepared),
+        approval_record=_load_json(args.approval),
+        identity=_load_json(args.identity),
+        nonce_state_path=args.used_nonces,
         now=args.now,
     )
-    nonce_state["used_nonces"] = sorted(used)
-    args.used_nonces.write_text(json.dumps(nonce_state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     _write_json(result, args.output)
     return 0
 
