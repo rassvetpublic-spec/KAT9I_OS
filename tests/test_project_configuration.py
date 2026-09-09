@@ -58,7 +58,7 @@ class ProjectConfigurationTests(unittest.TestCase):
             result.returncode,
             msg=f"PowerShell behavior test упал.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}",
         )
-        self.assertIn("PASS: Project policy fail-closed", result.stdout)
+        self.assertIn("PASS: Project policy запускает фактическое production-тело entrypoint", result.stdout)
 
 
 if __name__ == "__main__":
