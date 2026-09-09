@@ -13,10 +13,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+
+# При прямом запуске `python scripts/graveyard_excavate.py` Python добавляет в
+# sys.path каталог scripts/, а не корень репозитория. Явно добавляем repo root,
+# чтобы тот же файл одинаково работал как CLI и как импортируемый test module.
+_REPO_ROOT_FOR_IMPORT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT_FOR_IMPORT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT_FOR_IMPORT))
 
 from scripts.graveyard_context import (
     REPO_ROOT,
