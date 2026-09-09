@@ -89,11 +89,10 @@ def validate_graveyard(root: Path) -> None:
         if entry.get("git_blob_sha1") != _git_blob_sha1(data):
             _fail(f"Изменился Git blob SHA-1 архива: {relative}")
 
-    actual = {p.as_posix() for p in graveyard.glob("GY-*.md")}
-    expected = {str(Path(p)) for p in paths}
-    if actual != expected:
-        missing = sorted(expected - actual)
-        unregistered = sorted(actual - expected)
+    actual = {p.relative_to(root).as_posix() for p in graveyard.glob("GY-*.md")}
+    if actual != paths:
+        missing = sorted(paths - actual)
+        unregistered = sorted(actual - paths)
         _fail(f"Manifest не совпадает с архивами: missing={missing}, unregistered={unregistered}")
 
     canonical_files: list[Path] = []
@@ -111,12 +110,11 @@ def validate_graveyard(root: Path) -> None:
             _fail(f"Канонический контур ссылается на конкретный Graveyard archive: {path.relative_to(root)}")
 
 
-def validate_append_only(root: Path, base_ref: str | None) -> None:
-    if not base_ref:
+def validate_append_only(root: Path, base_sha: str | None) -> None:
+    if not base_sha:
         return
-    base = f"origin/{base_ref}"
     proc = subprocess.run(
-        ["git", "diff", "--name-status", f"{base}...HEAD", "--", "graveyard/"],
+        ["git", "diff", "--name-status", base_sha, "HEAD", "--", "graveyard/"],
         cwd=root,
         check=True,
         text=True,
@@ -135,7 +133,7 @@ def validate_append_only(root: Path, base_ref: str | None) -> None:
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     validate_graveyard(root)
-    validate_append_only(root, os.environ.get("GITHUB_BASE_REF"))
+    validate_append_only(root, os.environ.get("GRAVEYARD_BASE_SHA"))
     print("Graveyard: DATA/CONTROL, manifest, integrity, SSoT boundary и append-only проверки пройдены.")
     return 0
 
