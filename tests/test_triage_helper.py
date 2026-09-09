@@ -77,6 +77,16 @@ class TestTriageHelper(unittest.TestCase):
         self.assertNotEqual(res["domain_candidate"], "Security & Governance")
         self.assertNotEqual(res["priority_candidate"], "P0 (Критический кандидат)")
 
+    def test_feedback_form_boilerplate_does_not_trigger_security(self):
+        body = (
+            "Обычная обратная связь про понятность интерфейса.\n"
+            "- [x] Я не добавил в обращение пароль, API-ключ, токен доступа или другой секрет."
+        )
+        res = classify_issue_text("Обратная связь", body)
+        self.assertNotEqual(res["domain_candidate"], "Security & Governance")
+        self.assertNotEqual(res["priority_candidate"], "P0 (Критический кандидат)")
+        self.assertNotEqual(res["decision_level"], "Требуется ADMIN Approval")
+
     def test_format_comment(self):
         res = classify_issue_text("Утечка секрета", "Нужно срочно закрыть доступ")
         comment = format_triage_comment(res, "rassvetpublic-spec", "KAT9I_OS")
