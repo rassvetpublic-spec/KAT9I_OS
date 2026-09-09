@@ -22,8 +22,14 @@ from typing import Any
 from scripts.check_graveyard import validate_graveyard
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = REPO_ROOT / "graveyard" / "MANIFEST.json"
 CANON_STATUSES = {"NOT_CHECKED", "COMPATIBLE", "CONFLICT", "SUPERSEDED", "UNKNOWN"}
+CANDIDATE_STATES = {
+    "CANDIDATE",
+    "AWAITING_OWNER_CONFIRMATION",
+    "BLOCKED_BY_CANON",
+    "APPROVED_FOR_NORMAL_WORKFLOW",
+    "REJECTED",
+}
 
 
 def _now_iso() -> str:
@@ -153,15 +159,26 @@ def validate_candidate_policy(candidate: dict[str, Any]) -> None:
         _fail("GraveyardCandidate всегда остаётся DATA/non-actionable")
     if candidate.get("requires_owner_confirmation") is not True:
         _fail("GraveyardCandidate требует явного подтверждения владельца")
-    if candidate.get("archive_id") != candidate.get("resurrected_from"):
+
+    archive_id = candidate.get("archive_id")
+    if not isinstance(archive_id, str) or not archive_id.startswith("GY-"):
+        _fail("Некорректный archive_id кандидата")
+    if archive_id != candidate.get("resurrected_from"):
         _fail("resurrected_from должен совпадать с исходным Archive ID")
+    if candidate.get("source_ref") != f"ctx-{archive_id}":
+        _fail("source_ref должен указывать на ContextRef того же Archive ID")
 
     state = candidate.get("state")
+    if state not in CANDIDATE_STATES:
+        _fail(f"Неизвестное состояние GraveyardCandidate: {state}")
+
     canon = candidate.get("canon_check") or {}
     status = canon.get("status")
     if status not in CANON_STATUSES:
         _fail(f"Неизвестный canon_check.status: {status}")
 
+    if state == "CANDIDATE" and status != "NOT_CHECKED":
+        _fail("Новый CANDIDATE обязан начинаться с NOT_CHECKED")
     if state == "AWAITING_OWNER_CONFIRMATION" and status != "COMPATIBLE":
         _fail("Ожидать подтверждение владельца можно только после COMPATIBLE canon check")
     if state == "APPROVED_FOR_NORMAL_WORKFLOW":
@@ -169,6 +186,8 @@ def validate_candidate_policy(candidate: dict[str, Any]) -> None:
             _fail("APPROVED_FOR_NORMAL_WORKFLOW требует COMPATIBLE canon check")
         if not candidate.get("owner_confirmation_ref"):
             _fail("APPROVED_FOR_NORMAL_WORKFLOW требует owner_confirmation_ref")
+    elif candidate.get("owner_confirmation_ref") is not None:
+        _fail("owner_confirmation_ref допустим только после APPROVED_FOR_NORMAL_WORKFLOW")
     if state == "BLOCKED_BY_CANON" and status not in {"CONFLICT", "SUPERSEDED", "UNKNOWN"}:
         _fail("BLOCKED_BY_CANON требует CONFLICT/SUPERSEDED/UNKNOWN")
 
