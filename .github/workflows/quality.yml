@@ -91,7 +91,6 @@ jobs:
           for path in Path('docs').rglob('*.md'):
               path.read_text(encoding='utf-8')
 
-          # Проверка новых спецификаций (docs/spec/ и docs/guides/) на запрещённое сокращение KAT
           for path in list(Path('docs/spec').glob('*.md')) + list(Path('docs/guides').glob('*.md')):
               text = path.read_text(encoding='utf-8')
               for line_no, line in enumerate(text.splitlines(), start=1):
@@ -130,12 +129,14 @@ jobs:
           print(f"Успешно проверено {len(yaml_files)} YAML-файлов.")
           PY
 
-      - name: Запустить модульные тесты SSoT, документации, triage и Graveyard
+      - name: Запустить контрактные, реестровые и Graveyard тесты
         shell: bash
         run: |
           set -euo pipefail
           python tests/test_docs_ssot.py
           python -m unittest tests/test_triage_helper.py
+          python -m unittest tests/test_contract_schemas.py
+          python -m unittest tests/test_module_registry.py
           python -m unittest tests/test_graveyard.py
           python -m unittest tests/test_graveyard_context.py
 
