@@ -23,7 +23,7 @@ class ProjectConfigurationTests(unittest.TestCase):
     def test_configurator_has_exactly_five_canonical_views(self):
         text = SCRIPT.read_text(encoding="utf-8")
         match = re.search(
-            r"\$views=@\(\s*(.*?)\n\s*\)\s*\n\s*\$p=\(Snapshot\)\.user\.projectV2",
+            r"\$views=@\(\s*(.*?)\n\s*\)\s*\n\s*\$canonicalNames=",
             text,
             re.DOTALL,
         )
@@ -33,6 +33,8 @@ class ProjectConfigurationTests(unittest.TestCase):
         self.assertEqual(CANONICAL_VIEWS, names)
         self.assertEqual(5, len(names))
         self.assertIn('Статус:\"Проверка QA\"', active_block)
+        self.assertEqual(3, active_block.count("gl='TABLE_LAYOUT'"))
+        self.assertEqual(2, active_block.count("gl='BOARD_LAYOUT'"))
 
     def test_documentation_matches_canonical_views_and_status(self):
         text = WORKFLOW_DOC.read_text(encoding="utf-8")
