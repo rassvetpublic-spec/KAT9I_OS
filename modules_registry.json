@@ -1,6 +1,6 @@
 {
-  "registry_version": "1.2.0",
-  "updated_at": "2026-09-08T18:52:00Z",
+  "registry_version": "1.3.0",
+  "updated_at": "2026-09-09T14:25:00Z",
   "modules": [
     {
       "module_id": "Storage",
@@ -108,13 +108,14 @@
     {
       "module_id": "Context",
       "name": "Менеджер контекста",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "tier": "CORE_RUNTIME",
       "canonical_owner_ref": "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.8",
       "canonical_responsibility": "Политика формирования рабочего контекста, ContextPack и расчёт Context Budget",
       "provides_contracts": [
         "ContextRef",
-        "ContextPack"
+        "ContextPack",
+        "GraveyardCandidate"
       ],
       "requires_contracts": [
         "SystemEvent"
@@ -125,7 +126,9 @@
       "capabilities": [
         "CONTEXT_PACKING",
         "CONTEXT_BUDGETING",
-        "REFS_RESOLVER"
+        "REFS_RESOLVER",
+        "NON_ACTIONABLE_CONTEXT_FILTERING",
+        "GRAVEYARD_REACTIVATION_CANDIDATE"
       ],
       "health_interface": {
         "type": "INTERNAL_STATE_PROBE",
