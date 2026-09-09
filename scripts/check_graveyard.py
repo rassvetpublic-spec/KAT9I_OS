@@ -17,6 +17,7 @@ CONTROL_TEXT_SUFFIXES = {
     ".cmd", ".bat", ".rs", ".ts", ".tsx", ".js", ".mjs", ".cjs",
     ".html", ".xml", ".ini", ".cfg", ".txt",
 }
+CONTROL_EXTENSIONLESS_DIRS = {"scripts", "tools", "bin", ".github"}
 CONCRETE_GRAVEYARD_REF = re.compile(r"graveyard[\\/]+GY-[A-Za-z0-9._-]+\.md", re.IGNORECASE)
 # Этот тест обязан содержать заведомо плохую concrete-reference строку, иначе
 # невозможно доказать, что guard её ловит. Это единственное осознанное исключение.
@@ -44,7 +45,7 @@ def _validate_archive_relative_path(relative: str) -> Path:
 
 
 def _iter_control_text_files(root: Path):
-    """Сканирует весь текстовый control/code contour, включая Windows scripts."""
+    """Сканирует текстовый control/code contour, включая extensionless executables."""
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -53,7 +54,15 @@ def _iter_control_text_files(root: Path):
             continue
         if rel in CONTROL_SCAN_ALLOWLIST:
             continue
-        if path.suffix.lower() in CONTROL_TEXT_SUFFIXES:
+        suffix_known = path.suffix.lower() in CONTROL_TEXT_SUFFIXES
+        extensionless_control = (
+            path.suffix == ""
+            and (
+                (bool(rel.parts) and rel.parts[0] in CONTROL_EXTENSIONLESS_DIRS)
+                or os.access(path, os.X_OK)
+            )
+        )
+        if suffix_known or extensionless_control:
             yield path
 
 
