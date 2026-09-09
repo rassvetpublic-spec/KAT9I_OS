@@ -129,14 +129,14 @@ jobs:
           print(f"Успешно проверено {len(yaml_files)} YAML-файлов.")
           PY
 
-      - name: Запустить контрактные, реестровые и Graveyard тесты
+      - name: Запустить контрактные и Graveyard тесты
         shell: bash
         run: |
           set -euo pipefail
           python tests/test_docs_ssot.py
           python -m unittest tests/test_triage_helper.py
           python -m unittest tests/test_contract_schemas.py
-          python -m unittest tests/test_module_registry.py
+          python scripts/verify_module_registry.py
           python -m unittest tests/test_graveyard.py
           python -m unittest tests/test_graveyard_context.py
 
