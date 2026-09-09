@@ -6,6 +6,8 @@ import json
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 from scripts.graveyard_context import (
     build_work_provenance,
     can_seed_planning,
@@ -124,14 +126,65 @@ class TestGraveyardContextBoundary(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_candidate_policy(forged)
 
+    def test_candidate_policy_rejects_provenance_substitution(self):
+        candidate = create_reactivation_candidate(
+            self.archive_id,
+            "Проверка подмены provenance",
+            root=REPO_ROOT,
+            created_at=self.fixed_time,
+        )
+        forged = copy.deepcopy(candidate)
+        forged["source_ref"] = "ctx-GY-other-archive"
+        with self.assertRaises(ValueError):
+            validate_candidate_policy(forged)
+
+    def test_candidate_policy_rejects_unknown_state(self):
+        candidate = create_reactivation_candidate(
+            self.archive_id,
+            "Проверка неизвестного состояния",
+            root=REPO_ROOT,
+            created_at=self.fixed_time,
+        )
+        forged = copy.deepcopy(candidate)
+        forged["state"] = "AUTO_PROMOTED"
+        with self.assertRaises(ValueError):
+            validate_candidate_policy(forged)
+
+    def test_candidate_policy_rejects_early_owner_confirmation(self):
+        candidate = create_reactivation_candidate(
+            self.archive_id,
+            "Проверка раннего подтверждения",
+            root=REPO_ROOT,
+            created_at=self.fixed_time,
+        )
+        forged = copy.deepcopy(candidate)
+        forged["owner_confirmation_ref"] = "owner://forged-before-canon-check"
+        with self.assertRaises(ValueError):
+            validate_candidate_policy(forged)
+
     def test_machine_schemas_encode_graveyard_boundary(self):
         context_schema = json.loads((REPO_ROOT / "schemas" / "v1" / "ContextRef.json").read_text(encoding="utf-8"))
         candidate_schema = json.loads((REPO_ROOT / "schemas" / "v1" / "GraveyardCandidate.json").read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(context_schema)
+        Draft202012Validator.check_schema(candidate_schema)
         self.assertFalse(context_schema["additionalProperties"])
         self.assertFalse(candidate_schema["additionalProperties"])
         self.assertEqual(candidate_schema["properties"]["actionable"]["const"], False)
         self.assertEqual(candidate_schema["properties"]["control"]["const"], False)
         self.assertEqual(candidate_schema["properties"]["requires_owner_confirmation"]["const"], True)
+
+        candidate = create_reactivation_candidate(
+            self.archive_id,
+            "Проверка схемы кандидата",
+            root=REPO_ROOT,
+            created_at=self.fixed_time,
+        )
+        validator = Draft202012Validator(candidate_schema)
+        self.assertTrue(validator.is_valid(candidate))
+
+        early_confirmation = copy.deepcopy(candidate)
+        early_confirmation["owner_confirmation_ref"] = "owner://forged-before-canon-check"
+        self.assertFalse(validator.is_valid(early_confirmation))
 
 
 if __name__ == "__main__":
