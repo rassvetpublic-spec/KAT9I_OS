@@ -14,13 +14,13 @@ MARKER = "# GRAVEYARD / DATA ONLY / NON-CANONICAL / NON-ACTIONABLE / NO AUTO-PRO
 FALSE_POLICY_FIELDS = ("actionable", "control", "canonical", "auto_promotion", "ssot")
 CONTROL_TEXT_SUFFIXES = {
     ".md", ".json", ".yml", ".yaml", ".toml", ".py", ".ps1", ".sh",
-    ".rs", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".html", ".xml",
-    ".ini", ".cfg", ".txt",
+    ".cmd", ".bat", ".rs", ".ts", ".tsx", ".js", ".mjs", ".cjs",
+    ".html", ".xml", ".ini", ".cfg", ".txt",
 }
 CONCRETE_GRAVEYARD_REF = re.compile(r"graveyard[\\/]+GY-[A-Za-z0-9._-]+\.md", re.IGNORECASE)
 # Этот тест обязан содержать заведомо плохую concrete-reference строку, иначе
 # невозможно доказать, что guard её ловит. Это единственное осознанное исключение.
-CONTROL_SCAN_ALLOWLIST = {Path("tests/test_graveyard.py")}
+CONTROL_SCAN_ALLOWLIST = {Path("tests/test_graveyard.py"), Path("tests/test_graveyard_codex_regressions.py")}
 
 
 def _git_blob_sha1(data: bytes) -> str:
@@ -44,7 +44,7 @@ def _validate_archive_relative_path(relative: str) -> Path:
 
 
 def _iter_control_text_files(root: Path):
-    """Сканирует весь текстовый control/code contour, а не фиксированный список каталогов."""
+    """Сканирует весь текстовый control/code contour, включая Windows scripts."""
     for path in root.rglob("*"):
         if not path.is_file():
             continue
