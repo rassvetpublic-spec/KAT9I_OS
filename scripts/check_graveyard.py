@@ -96,10 +96,10 @@ def validate_graveyard(root: Path) -> None:
         _fail(f"Manifest не совпадает с архивами: missing={missing}, unregistered={unregistered}")
 
     canonical_files: list[Path] = []
-    root_readme = root / "README.md"
-    if root_readme.is_file():
-        canonical_files.append(root_readme)
-    for base_name in ("docs", "schemas", "config"):
+    for path in root.iterdir():
+        if path.is_file() and path.suffix.lower() in CANONICAL_SUFFIXES:
+            canonical_files.append(path)
+    for base_name in ("docs", "schemas", "config", ".github"):
         base = root / base_name
         if base.is_dir():
             canonical_files.extend(p for p in base.rglob("*") if p.is_file() and p.suffix.lower() in CANONICAL_SUFFIXES)
@@ -107,7 +107,7 @@ def validate_graveyard(root: Path) -> None:
     for path in canonical_files:
         text = path.read_text(encoding="utf-8")
         if "graveyard/GY-" in text or "graveyard\\GY-" in text:
-            _fail(f"Канонический контур ссылается на конкретный Graveyard archive: {path.relative_to(root)}")
+            _fail(f"Канонический/управляющий контур ссылается на конкретный Graveyard archive: {path.relative_to(root)}")
 
 
 def validate_append_only(root: Path, base_sha: str | None) -> None:
