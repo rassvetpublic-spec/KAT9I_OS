@@ -13,8 +13,18 @@ $script:RestWrites=0
 $script:IterationMode=$false
 $script:IterationDuration=3
 
-function New-View([string]$Name,[string]$Id){
-  [pscustomobject]@{id=$Id;name=$Name;layout='TABLE';filter=''}
+function New-View([string]$Name,[string]$Id,[string]$Layout,[string]$Filter){
+  [pscustomobject]@{id=$Id;name=$Name;layout=$Layout;filter=$Filter}
+}
+
+function New-CanonicalViews {
+  @(
+    (New-View '00 — Все задачи' 'C0' 'TABLE_LAYOUT' 'is:open'),
+    (New-View '01 — Готово к работе' 'C1' 'TABLE_LAYOUT' 'is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"'),
+    (New-View '02 — В работе' 'C2' 'BOARD_LAYOUT' 'is:open Статус:"В работе"'),
+    (New-View '03 — Проверка' 'C3' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'),
+    (New-View '04 — Заблокировано' 'C4' 'TABLE_LAYOUT' 'is:open Статус:"Заблокировано"')
+  )
 }
 
 function Snapshot {
@@ -79,14 +89,6 @@ function Gql {
   throw 'GraphQL mutation не должна выполняться в fail-closed сценарии.'
 }
 
-$canonical=@(
-  '00 — Все задачи',
-  '01 — Готово к работе',
-  '02 — В работе',
-  '03 — Проверка',
-  '04 — Заблокировано'
-)
-
 function Assert-ViewsFailClosed([object[]]$Views,[string]$ExpectedMessage){
   $script:IterationMode=$false
   $script:MockViews=$Views
@@ -106,17 +108,21 @@ function Assert-ViewsFailClosed([object[]]$Views,[string]$ExpectedMessage){
   if($script:RestWrites -ne 0){throw "Fail-closed нарушен: REST writes = $($script:RestWrites)"}
 }
 
-$caseVariant=@()
-$i=1
-foreach($name in $canonical){$caseVariant+=New-View $name "C$i";$i++}
-$caseVariant+=New-View '00 — все задачи' 'CASE'
-Assert-ViewsFailClosed $caseVariant 'неизвестные дополнительные представления'
+$caseVariant=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
+$caseVariant+=New-View '00 — все задачи' 'CASE' 'TABLE_LAYOUT' 'is:open'
+Assert-ViewsFailClosed $caseVariant 'неизвестные или регистрово отличающиеся представления'
 
-$duplicate=@()
-$i=1
-foreach($name in $canonical){$duplicate+=New-View $name "D$i";$i++}
-$duplicate+=New-View '00 — Все задачи' 'DUP'
-Assert-ViewsFailClosed $duplicate 'дубли канонического представления'
+$oldQaFilter=@(New-CanonicalViews)
+$oldQaFilter=@($oldQaFilter|ForEach-Object{
+  if($_.name -ceq '03 — Проверка'){
+    New-View $_.name $_.id $_.layout 'is:open Статус:"Проверка качества"'
+  } else {$_}
+})
+Assert-ViewsFailClosed $oldQaFilter 'нарушает контракт'
+
+$missingEarlyDuplicateLate=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
+$missingEarlyDuplicateLate+=New-View '03 — Проверка' 'DUP' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'
+Assert-ViewsFailClosed $missingEarlyDuplicateLate 'дубли представления'
 
 $script:IterationMode=$true
 $script:IterationDuration=7
@@ -133,4 +139,4 @@ try {
 if(-not $thrown){throw 'Ожидалась fail-closed ошибка для существующей 7-дневной итерации.'}
 if($script:GqlCalls -ne 0){throw "Итерация была изменена через GraphQL: calls = $($script:GqlCalls)"}
 
-Write-Host 'PASS: Project policy fail-closed для case-variant, дубля и небезопасной миграции итерации.'
+Write-Host 'PASS: Project policy fail-closed выполняет полный preflight имени/layout/filter, дублей и небезопасной миграции итерации.'
