@@ -26,10 +26,10 @@ from scripts.graveyard_context import (
     REPO_ROOT,
     activation_action_hash,
     build_activation_ticket,
-    build_work_provenance,
     confirm_for_normal_workflow,
     create_reactivation_candidate,
     record_canon_check,
+    verified_work_provenance,
 )
 
 
@@ -119,17 +119,8 @@ def approve_excavate_request(
     if not isinstance(candidate, dict) or not isinstance(ticket, dict):
         _fail("Prepared bundle не содержит candidate/activation_ticket")
 
-    approved = confirm_for_normal_workflow(
+    outcome = confirm_for_normal_workflow(
         candidate,
-        activation_ticket=ticket,
-        approval_record=approval_record,
-        identity=identity,
-        used_nonces=used_nonces,
-        now=now,
-        root=root,
-    )
-    provenance = build_work_provenance(
-        approved,
         activation_ticket=ticket,
         approval_record=approval_record,
         identity=identity,
@@ -139,8 +130,8 @@ def approve_excavate_request(
     )
     return {
         "status": "APPROVED_FOR_NORMAL_WORKFLOW",
-        "candidate": approved,
-        "provenance": provenance,
+        "candidate": outcome.candidate,
+        "provenance": verified_work_provenance(outcome, root=root),
         "side_effect_performed": False,
     }
 
