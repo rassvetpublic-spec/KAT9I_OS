@@ -21,8 +21,8 @@
 
 ```text
 schemas/
-├── README.md             # Настоящий манифест и правила
-└── v1/                   # Канонические схемы версии 1
+├── README.md                   # Настоящий манифест и правила
+└── v1/                         # Канонические схемы версии 1
     ├── TaskContract.json       # Паспорт и требования к задаче
     ├── TaskRuntimeState.json   # Текущее состояние исполнения задачи
     ├── TaskResult.json         # Итоговый результат выполнения
@@ -36,8 +36,12 @@ schemas/
     ├── JournalEvent.json       # Элемент append-only журнала событий Event Journal
     ├── Checkpoint.json         # Снимок состояния задачи для Replay Recovery
     ├── CoreIpcMessage.json     # Контракт типизированного IPC между Electron и Rust Core
-    └── SecretRef.json          # Ссылка на защищённый секрет (DPAPI) без раскрытия значения
+    ├── SecretRef.json          # Ссылка на защищённый секрет (DPAPI) без раскрытия значения
+    ├── ContextRef.json         # Ссылка на контекст с provenance/trust/DATA-CONTROL признаками
+    └── GraveyardCandidate.json # Неисполняемый кандидат на ручное возвращение идеи из Graveyard
 ```
+
+Физический список файлов в `schemas/v1/` может быть шире этого краткого перечня по мере развития уже принятых контрактов. Каноническим является сам каталог и конкретные схемы, а не пример дерева выше.
 
 ## 4. Политика версионирования и эволюции схем
 
@@ -59,3 +63,17 @@ schemas/
    - Размещение в новом каталоге: `schemas/v2/`.
 3. **Принцип Fail-Closed при неизвестной версии:**
    - Если модуль получает сообщение с неизвестной `MAJOR` версией, операция немедленно отклоняется с ошибкой `INCOMPATIBLE_SCHEMA_VERSION`. Никакая интерпретация «по догадке» не допускается.
+
+## 5. Контекст и Graveyard
+
+`ContextRef.json` материализует уже объявленный в Module Registry контракт Context и делает машинными свойства источника: provenance, trust, freshness, `actionable`, `control` и `canonical`.
+
+Для `source_class=graveyard` схема принудительно требует:
+
+- `actionable=false`;
+- `control=false`;
+- `canonical=false`;
+- `freshness=ARCHIVED`;
+- `access=read`.
+
+`GraveyardCandidate.json` описывает только промежуточный DATA-объект. Даже после состояния `APPROVED_FOR_NORMAL_WORKFLOW` он не становится TaskContract, Issue или CONTROL. Он лишь доказывает, что историческая идея была сверена с текущим каноном и получила отдельное явное подтверждение владельца для перехода в обычный актуальный workflow.
