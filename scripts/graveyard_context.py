@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Fail-closed мост Graveyard -> Context -> Approval -> normal workflow.
+"""Fail-closed Graveyard -> Context -> Approval -> normal workflow bridge.
 
-Этот reference implementation намеренно не создаёт Issue/ADR/TaskContract и не
-выполняет внешних side effects. Он материализует DATA-контекст, блокирует
-автоматическое планирование, проверяет canon revision и допускает переход в
-обычный workflow только через точный GraveyardActivationTicket + ApprovalRecord
-+ Identity с replay/expiry проверками.
+Reference implementation only: no Issue/ADR/TaskContract creation and no external
+side effects. Graveyard always remains DATA. A normal-workflow handoff requires a
+manifest-bound candidate, completed canon check, exact ActivationTicket, valid
+Human Approval and replay evidence.
 """
 
 from __future__ import annotations
@@ -69,35 +68,30 @@ def _validate_schema(root: Path, name: str, value: dict[str, Any]) -> None:
 
 
 def load_manifest(root: Path = REPO_ROOT) -> dict[str, Any]:
-    """Загружает Graveyard manifest только после fail-closed проверки целостности."""
     validate_graveyard(root)
-    path = root / "graveyard" / "MANIFEST.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads((root / "graveyard" / "MANIFEST.json").read_text(encoding="utf-8"))
 
 
 def _find_archive(manifest: dict[str, Any], archive_id: str) -> dict[str, Any]:
     matches = [entry for entry in manifest.get("archives", []) if entry.get("archive_id") == archive_id]
     if len(matches) != 1:
-        _fail(f"Archive ID должен разрешаться ровно в одну запись: {archive_id}")
+        _fail(f"Archive ID должен разрешаться ровно в одну manifest-запись: {archive_id}")
     return matches[0]
 
 
 def _looks_like_graveyard_ref(context_ref: dict[str, Any]) -> bool:
-    """Распознаёт Graveyard по нескольким связанным provenance-признакам.
-
-    Это не позволяет обойти deny простым изменением source_class.
-    """
     provenance = context_ref.get("provenance") or {}
-    candidates = (
-        context_ref.get("source_class") == "graveyard",
-        context_ref.get("resolver") == "graveyard_manifest",
-        isinstance(context_ref.get("ref_id"), str) and context_ref["ref_id"].startswith("ctx-GY-"),
-        isinstance(context_ref.get("uri"), str)
-        and context_ref["uri"].replace("\\", "/").startswith("graveyard/GY-"),
-        isinstance(provenance.get("source_uri"), str)
-        and provenance["source_uri"].replace("\\", "/").startswith("graveyard/GY-"),
+    return any(
+        (
+            context_ref.get("source_class") == "graveyard",
+            context_ref.get("resolver") == "graveyard_manifest",
+            isinstance(context_ref.get("ref_id"), str) and context_ref["ref_id"].startswith("ctx-GY-"),
+            isinstance(context_ref.get("uri"), str)
+            and context_ref["uri"].replace("\\", "/").startswith("graveyard/GY-"),
+            isinstance(provenance.get("source_uri"), str)
+            and provenance["source_uri"].replace("\\", "/").startswith("graveyard/GY-"),
+        )
     )
-    return any(candidates)
 
 
 def resolve_archive_context(
@@ -106,7 +100,6 @@ def resolve_archive_context(
     root: Path = REPO_ROOT,
     retrieved_at: str | None = None,
 ) -> dict[str, Any]:
-    """Материализует Graveyard archive как ContextRef без управляющей силы."""
     manifest = load_manifest(root)
     entry = _find_archive(manifest, archive_id)
     ref = {
@@ -135,27 +128,23 @@ def resolve_archive_context(
 
 
 def validate_context_ref_policy(context_ref: dict[str, Any]) -> None:
-    """Проверяет security-инварианты, важные для Graveyard ContextRef."""
     if not _looks_like_graveyard_ref(context_ref):
         return
-    if context_ref.get("source_class") != "graveyard":
-        _fail("Graveyard provenance нельзя переклассифицировать в другой source_class")
-    if context_ref.get("actionable") is not False:
-        _fail("Graveyard ContextRef обязан иметь actionable=false")
-    if context_ref.get("control") is not False:
-        _fail("Graveyard ContextRef обязан иметь control=false")
-    if context_ref.get("canonical") is not False:
-        _fail("Graveyard ContextRef обязан иметь canonical=false")
-    if context_ref.get("freshness") != "ARCHIVED":
-        _fail("Graveyard ContextRef обязан иметь freshness=ARCHIVED")
-    if context_ref.get("access") != "read":
-        _fail("Graveyard ContextRef обязан быть read-only")
-    if context_ref.get("resolver") != "graveyard_manifest":
-        _fail("Graveyard ContextRef обязан разрешаться через graveyard_manifest")
+    expected = {
+        "source_class": "graveyard",
+        "actionable": False,
+        "control": False,
+        "canonical": False,
+        "freshness": "ARCHIVED",
+        "access": "read",
+        "resolver": "graveyard_manifest",
+    }
+    for field, value in expected.items():
+        if context_ref.get(field) != value:
+            _fail(f"Graveyard ContextRef: недопустимое {field}={context_ref.get(field)!r}")
 
 
 def can_seed_planning(context_ref: dict[str, Any]) -> bool:
-    """Возвращает False для любого объекта с Graveyard provenance, даже после подмены flags/class."""
     if _looks_like_graveyard_ref(context_ref):
         return False
     return context_ref.get("actionable") is True and context_ref.get("control") is True
@@ -166,6 +155,28 @@ def _candidate_id(archive_id: str, selector: str, idea_summary: str) -> str:
     return "gyc-" + hashlib.sha256(payload).hexdigest()[:16]
 
 
+def _validate_candidate_origin(candidate: dict[str, Any], *, root: Path) -> None:
+    archive_id = candidate.get("archive_id")
+    if not isinstance(archive_id, str) or not archive_id.startswith("GY-"):
+        _fail("Некорректный archive_id кандидата")
+
+    manifest = load_manifest(root)
+    _find_archive(manifest, archive_id)
+
+    selector = candidate.get("selector", "")
+    idea_summary = candidate.get("idea_summary")
+    if not isinstance(selector, str) or not isinstance(idea_summary, str) or not idea_summary.strip():
+        _fail("Кандидат обязан содержать selector и непустой idea_summary")
+
+    expected_id = _candidate_id(archive_id, selector, idea_summary)
+    if candidate.get("candidate_id") != expected_id:
+        _fail("candidate_id не соответствует Archive ID/selector/idea_summary")
+    if candidate.get("resurrected_from") != archive_id:
+        _fail("resurrected_from должен совпадать с Archive ID")
+    if candidate.get("source_ref") != f"ctx-{archive_id}":
+        _fail("source_ref должен соответствовать тому же Archive ID")
+
+
 def create_reactivation_candidate(
     archive_id: str,
     idea_summary: str,
@@ -174,7 +185,6 @@ def create_reactivation_candidate(
     root: Path = REPO_ROOT,
     created_at: str | None = None,
 ) -> dict[str, Any]:
-    """Создаёт DATA-кандидат. Сам кандидат никогда не становится Task/Issue."""
     if not idea_summary.strip():
         _fail("idea_summary не может быть пустым")
     source_ref = resolve_archive_context(archive_id, root=root, retrieved_at=created_at)
@@ -199,25 +209,18 @@ def create_reactivation_candidate(
         "owner_confirmation_ref": None,
         "created_at": created_at or _now_iso(),
     }
-    validate_candidate_policy(candidate)
+    validate_candidate_policy(candidate, root=root)
     _validate_schema(root, "GraveyardCandidate.json", candidate)
     return candidate
 
 
-def validate_candidate_policy(candidate: dict[str, Any]) -> None:
-    """Fail-closed проверка состояния reactivation candidate."""
+def validate_candidate_policy(candidate: dict[str, Any], *, root: Path = REPO_ROOT) -> None:
     if candidate.get("actionable") is not False or candidate.get("control") is not False:
         _fail("GraveyardCandidate всегда остаётся DATA/non-actionable")
     if candidate.get("requires_owner_confirmation") is not True:
-        _fail("GraveyardCandidate требует явного подтверждения владельца")
+        _fail("GraveyardCandidate требует Human Approval")
 
-    archive_id = candidate.get("archive_id")
-    if not isinstance(archive_id, str) or not archive_id.startswith("GY-"):
-        _fail("Некорректный archive_id кандидата")
-    if archive_id != candidate.get("resurrected_from"):
-        _fail("resurrected_from должен совпадать с исходным Archive ID")
-    if candidate.get("source_ref") != f"ctx-{archive_id}":
-        _fail("source_ref должен указывать на ContextRef того же Archive ID")
+    _validate_candidate_origin(candidate, root=root)
 
     state = candidate.get("state")
     if state not in CANDIDATE_STATES:
@@ -229,29 +232,30 @@ def validate_candidate_policy(candidate: dict[str, Any]) -> None:
     if status not in CANON_STATUSES:
         _fail(f"Неизвестный canon_check.status: {status}")
 
-    if state == "CANDIDATE":
-        if status != "NOT_CHECKED" or checked_revision is not None:
-            _fail("Новый CANDIDATE обязан иметь NOT_CHECKED и checked_revision=null")
-    elif state in {"AWAITING_OWNER_CONFIRMATION", "APPROVED_FOR_NORMAL_WORKFLOW", "BLOCKED_BY_CANON"}:
-        if not isinstance(checked_revision, str) or not checked_revision.strip():
-            _fail("После canon check checked_revision обязан быть непустой строкой")
+    if status == "NOT_CHECKED":
+        if checked_revision is not None:
+            _fail("NOT_CHECKED требует checked_revision=null")
+    elif not isinstance(checked_revision, str) or not checked_revision.strip():
+        _fail("Любой завершённый canon-check требует непустую checked_revision")
 
+    if state == "CANDIDATE" and status != "NOT_CHECKED":
+        _fail("CANDIDATE обязан иметь canon status NOT_CHECKED")
     if state == "AWAITING_OWNER_CONFIRMATION" and status != "COMPATIBLE":
-        _fail("Ожидать подтверждение владельца можно только после COMPATIBLE canon check")
+        _fail("AWAITING_OWNER_CONFIRMATION требует COMPATIBLE")
+    if state == "APPROVED_FOR_NORMAL_WORKFLOW" and status != "COMPATIBLE":
+        _fail("APPROVED_FOR_NORMAL_WORKFLOW требует COMPATIBLE")
     if state == "BLOCKED_BY_CANON" and status not in {"CONFLICT", "SUPERSEDED", "UNKNOWN"}:
         _fail("BLOCKED_BY_CANON требует CONFLICT/SUPERSEDED/UNKNOWN")
 
     activation_ref = candidate.get("activation_ref")
     confirmation_ref = candidate.get("owner_confirmation_ref")
     if state == "APPROVED_FOR_NORMAL_WORKFLOW":
-        if status != "COMPATIBLE":
-            _fail("APPROVED_FOR_NORMAL_WORKFLOW требует COMPATIBLE canon check")
         if not isinstance(activation_ref, str) or not activation_ref.startswith("gya-"):
-            _fail("APPROVED_FOR_NORMAL_WORKFLOW требует activation_ref")
+            _fail("Approved candidate требует activation_ref")
         if not isinstance(confirmation_ref, str) or not confirmation_ref.startswith("appr-"):
-            _fail("APPROVED_FOR_NORMAL_WORKFLOW требует approval_id в owner_confirmation_ref")
+            _fail("Approved candidate требует approval_id")
     elif activation_ref is not None or confirmation_ref is not None:
-        _fail("activation/owner confirmation refs допустимы только после APPROVED_FOR_NORMAL_WORKFLOW")
+        _fail("activation/approval refs допустимы только после Approval")
 
 
 def record_canon_check(
@@ -263,14 +267,13 @@ def record_canon_check(
     notes: str = "",
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """Фиксирует результат сверки идеи с актуальным каноном."""
-    validate_candidate_policy(candidate)
+    validate_candidate_policy(candidate, root=root)
     if candidate.get("state") not in {"CANDIDATE", "BLOCKED_BY_CANON"}:
-        _fail("Canon check разрешён только для нового или ранее заблокированного кандидата")
+        _fail("Canon check разрешён только для нового/заблокированного кандидата")
     if status not in CANON_STATUSES - {"NOT_CHECKED"}:
-        _fail(f"Недопустимый результат canon check: {status}")
+        _fail(f"Недопустимый canon status: {status}")
     if not isinstance(checked_revision, str) or not checked_revision.strip():
-        _fail("checked_revision обязателен для canon check")
+        _fail("checked_revision обязателен")
 
     updated = copy.deepcopy(candidate)
     updated["canon_check"] = {
@@ -282,12 +285,14 @@ def record_canon_check(
     updated["state"] = "AWAITING_OWNER_CONFIRMATION" if status == "COMPATIBLE" else "BLOCKED_BY_CANON"
     updated["activation_ref"] = None
     updated["owner_confirmation_ref"] = None
-    validate_candidate_policy(updated)
+    validate_candidate_policy(updated, root=root)
     _validate_schema(root, "GraveyardCandidate.json", updated)
     return updated
 
 
-def _activation_id(candidate: dict[str, Any], task_id: str, proposed_work: dict[str, Any], issued_at: str, expires_at: str) -> str:
+def _activation_id(
+    candidate: dict[str, Any], task_id: str, proposed_work: dict[str, Any], issued_at: str, expires_at: str
+) -> str:
     payload = {
         "candidate_id": candidate["candidate_id"],
         "task_id": task_id,
@@ -307,8 +312,7 @@ def build_activation_ticket(
     expires_at: str,
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """Запечатывает точные параметры будущего side effect до Human Approval."""
-    validate_candidate_policy(candidate)
+    validate_candidate_policy(candidate, root=root)
     if candidate.get("state") != "AWAITING_OWNER_CONFIRMATION":
         _fail("ActivationTicket разрешён только после COMPATIBLE canon check")
     if _parse_iso(expires_at) <= _parse_iso(issued_at):
@@ -334,37 +338,43 @@ def build_activation_ticket(
 
 
 def activation_action_hash(ticket: dict[str, Any], *, root: Path = REPO_ROOT) -> str:
-    """Вычисляет action_hash ApprovalRecord по точному каноническому ticket."""
     _validate_schema(root, "GraveyardActivationTicket.json", ticket)
     return "sha256:" + hashlib.sha256(_canonical_json_bytes(ticket)).hexdigest()
 
 
 def validate_identity_for_approval(
-    identity: dict[str, Any],
-    approval_record: dict[str, Any],
-    *,
-    root: Path = REPO_ROOT,
+    identity: dict[str, Any], approval_record: dict[str, Any], *, root: Path = REPO_ROOT
 ) -> None:
-    """Проверяет, что Approval действительно относится к доверенному HUMAN_USER."""
     _validate_schema(root, "Identity.json", identity)
     _validate_schema(root, "ApprovalRecord.json", approval_record)
-
     if identity.get("subject_type") != "HUMAN_USER":
         _fail("Human Approval может исходить только от HUMAN_USER")
     if identity.get("identity_id") != approval_record.get("approver_identity_id"):
         _fail("approver_identity_id не совпадает с Identity")
     if identity.get("trust_level") not in TRUSTED_HUMAN_LEVELS:
-        _fail("Human Approval требует AUTHENTICATED/FULL_LOCAL_TRUST Identity")
-
+        _fail("Human Approval требует AUTHENTICATED/FULL_LOCAL_TRUST")
     role = approval_record.get("approver_role")
     if role not in identity.get("roles", []):
-        _fail("Approval использует роль, которой нет у Identity")
-
-    windows_binding = identity.get("windows_binding")
-    if not isinstance(windows_binding, dict):
+        _fail("Approval использует отсутствующую у Identity роль")
+    binding = identity.get("windows_binding")
+    if not isinstance(binding, dict):
         _fail("Локальный Human Approval требует Windows binding")
-    if role == "LOCAL_ADMIN" and windows_binding.get("is_elevated") is not True:
-        _fail("LOCAL_ADMIN Approval требует is_elevated=true")
+    if role == "LOCAL_ADMIN" and binding.get("is_elevated") is not True:
+        _fail("LOCAL_ADMIN Approval требует elevation")
+
+
+def _validate_activation_window(ticket: dict[str, Any], approval_record: dict[str, Any], now: str) -> None:
+    ticket_issued = _parse_iso(ticket["issued_at"])
+    ticket_expires = _parse_iso(ticket["expires_at"])
+    approval_issued = _parse_iso(approval_record["issued_at"])
+    approval_expires = _parse_iso(approval_record["expires_at"])
+    current = _parse_iso(now)
+    if approval_issued < ticket_issued:
+        _fail("ApprovalRecord выдан раньше ActivationTicket")
+    if not (ticket_issued <= current < ticket_expires):
+        _fail("ActivationTicket ещё не действует или истёк")
+    if not (approval_issued <= current < approval_expires):
+        _fail("ApprovalRecord ещё не действует или истёк")
 
 
 def validate_approval_for_activation(
@@ -374,37 +384,28 @@ def validate_approval_for_activation(
     *,
     used_nonces: set[str],
     now: str,
+    require_consumed: bool = False,
     root: Path = REPO_ROOT,
 ) -> str:
-    """Fail-closed проверяет exact ticket hash, Identity, expiry и одноразовый nonce."""
     if used_nonces is None:
         _fail("Replay protection store обязателен")
     _validate_schema(root, "GraveyardActivationTicket.json", ticket)
     _validate_schema(root, "ApprovalRecord.json", approval_record)
     validate_identity_for_approval(identity, approval_record, root=root)
-
     if approval_record.get("task_id") != ticket.get("task_id"):
         _fail("ApprovalRecord.task_id не совпадает с ActivationTicket.task_id")
     if approval_record.get("action_hash") != activation_action_hash(ticket, root=root):
         _fail("ApprovalRecord.action_hash не совпадает с exact ActivationTicket")
-
-    ticket_issued = _parse_iso(ticket["issued_at"])
-    ticket_expires = _parse_iso(ticket["expires_at"])
-    approval_issued = _parse_iso(approval_record["issued_at"])
-    approval_expires = _parse_iso(approval_record["expires_at"])
-    current = _parse_iso(now)
-
-    if approval_issued < ticket_issued:
-        _fail("ApprovalRecord не может быть выдан раньше ActivationTicket")
-    if not (ticket_issued <= current < ticket_expires):
-        _fail("ActivationTicket ещё не действует или уже истёк")
-    if not (approval_issued <= current < approval_expires):
-        _fail("ApprovalRecord ещё не действует или уже истёк")
+    _validate_activation_window(ticket, approval_record, now)
 
     nonce = approval_record["nonce"]
-    if nonce in used_nonces:
-        _fail("ApprovalRecord nonce уже использован: replay blocked")
-    used_nonces.add(nonce)
+    if require_consumed:
+        if nonce not in used_nonces:
+            _fail("Provenance требует доказательство уже потреблённого nonce")
+    else:
+        if nonce in used_nonces:
+            _fail("ApprovalRecord nonce уже использован: replay blocked")
+        used_nonces.add(nonce)
     return approval_record["approval_id"]
 
 
@@ -430,10 +431,9 @@ def confirm_for_normal_workflow(
     now: str,
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """Подтверждает переход только после валидного Human Approval exact ticket."""
-    validate_candidate_policy(candidate)
+    validate_candidate_policy(candidate, root=root)
     if candidate.get("state") != "AWAITING_OWNER_CONFIRMATION":
-        _fail("Подтверждать можно только кандидата после COMPATIBLE canon check")
+        _fail("Подтверждать можно только AWAITING_OWNER_CONFIRMATION")
     _validate_schema(root, "GraveyardActivationTicket.json", activation_ticket)
     _validate_ticket_matches_candidate(candidate, activation_ticket)
     approval_id = validate_approval_for_activation(
@@ -444,41 +444,60 @@ def confirm_for_normal_workflow(
         now=now,
         root=root,
     )
-
     updated = copy.deepcopy(candidate)
     updated["state"] = "APPROVED_FOR_NORMAL_WORKFLOW"
     updated["activation_ref"] = activation_ticket["activation_id"]
     updated["owner_confirmation_ref"] = approval_id
-    validate_candidate_policy(updated)
+    validate_candidate_policy(updated, root=root)
     _validate_schema(root, "GraveyardCandidate.json", updated)
     return updated
 
 
 def reject_candidate(candidate: dict[str, Any], *, root: Path = REPO_ROOT) -> dict[str, Any]:
-    """Явно отклоняет кандидат без изменения Graveyard-оригинала."""
-    validate_candidate_policy(candidate)
+    validate_candidate_policy(candidate, root=root)
     updated = copy.deepcopy(candidate)
     updated["state"] = "REJECTED"
     updated["activation_ref"] = None
     updated["owner_confirmation_ref"] = None
-    validate_candidate_policy(updated)
+    validate_candidate_policy(updated, root=root)
     _validate_schema(root, "GraveyardCandidate.json", updated)
     return updated
 
 
-def build_work_provenance(candidate: dict[str, Any]) -> dict[str, str]:
-    """Возвращает provenance для будущей обычной задачи после всех Gate.
-
-    Функция не создаёт Issue/ADR/TaskContract и не выполняет side effect.
-    """
-    validate_candidate_policy(candidate)
+def build_work_provenance(
+    candidate: dict[str, Any],
+    *,
+    activation_ticket: dict[str, Any],
+    approval_record: dict[str, Any],
+    identity: dict[str, Any],
+    used_nonces: set[str],
+    now: str,
+    root: Path = REPO_ROOT,
+) -> dict[str, str]:
+    """Return handoff provenance only after re-validating the full Approval chain."""
+    validate_candidate_policy(candidate, root=root)
     if candidate.get("state") != "APPROVED_FOR_NORMAL_WORKFLOW":
-        _fail("Provenance для новой работы можно выдавать только после валидного Human Approval")
+        _fail("Provenance разрешён только после Approval")
+    _validate_schema(root, "GraveyardActivationTicket.json", activation_ticket)
+    _validate_ticket_matches_candidate(candidate, activation_ticket)
+    approval_id = validate_approval_for_activation(
+        activation_ticket,
+        approval_record,
+        identity,
+        used_nonces=used_nonces,
+        now=now,
+        require_consumed=True,
+        root=root,
+    )
+    if candidate.get("activation_ref") != activation_ticket.get("activation_id"):
+        _fail("candidate.activation_ref не совпадает с exact ticket")
+    if candidate.get("owner_confirmation_ref") != approval_id:
+        _fail("candidate.owner_confirmation_ref не совпадает с ApprovalRecord")
     return {
         "resurrected_from": candidate["archive_id"],
         "graveyard_candidate_id": candidate["candidate_id"],
         "source_ref": candidate["source_ref"],
-        "activation_ticket_id": candidate["activation_ref"],
-        "approval_id": candidate["owner_confirmation_ref"],
+        "activation_ticket_id": activation_ticket["activation_id"],
+        "approval_id": approval_id,
         "canon_checked_revision": candidate["canon_check"]["checked_revision"],
     }
