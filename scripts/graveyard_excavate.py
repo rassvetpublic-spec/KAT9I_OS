@@ -2,8 +2,8 @@
 """Безопасный reference handler команды «Раскопать идею».
 
 No GitHub Issue/ADR/TaskContract side effects. Production Electron/Rust wiring is
-still gated by G3. CLI approval consumes replay nonce under a cross-process lock,
-uses trusted system time, and atomically replaces the nonce-state file.
+still gated by G3. CLI approval consumes replay nonce under one trusted
+repo-local store with a cross-process lock, trusted system time and atomic writes.
 """
 
 from __future__ import annotations
@@ -41,6 +41,11 @@ def _fail(message: str) -> None:
 def _trusted_now_iso() -> str:
     """CLI security boundary: current time comes only from system UTC clock."""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _trusted_nonce_state_path(root: Path = REPO_ROOT) -> Path:
+    """Production-facing CLI uses one fixed replay store; callers cannot redirect it."""
+    return root / ".kat9i-runtime" / "graveyard-used-nonces.json"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -186,10 +191,17 @@ def approve_excavate_request_with_nonce_file(
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     """Serialize replay check+consume+persist as one critical section."""
+    parent = nonce_state_path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    if parent.is_symlink() or nonce_state_path.is_symlink():
+        _fail("Replay store не может быть symlink")
     lock_path = nonce_state_path.with_name(nonce_state_path.name + ".lock")
     lock_fd = _acquire_lock(lock_path)
     try:
-        state = _load_json(nonce_state_path)
+        if nonce_state_path.exists():
+            state = _load_json(nonce_state_path)
+        else:
+            state = {"used_nonces": []}
         used = _nonce_state_to_set(state)
         result = approve_excavate_request(
             prepared,
@@ -235,7 +247,6 @@ def main() -> int:
     approve.add_argument("--prepared", type=Path, required=True)
     approve.add_argument("--approval", type=Path, required=True)
     approve.add_argument("--identity", type=Path, required=True)
-    approve.add_argument("--used-nonces", type=Path, required=True)
     approve.add_argument("--output", type=Path)
 
     args = parser.parse_args()
@@ -255,7 +266,7 @@ def main() -> int:
         _load_json(args.prepared),
         approval_record=_load_json(args.approval),
         identity=_load_json(args.identity),
-        nonce_state_path=args.used_nonces,
+        nonce_state_path=_trusted_nonce_state_path(),
         now=_trusted_now_iso(),
     )
     _write_json(result, args.output)
