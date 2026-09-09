@@ -371,3 +371,9 @@ Integrations не должны:
 ## 15.35. Главный принцип
 
 > KAT9I_OS должна воспринимать GitHub, Google Drive, Obsidian, API, MCP, локальные программы и другие сервисы как сменяемые способы доступа к логическим возможностям, а не как архитектурные зависимости Core.
+
+## Promotion Adapter и Capability Negotiation (§36)
+
+Integrations сообщают технические capabilities платформы отдельно от Security permissions: чтение change, candidate build, CI, write/merge, CAS/expected-SHA, native queue, rulesets/reviews и workflow dispatch.
+
+Native queue является optional adapter. Отсутствие capability вызывает safe degradation: portable backend, local Runner, READY_FOR_MANUAL_MERGE или verified manual PromotionTicket. Platform-specific возможность не становится Core-инвариантом.

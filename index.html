@@ -238,6 +238,7 @@
 <a href="#arch-32_architectural_decisions_and_open_questions" data-target-id="arch-32_architectural_decisions_and_open_questions">Архитектура: 32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS</a>
 <a href="#arch-33_external_systems_benchmark" data-target-id="arch-33_external_systems_benchmark">Архитектура: 33_EXTERNAL_SYSTEMS_BENCHMARK</a>
 <a href="#arch-34_cache_engine" data-target-id="arch-34_cache_engine">Архитектура: 34_CACHE_ENGINE</a>
+<a href="#arch-36_change_promotion_protocol" data-target-id="arch-36_change_promotion_protocol">Архитектура: 36_CHANGE_PROMOTION_PROTOCOL</a>
 <a href="#arch-kat9i_os_architecture_context" data-target-id="arch-kat9i_os_architecture_context">Архитектура: KAT9I_OS_ARCHITECTURE_CONTEXT</a>
   </nav>
 
@@ -653,6 +654,21 @@ QA Worker: @auditor_login
 <h2 id="безопасный-отказ-при-неопределённости-fail-closed">Безопасный отказ при неопределённости (Fail-Closed)</h2>
 <p data-detail-level="simple"><strong>Очень просто:</strong> если не уверен в безопасности — остановись и заблокируй действие.</p>
 <p data-detail-level="worker"><strong>Рабочее объяснение:</strong> фундаментальный архитектурный принцип, при котором любая неопределённость в правах, правилах, целостности или проверках приводит к блокировке операции, а не к её разрешению.</p>
+<h2 id="продвижение-изменения-promotion">Продвижение изменения (Promotion)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> безопасно довести проверенное изменение до целевой версии.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> универсальная операция §36, которая связывает ChangeSet, target, Evidence, policy, authorization и фактический side effect; GitHub merge является одним из адаптеров.</p>
+<h2 id="запрос-продвижения-promotionrequest">Запрос продвижения (PromotionRequest)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> запись о том, какое изменение ждёт продвижения и на каком оно этапе.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> durable состояние одного элемента Promotion Queue; SSoT хранится в одном PromotionStore.</p>
+<h2 id="билет-продвижения-promotionticket">Билет продвижения (PromotionTicket)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> запечатанный паспорт точного финального действия.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> immutable bundle checked change + target + candidate + Evidence + policy + method + lease generation. <code>mtd</code> связывается с hash именно этого ticket.</p>
+<h2 id="право-продвижения-promotion-lease">Право продвижения (Promotion Lease)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> право одного актуального исполнителя выполнить финальное изменение target.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> существующий Lease/fencing механизм, применённый к Promotion side effect; stale generation не имеет права выполнить действие.</p>
+<h2 id="турбо-подготовка-turbo-preparation">Турбо-подготовка (Turbo preparation)</h2>
+<p data-detail-level="simple"><strong>Очень просто:</strong> пока первый ждёт, следующие заранее делают только безопасную подготовку.</p>
+<p data-detail-level="worker"><strong>Рабочее объяснение:</strong> speculative CLASSIFY/PRECHECK/impact/preliminary CI без изменения target, без финального Lease и без права считать preliminary CI финальным Integration Evidence.</p>
     </section>
 
     
@@ -1423,6 +1439,9 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <li>Trace фиксирует последовательность, тайминги и иерархию шагов;</li>
 <li>Evidence доказывает факт корректности полученного результата или прохождения приёмочных тестов.</li>
 </ul>
+<h2 id="метрики-portable-promotion-36">Метрики Portable Promotion (§36)</h2>
+<p>Минимально измеряются <code>full_qa_runs</code>, <code>delta_qa_runs</code>, <code>qa_reuse_count</code>, <code>qa_reuse_rate</code>, <code>qa_invalidation_reason</code>, <code>saved_full_qa_runs</code>, <code>external_qa_tokens</code>, <code>external_qa_cost</code>, <code>queue_wait_time</code>, <code>candidate_rebuild_count</code>, <code>integration_retry_count</code>, <code>promotion_block_reason</code>, <code>promotion_lead_time</code> и <code>qa_amplification_factor</code>.</p>
+<p>Обычный сбор и визуализация этих метрик не требуют LLM.</p>
     </section>
         
 
@@ -1825,6 +1844,10 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 </ol>
 <h2 id="14-52-главный-принцип">14.52. Главный принцип</h2>
 <p>KAT9I_OS не должна пытаться сделать ИИ абсолютно доверенным. Она должна строиться так, чтобы ошибка, галлюцинация или внедрённая управляющая команда не могли превратиться в опасное действие без прохождения независимых программных границ прав, Scope, Security и Evidence.</p>
+<h2 id="authorization-evidence-для-promotion-36">Authorization Evidence для Promotion (§36)</h2>
+<p>Для STRICT Promotion команда <code>mtd</code> создаёт/фиксирует Human Approval через существующий <code>ApprovalRecord</code>. <code>ApprovalRecord.action_hash</code> должен соответствовать <code>sha256:</code> + lowercase hex SHA-256 от RFC 8785 JCS всего точного sealed PromotionTicket. ApprovalRecord создаётся после seal и хранится как отдельное Authorization Evidence; изменившийся или expired ticket делает прежнее одобрение неприменимым.</p>
+<p><code>SecurityDecision</code> версии 1.1 использует <code>action.operation = PROMOTE_CHANGE</code>. Для такого решения <code>action_hash</code> обязателен и должен совпадать с <code>PromotionTicket.action_hash</code>, вычисленным по каноническим side-effect параметрам §36. Это связывает Security verdict с точным target/candidate/method без циклической зависимости от Human Approval.</p>
+<p>AI не может создавать Human Approval и не может единолично понижать risk class до SAFE. Перед side effect Security повторно проверяет capability, policy, ticket, совпадение action hash и актуальность authorization; неопределённость блокирует действие.</p>
     </section>
         
 
@@ -2264,6 +2287,9 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 </ol>
 <h2 id="15-35-главный-принцип">15.35. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> KAT9I_OS должна воспринимать GitHub, Google Drive, Obsidian, API, MCP, локальные программы и другие сервисы как сменяемые способы доступа к логическим возможностям, а не как архитектурные зависимости Core.</div>
+<h2 id="promotion-adapter-и-capability-negotiation-36">Promotion Adapter и Capability Negotiation (§36)</h2>
+<p>Integrations сообщают технические capabilities платформы отдельно от Security permissions: чтение change, candidate build, CI, write/merge, CAS/expected-SHA, native queue, rulesets/reviews и workflow dispatch.</p>
+<p>Native queue является optional adapter. Отсутствие capability вызывает safe degradation: portable backend, local Runner, READY_FOR_MANUAL_MERGE или verified manual PromotionTicket. Platform-specific возможность не становится Core-инвариантом.</p>
     </section>
         
 
@@ -3125,6 +3151,9 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 </ol>
 <h2 id="23-50-главный-принцип">23.50. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS может считать компонент или результат готовым только тогда, когда его требования проверены на точной версии реальными тестами и Evidence, а для значимых изменений результат независимо подтверждён другим исполнителем.</strong></div>
+<h2 id="связь-qa-с-portable-promotion-protocol-36">Связь QA с Portable Promotion Protocol (§36)</h2>
+<p>Change Evidence подтверждает ChangeSet, а Integration Evidence подтверждает точную комбинацию checked change + current target. Движение target инвалидирует Integration Evidence, но не является самостоятельной причиной FULL QA ChangeSet.</p>
+<p>Повторный FULL QA после PASS требует machine-readable reason из §23.2. Для повторного QA Context должен предпочитать QA Delta Context из §36 вместо повторной передачи всего PR/repository.</p>
     </section>
         
 
@@ -3275,6 +3304,10 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Тяжёлые проверки не включаются только ради количества функций.</p>
 <h2 id="24-19-главный-принцип">24.19. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> GitHub должен делать совместную работу KAT9I_OS понятной даже новичку, но не создавать параллельные источники истины: архитектура живёт в канонических документах, работа — в Issues, проверки — в Actions и Evidence, выпуск — в Releases, а Projects, HTML и другие интерфейсы лишь показывают эти данные удобным способом.</div>
+<h2 id="portable-promotion-для-github-36">Portable Promotion для GitHub (§36)</h2>
+<p>Команда <code>мерж</code> означает постановку/продолжение PromotionRequest, а не немедленный merge. GitHub PR является ChangeRef первой вертикали, <code>main</code> — target_ref, а final CI выполняется на synthetic candidate current target + checked ChangeSet.</p>
+<p>GitHub Project остаётся control plane и представлением. Runtime FIFO/Promotion state хранится только в authoritative PromotionStore. Native GitHub Merge Queue и Actions concurrency не являются обязательным SSoT.</p>
+<p>SAFE auto-promotion возможен только по детерминированной policy §36; архитектурные, workflow, schema, Security, QA/Gate и неопределённые изменения всегда STRICT.</p>
     </section>
         
 
@@ -4102,6 +4135,9 @@ Learning (самообучение)
 </ol>
 <h2 id="7-33-главный-принцип">7.33. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>Лучший контекст — не самый большой и не самый маленький. Лучший контекст — минимальный набор проверяемых источников, достаточный конкретному исполнителю для качественного выполнения конкретного этапа задачи.</strong></div>
+<h2 id="qa-delta-context-для-promotion-36">QA Delta Context для Promotion (§36)</h2>
+<p>При повторной проверке Context применяет Reference-first пакет: <code>PreviousChangeEvidence + PreviousFindings + ChangedDelta + ImpactAssessment + AffectedContracts + QuestionToRevalidate</code>.</p>
+<p>Полный PR/repository/старый чат не пересылаются без необходимости. Это уменьшает Context Drift, токены и стоимость повторного QA без ослабления Evidence provenance.</p>
     </section>
         
 
@@ -5972,6 +6008,9 @@ Learning (самообучение)
 </ol>
 <h2 id="19-35-главный-принцип">19.35. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS должна не только измерять, сколько ресурсов уже потрачено, но и до выполнения прогнозировать стоимость успешного результата, сравнивать разрешённые маршруты, пересчитывать прогноз по ходу работы и учиться на разнице между прогнозом и фактом.</strong></div>
+<h2 id="qa-budget-для-promotion-36">QA budget для Promotion (§36)</h2>
+<p>External FULL QA учитывается Planning как ограниченный ресурс времени, токенов и стоимости. После ранее принятого PASS Planning сравнивает стоимость нового FULL QA с Impact Assessment + DELTA QA и не запускает FULL повторно без machine-readable reason из §23.</p>
+<p>Целевой KPI — QA Amplification Factor около 1 для STRICT accepted change и 0 для SAFE.</p>
     </section>
         
 
@@ -6515,6 +6554,9 @@ Learning (самообучение)
 <p>Оркестрация должна стремиться не к максимальному числу агентов, моделей и вызовов, а к минимальному числу безопасных и достаточных действий, обеспечивающих требуемый результат.</p>
 <h2 id="20-54-главный-принцип">20.54. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS должна превращать запрос в управляемую цепочку контрактов, прогнозов, ссылок, разрешений, исполняемых действий и доказательств: заранее оценивать стоимость результата, пересчитывать ожидания по ходу выполнения, проверять фактический результат и использовать разницу между прогнозом и фактом для дальнейшего самообучения.</strong></div>
+<h2 id="связь-с-portable-promotion-protocol-36">Связь с Portable Promotion Protocol (§36)</h2>
+<p>Core является владельцем оркестрации Promotion lifecycle и порядка PromotionRequest. Детальная state machine, PromotionTicket и правила serialized side effect определены в §36. Новый top-level MergeQueue/Promotion supermodule не создаётся.</p>
+<p>После QA результат не публикуется напрямую в target: если ResultSink требует изменяющего Promotion, Core проходит через §36 и передаёт Execution только sealed PromotionTicket с действующими Evidence, Security Decision и Authorization Evidence.</p>
     </section>
         
 
@@ -6816,6 +6858,9 @@ Learning (самообучение)
 </ol>
 <h2 id="21-40-главный-принцип">21.40. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS должна проектироваться так, будто любой Worker, Provider, процесс, сеть или внешний сервис однажды обязательно откажет: состояние должно быть восстановимо, побочные действия защищены от повторения, операционные пороги обучаться на реальной истории, а пользователь должен видеть, что произошло, что удалось сохранить и как система продолжит работу.</strong></div>
+<h2 id="recovery-portable-promotion-36">Recovery Portable Promotion (§36)</h2>
+<p>Promotion переиспользует существующий Lease + generation + fencing. Один target имеет максимум одного активного владельца финального side effect. Старое поколение не может выполнить Promotion после reassignment.</p>
+<p>Event Journal фиксирует Promotion transitions, включая enqueue/classify/head/candidate/ticket/approval/commit/block и QA reuse/invalidation. Recovery восстанавливает состояние из authoritative PromotionStore + Journal + Checkpoint + фактического внешнего target.</p>
     </section>
         
 
@@ -7709,6 +7754,9 @@ Learning (самообучение)
 </ol>
 <h2 id="25-81-главный-принцип">25.81. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS должна хранить не «всё в одном месте», а каждую сущность там, где ей место: каноническое состояние — в надёжном структурированном хранилище, большие ресурсы — у их владельцев с доступом по ссылке, знания — в Базе знаний, секреты — в защищённом хранилище, а кэш и индексы — как безопасно пересоздаваемые ускорители.</strong></div>
+<h2 id="promotionstore-как-ssot-36">PromotionStore как SSoT (§36)</h2>
+<p>Для Promotion state в каждый момент разрешён ровно один authoritative backend. Для Desktop предпочтителен SQLite; для CI-only допустим dedicated Git ledger/ref с CAS; native platform queue может использоваться только как совместимый optional backend.</p>
+<p>GitHub Project не является runtime SSoT Promotion Queue. Переключение backend требует явной reconciliation/migration и не допускает двух равноправных источников истины.</p>
     </section>
         
 
@@ -8876,6 +8924,9 @@ Learning (самообучение)
 </ol>
 <h2 id="27-47-главный-принцип">27.47. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS должна иметь настолько чёткие границы ответственности, чтобы для любой функции можно было однозначно ответить: какой модуль ею владеет, кто её использует, через какой контракт она доступна и какой другой модуль не имеет права незаметно присвоить её себе; человек взаимодействует с системой через штатное Electron-приложение, но Electron не получает права обходить эти границы.</strong></div>
+<h2 id="portable-promotion-распределение-ответственности-36">Portable Promotion: распределение ответственности (§36)</h2>
+<p>Promotion не создаёт новый верхнеуровневый модуль. Core владеет orchestration; Rule Manager — classification/policy; Security — authorization; QA — Change Evidence; Execution — candidate и side effect; Integrations — transport; Storage — PromotionStore; Recovery — Lease/fencing; Context — QA Delta Context; Metrics — измерения; Planning — QA budget.</p>
+<p>Новые ключевые контракты: <code>PromotionRequest</code>, <code>ChangeEvidence</code>, <code>ImpactAssessment</code>, <code>PromotionTicket</code>. Они не меняют правило одного канонического владельца ответственности.</p>
     </section>
         
 
@@ -10885,6 +10936,9 @@ Learning (самообучение)
 </ol>
 <h2 id="31-90-главный-принцип">31.90. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS должна расти не количеством модулей, а количеством полностью работающих и доказанных путей от задачи до результата: сначала один локальный путь, затем GitHub-разработка, затем восстановление, прогнозирование, обучение и только после этого распределённая работа и расширение системы.</strong></div>
+<h2 id="portable-promotion-в-первой-github-вертикали-36">Portable Promotion в первой GitHub-вертикали (§36)</h2>
+<p>GitHub dogfood использует единый Portable Promotion Protocol: PR → Change Evidence → Promotion Queue → synthetic candidate → Integration Evidence → sealed PromotionTicket → AUTO или <code>mtd</code> → verified side effect.</p>
+<p>Первая реализация допускает GitHub Actions Promotion Bridge без собственной GitHub App. Native Merge Queue остаётся optional acceleration и не является условием работы на personal account.</p>
     </section>
         
 
@@ -11027,10 +11081,10 @@ Learning (самообучение)
 <p>Применимый обязательный запрет имеет приоритет над разрешением.</p>
 <p>Неоднозначность критического обязательного правила приводит к BLOCKED.</p>
 <h2 id="32-17-adr-009-независимый-qa">32.17. ADR-009 — независимый QA</h2>
-<p><strong>Статус:</strong> SUPERSEDED by ADR-040.</p>
+<p><strong>Статус:</strong> SUPERSEDED by ADR-045.</p>
 <p>Сохраняется исторически принятое требование независимости: Worker, реализовавший изменение, не выполняет квалифицирующий независимый QA собственного изменения.</p>
-<p>Старая универсальная формулировка «изменение revision делает старый QA неактуальным» заменена ADR-040, потому что она смешивала Provenance проверки с решением о необходимости повторного содержательного QA.</p>
-<h2 id="32-17a-adr-040-применимость-qa-evidence-после-изменения-revision">32.17a. ADR-040 — применимость QA Evidence после изменения revision</h2>
+<p>Старая универсальная формулировка «изменение revision делает старый QA неактуальным» заменена ADR-045, потому что она смешивала Provenance проверки с решением о необходимости повторного содержательного QA.</p>
+<h2 id="32-17a-adr-045-применимость-qa-evidence-после-изменения-revision">32.17a. ADR-045 — применимость QA Evidence после изменения revision</h2>
 <p><strong>Статус:</strong> ACCEPTED.</p>
 <p>QA Evidence всегда хранит точную <code>source revision</code> как Provenance и проверенный ChangeSet. Изменение SHA/rebase/target само по себе не является достаточным основанием для повторного FULL QA.</p>
 <p>После изменения система проверяет ChangeSet, значимые Rules/Policy, Scope, новый Evidence и Impact Assessment и выбирает <code>QA REUSE</code>, <code>DELTA QA</code>, <code>FULL QA</code> или <code>BLOCKED</code> согласно каноническому §23 и §20.34. Если изменился только target/base, пересчитывается Integration Evidence; Change Evidence не инвалидируется автоматически.</p>
@@ -11444,6 +11498,18 @@ Learning (самообучение)
 <li>Изменение модели, системных промптов или навыков принимается только при отсутствии деградации на базовом наборе сценариев.</li>
 <li>Любое ухудшение ранее работавшего сценария порождает статус <code>REGRESSION_DETECTED</code> и блокирует признание обновления успешным.</li>
 </ul>
+<h2 id="32-40k-adr-046-portable-promotion-protocol">32.40k. ADR-046 — Portable Promotion Protocol</h2>
+<p><strong>Статус:</strong> ACCEPTED (канонический источник: <code>docs/architecture/36_CHANGE_PROMOTION_PROTOCOL.md</code>, <code>schemas/v1/PromotionRequest.json</code>, <code>schemas/v1/ChangeEvidence.json</code>, <code>schemas/v1/ImpactAssessment.json</code>, <code>schemas/v1/PromotionTicket.json</code>, Issue #90).</p>
+<ol>
+<li>Каноническая абстракция — Promotion, а не platform-specific Merge Queue.</li>
+<li>Change Evidence, Integration Evidence и Authorization Evidence имеют независимые области жизни и инвалидируются по разным причинам.</li>
+<li>Финальный side effect разрешён только по sealed PromotionTicket; Human Approval связывается с hash этого ticket через существующий ApprovalRecord.</li>
+<li>Один target имеет не более одного активного Promotion Lease; stale executor блокируется fencing generation.</li>
+<li>Native platform queue является optional acceleration adapter; personal GitHub repository должен поддерживаться portable backend.</li>
+<li>Missing capability приводит к safe degradation, а не к обходу Gate.</li>
+<li>AI не может единолично понижать risk class до SAFE.</li>
+<li>PromotionStore имеет ровно один authoritative SSoT.</li>
+</ol>
 <h2 id="32-41-технологические-решения-которые-пока-не-должны-становиться-архитектурными-догмами">32.41. Технологические решения, которые пока не должны становиться архитектурными догмами</h2>
 <p>Следующие вещи могут быть заменены без изменения архитектурных принципов.</p>
 <h2 id="32-42-реализация-ipc-electron">32.42. Реализация IPC Electron</h2>
@@ -12485,6 +12551,319 @@ Learning (самообучение)
 <p>То есть ожидаемые пути развития учитываются в контрактах заранее, но неиспользуемая сложность не реализуется до появления измеренной необходимости.</p>
 <p>Дополнительный принцип:</p>
 <div class="note"><strong>Примечание:</strong> <strong>совместимость с будущей функцией обеспечивается контрактом, а не заранее написанным неиспользуемым кодом.</strong></div>
+    </section>
+        
+
+    <section id="arch-36_change_promotion_protocol" data-section-level="all">
+      <div class="badge">Каноническая архитектура</div>
+      <h1 id="36-portable-promotion-protocol-безопасное-продвижение-изменений">36. Portable Promotion Protocol — безопасное продвижение изменений</h1>
+<h2 id="36-1-назначение">36.1. Назначение</h2>
+<p>Portable Promotion Protocol — канонический механизм KAT9I_OS для безопасного продвижения уже подготовленного изменения в целевое состояние.</p>
+<p>Главная абстракция — <strong>Promotion</strong>, а не GitHub Merge Queue и не конкретный Pull Request.</p>
+<p>GitHub PR → <code>main</code> является первой рабочей вертикалью. Та же семантика должна переноситься на GitLab Merge Request, локальную Git-ветку, release branch и другой ResultSink через адаптеры.</p>
+<p>Ключевой принцип:</p>
+<div class="note"><strong>Примечание:</strong> внешний QA проверяет ChangeSet; детерминированные проверки подтверждают интеграцию этого же ChangeSet с текущим target; Authorization Evidence разрешает точное финальное Promotion-действие.</div>
+<p>Native platform queue может ускорять реализацию, но никогда не является обязательной частью Core-поведения.</p>
+<h2 id="36-2-пользовательские-команды">36.2. Пользовательские команды</h2>
+<p>Команда <code>мерж</code> означает: создать или продолжить PromotionRequest и продвинуть его настолько далеко, насколько разрешает текущая policy.</p>
+<p>Команда <code>mtd</code> / <code>MTD</code> / <code>мтд</code> означает: выдать Human Approval для <strong>точного sealed PromotionTicket</strong>, а не общее разрешение «слить этот PR когда-нибудь».</p>
+<p>Служебные пользовательские команды будущего интерфейса:</p>
+<ul>
+<li><code>очередь</code> — показать Promotion Queue и причины ожидания;</li>
+<li><code>пауза</code> — не выдавать новые финальные кандидаты;</li>
+<li><code>продолжить</code> — возобновить выдачу финальных кандидатов.</li>
+</ul>
+<p>Эти команды являются UI-контрактом. Конкретный transport не является частью архитектурного инварианта.</p>
+<h2 id="36-3-три-независимых-слоя-evidence">36.3. Три независимых слоя Evidence</h2>
+<h3 id="change-evidence">Change Evidence</h3>
+<p>Доказывает приемлемость самого ChangeSet. Всегда хранит точную source revision как Provenance, ChangeSetDigest, Scope и Rules/Policy проверки.</p>
+<p>Change Evidence не инвалидируется автоматически только из-за изменения target/base или нового эквивалентного SHA. Повторное использование определяется §23 через Impact Assessment и <strong>не создаёт новый ChangeEvidence с переписанной source revision</strong>: сохраняется ссылка на прежний immutable proof.</p>
+<h3 id="integration-evidence">Integration Evidence</h3>
+<p>Доказывает, что тот же проверенный ChangeSet совместим с конкретным target/candidate.</p>
+<p>Сюда относятся merge/conflict check, tests, schemas, build, lint и другие детерминированные проверки точной комбинации checked change + current target.</p>
+<p>Изменился target или candidate — Integration Evidence становится stale и пересчитывается. Это само по себе не означает новый FULL QA ChangeSet.</p>
+<h3 id="authorization-evidence">Authorization Evidence</h3>
+<p>Доказывает право выполнить конкретное финальное действие.</p>
+<p>Для Human Approval используется существующий <code>schemas/v1/ApprovalRecord.json</code>. Поле <code>ApprovalRecord.action_hash</code> равно <code>sha256:</code> + lowercase hex SHA-256 от UTF-8 JSON Canonicalization Scheme (RFC 8785) всего sealed PromotionTicket.</p>
+<p>ApprovalRecord создаётся <strong>после</strong> seal ticket и поэтому не входит внутрь PromotionTicket: это исключает циклический hash. Ссылка на Authorization Evidence хранится в mutable PromotionRequest. Изменился PromotionTicket или истёк срок ApprovalRecord — прежнее <code>mtd</code> не действует.</p>
+<h2 id="36-4-changesetdigest-и-impact-assessment">36.4. ChangeSetDigest и Impact Assessment</h2>
+<p>Первичная идентичность изменения — детерминированный <code>ChangeSetDigest</code>, а не AI semantic fingerprint.</p>
+<p><code>ChangeSetDigest</code> вычисляется как SHA-256 нормализованного фактического набора изменений: paths, operations, normalized content changes и значимые deterministic metadata.</p>
+<p>Оценка влияния отделена от идентичности и выполняется слоями:</p>
+<ol>
+<li>L0 — Git paths и delta;</li>
+<li>L1 — Module Registry, canonical ownership и contracts;</li>
+<li>L2 — dependency/overlap graph и blast radius;</li>
+<li>L3 — AI-анализ только при неоднозначности предыдущих уровней.</li>
+</ol>
+<p>AI не определяет математическую идентичность ChangeSet и не может единолично понижать риск до SAFE.</p>
+<h2 id="36-5-один-promotion-queue">36.5. Один Promotion Queue</h2>
+<p>KAT9I_OS имеет один логический Promotion Queue для target.</p>
+<p>Не создаются отдельные очереди SAFE, SOLO, TEAM или TURBO. Эти свойства описываются policy и требованиями Evidence конкретного PromotionRequest.</p>
+<p>Пример policy:</p>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Класс</th><th>Минимальное требование</th></tr></thead><tbody><tr><td>SAFE</td><td>Integration Evidence + policy auto-authorization, если она явно включена</td></tr><tr><td>NORMAL</td><td>Change Evidence + Integration Evidence + Human Approval</td></tr><tr><td>STRICT</td><td>FULL Change Evidence + Integration Evidence + Human Approval</td></tr><tr><td>TEAM_STRICT</td><td>независимый review + FULL Change Evidence + Integration Evidence + Human Approval</td></tr></tbody></table></div>
+<p>Авторство и identity агента влияют на policy, но не создают другой механизм Promotion.</p>
+<h2 id="36-6-safe">36.6. SAFE</h2>
+<p>SAFE — только результат детерминированной allowlist-policy.</p>
+<p>AI может повысить риск, но не является единственным источником разрешения SAFE. Неопределённость означает STRICT или BLOCKED.</p>
+<p>SAFE не определяется расширением файла. <code>.md</code> не означает SAFE автоматически.</p>
+<p>Всегда STRICT как минимум:</p>
+<ul>
+<li>архитектура;</li>
+<li>contracts/interfaces;</li>
+<li>schemas;</li>
+<li>Security;</li>
+<li>Rules/Policy;</li>
+<li>системный Context, prompts и agent rules;</li>
+<li>QA/Gate;</li>
+<li>permissions;</li>
+<li><code>.github/workflows/**</code>;</li>
+<li>CI, scripts и dependencies;</li>
+<li>Promotion/merge policy;</li>
+<li>release/versioning;</li>
+<li>migrations;</li>
+<li>любое изменение с неопределённым влиянием.</li>
+</ul>
+<p>SAFE может auto-promote только когда он является фактической головой очереди, построен свежий candidate для текущего target, все обязательные final checks зелёные и trusted gate не устарел.</p>
+<h2 id="36-7-канонический-жизненный-цикл-promotion">36.7. Канонический жизненный цикл Promotion</h2>
+<p>Логический поток:</p>
+<p><code>INTENT → CLASSIFY → QUEUE → PRECHECK → CHANGE_VERIFIED → WAITING → HEAD → CANDIDATE_BUILD → INTEGRATION_VERIFIED → TICKET_SEALED → AUTO или mtd → COMMIT → VERIFY_COMMIT → DONE</code>.</p>
+<p>Ошибки и неопределённость → <code>BLOCKED</code>.</p>
+<p>Отмена → <code>CANCELLED</code>.</p>
+<p>Изменился target → <code>CANDIDATE_STALE</code>, пересборка candidate и Integration Evidence.</p>
+<p>Изменился ChangeSet → Impact Assessment → <code>QA_REUSE</code>, <code>DELTA_QA</code>, <code>FULL_QA</code> или <code>BLOCKED</code> согласно §23.</p>
+<p>Подробное runtime-состояние PromotionRequest не должно перегружать TaskRuntimeState. PromotionRequest хранит ссылки на актуальные Change Evidence, Integration Evidence, sealed PromotionTicket и появившееся после seal Authorization Evidence; сами Evidence остаются отдельными объектами.</p>
+<h2 id="36-8-change-freeze-и-candidate-seal">36.8. Change Freeze и Candidate Seal</h2>
+<p>Это два разных вида неизменяемости.</p>
+<p><strong>Change Freeze</strong> фиксирует то, что проверял содержательный QA, и позволяет переиспользовать Change Evidence.</p>
+<p><strong>Candidate Seal</strong> фиксирует фактическую финальную комбинацию checked change + target + evidence + policy + method + authorization.</p>
+<p>Новый candidate не означает новый ChangeSet.</p>
+<h2 id="36-9-promotionticket">36.9. PromotionTicket</h2>
+<p>Перед финальным side effect формируется sealed <code>PromotionTicket</code>.</p>
+<p>Он связывает как минимум:</p>
+<ul>
+<li>promotion_id;</li>
+<li>task_id;</li>
+<li>change_ref;</li>
+<li>change_digest;</li>
+<li>target_ref;</li>
+<li>target_revision;</li>
+<li>candidate_revision;</li>
+<li>risk_class;</li>
+<li>Change Evidence ref (<code>null</code> допустим только для SAFE согласно policy);</li>
+<li>Integration Evidence ref;</li>
+<li>Security Decision ref;</li>
+<li><code>action_hash</code>;</li>
+<li>policy ref/version;</li>
+<li>promotion method;</li>
+<li>lease_generation;</li>
+<li>issued_at/expires_at.</li>
+</ul>
+<p><code>PromotionTicket.action_hash</code> вычисляется как <code>sha256:</code> + lowercase hex SHA-256 от RFC 8785 JCS-объекта с точными side-effect параметрами: <code>change_digest</code>, <code>target_ref</code>, <code>target_revision</code>, <code>candidate_revision</code>, <code>promotion_method</code>, <code>policy_ref</code>, <code>policy_version</code>, <code>lease_generation</code>. <code>SecurityDecision</code> с <code>operation = PROMOTE_CHANGE</code> обязан содержать тот же <code>action_hash</code>.</p>
+<p>После <code>TICKET_SEALED</code> изменение любого поля делает прежний ticket недействительным и требует нового ticket. Reusable Change Evidence при этом сохраняется, если §23 считает его применимым. Human Approval создаётся поверх уже sealed ticket и связывается с hash <strong>всего</strong> ticket, а не только <code>action_hash</code>.</p>
+<h2 id="36-10-promotion-lease-и-fencing">36.10. Promotion Lease и fencing</h2>
+<p>Новый mutex subsystem не создаётся.</p>
+<p>Promotion переиспользует существующие Lease, <code>lease_generation</code>, fencing и Recovery semantics §21.</p>
+<p>Инвариант:</p>
+<div class="note"><strong>Примечание:</strong> один target имеет не более одного активного владельца финального Promotion side effect.</div>
+<p>Когда PromotionRequest становится HEAD, Core получает Promotion Lease для target. После смены generation старый executor не имеет права выполнить side effect даже если вернулся после сбоя.</p>
+<p>GitHub Actions <code>concurrency</code> или аналог платформы может быть дополнительным mutex/safety belt, но не является FIFO SSoT очереди.</p>
+<h2 id="36-11-atomic-stale-candidate-protection">36.11. Atomic stale-candidate protection</h2>
+<p>Непосредственно перед физическим Promotion Execution повторно читает реальный target и проверяет:</p>
+<ul>
+<li>current target revision совпадает с <code>PromotionTicket.target_revision</code>;</li>
+<li>текущий ChangeSetDigest совпадает с ticket;</li>
+<li>candidate revision не изменился;</li>
+<li>policy и Evidence действительны;</li>
+<li>Security Decision действителен, имеет <code>operation = PROMOTE_CHANGE</code> и его <code>action_hash</code> совпадает с <code>PromotionTicket.action_hash</code>;</li>
+<li>Human Approval или policy auto-authorization действительны; для Human Approval <code>ApprovalRecord.action_hash</code> совпадает с SHA-256 RFC 8785 JCS всего sealed PromotionTicket;</li>
+<li>lease_generation является текущим.</li>
+</ul>
+<p>При любом несовпадении действует Fail-Closed.</p>
+<p>Если target изменился: <code>CANDIDATE_STALE</code>; side effect запрещён; строится новый candidate и новый Integration Evidence.</p>
+<p>Если transport поддерживает CAS, expected-SHA или защиту non-fast-forward, она используется как последний atomic guard.</p>
+<p>Нельзя сознательно продвигать candidate, отличный от финально проверенного.</p>
+<h2 id="36-12-turbo">36.12. Turbo</h2>
+<p>Turbo — speculative preparation scheduler, а не отдельный тип очереди и не ослабленная policy.</p>
+<p>Пока HEAD ожидает дорогой QA или другое Evidence, следующие до трёх PromotionRequest могут выполнять дешёвую подготовку:</p>
+<ul>
+<li>CLASSIFY;</li>
+<li>PRECHECK;</li>
+<li>dependency/impact analysis;</li>
+<li>preliminary CI;</li>
+<li>подготовку Context/Evidence refs.</li>
+</ul>
+<p>Turbo не может:</p>
+<ul>
+<li>менять target;</li>
+<li>получать финальный Promotion Lease;</li>
+<li>выполнять Promotion side effect;</li>
+<li>считать preliminary CI финальным Integration Evidence.</li>
+</ul>
+<p>Параллельная подготовка разрешена. Параллельный финальный Promotion одного target запрещён.</p>
+<h2 id="36-13-qa-merge-barrier">36.13. QA merge barrier</h2>
+<p>Консервативная policy может включать <code>qa_merge_barrier</code> на время дорогого FULL QA: target временно не изменяется, SAFE ждут, а Turbo продолжает PRECHECK.</p>
+<p>Это operational policy для снижения context drift и стоимости Impact Assessment, а не correctness invariant.</p>
+<p>Архитектура остаётся корректной и при отключённом barrier: движение target не инвалидирует Change Evidence автоматически, но всегда инвалидирует старый Integration Evidence/candidate.</p>
+<h2 id="36-14-qa-delta-context">36.14. QA Delta Context</h2>
+<p>Для повторной проверки Context передаёт минимальный пакет:</p>
+<p><code>PreviousChangeEvidence + PreviousFindings + ChangedDelta + ImpactAssessment + AffectedContracts + QuestionToRevalidate</code>.</p>
+<p>Не следует пересылать весь PR, весь repository или полный старый чат, если они не нужны для конкретного вывода.</p>
+<p>Это применение Reference-first и Context Funnel §7.</p>
+<h2 id="36-15-qa-economics">36.15. QA economics</h2>
+<p>External FULL QA является ограниченным ресурсом времени, токенов и стоимости.</p>
+<p>После ранее принятого PASS повторный FULL QA допускается только с machine-readable reason из §23.</p>
+<p>Planning перед повторным FULL QA учитывает стоимость FULL QA и альтернативу Impact Assessment + DELTA QA.</p>
+<p>Целевой показатель:</p>
+<p><code>QA Amplification Factor = FULL external QA runs / accepted change</code>.</p>
+<p>Ориентир: около 1 для STRICT и 0 для SAFE.</p>
+<h2 id="36-16-capability-negotiation">36.16. Capability Negotiation</h2>
+<p>При подключении repository/platform Integration Adapter сообщает фактические technical capabilities отдельно от Security permissions.</p>
+<p>Минимально полезные capability flags:</p>
+<ul>
+<li>read change;</li>
+<li>build synthetic candidate;</li>
+<li>read/run CI;</li>
+<li>auto promote/merge;</li>
+<li>CAS/expected-SHA atomic guard;</li>
+<li>native queue;</li>
+<li>rulesets/protection;</li>
+<li>reviews;</li>
+<li>write refs;</li>
+<li>workflow dispatch.</li>
+</ul>
+<p>Core выбирает backend на основании capabilities, но safety semantics не меняются.</p>
+<h2 id="36-17-graceful-degradation">36.17. Graceful degradation</h2>
+<p>Отсутствующая capability не должна останавливать универсальный продукт и не должна ослаблять Gate.</p>
+<p>Примеры:</p>
+<ul>
+<li>native queue доступен → optional acceleration backend;</li>
+<li>native queue отсутствует → KAT9I Promotion Queue + portable candidate;</li>
+<li>нет auto-merge permission → <code>READY_FOR_MANUAL_MERGE</code>;</li>
+<li>нет GitHub Actions → local Runner/CI adapter;</li>
+<li>нет API write → sealed verified PromotionTicket для ручного действия.</li>
+</ul>
+<p>Personal GitHub account является поддерживаемой базовой средой. Organization и Enterprise не обязательны.</p>
+<h2 id="36-18-promotionstore-и-ssot">36.18. PromotionStore и SSoT</h2>
+<p>В каждый момент существует ровно один authoritative PromotionStore/QueueStore для конкретного target scope.</p>
+<p>Предпочтительные backend:</p>
+<ul>
+<li>Desktop/local controller → SQLite;</li>
+<li>CI-only/unattended → dedicated Git ledger/ref с CAS/optimistic concurrency;</li>
+<li>native platform queue → optional backend/adapter, если он способен сохранить требуемые semantics.</li>
+</ul>
+<p>GitHub Project является control plane и представлением, но не runtime SSoT очереди.</p>
+<p>Переключение backend требует явной reconciliation/migration. Два равноправных SSoT запрещены.</p>
+<h2 id="36-19-владение-модулей">36.19. Владение модулей</h2>
+<p>Новый top-level <code>MergeQueue</code> или <code>Promotion</code> supermodule не создаётся.</p>
+<ul>
+<li>Core — Promotion workflow, order и state orchestration;</li>
+<li>Rule Manager — classification и policy;</li>
+<li>Security — capability grants, SAFE auto-authorization policy и проверка Human Approval;</li>
+<li>QA — Change Evidence / QA Result и содержательная применимость verdict;</li>
+<li>Execution — candidate materialization и физический Promotion side effect;</li>
+<li>Integrations — GitHub/GitLab/local Git transport adapters;</li>
+<li>Storage — физический PromotionStore backend;</li>
+<li>Recovery — Lease/fencing/reconciliation/retry;</li>
+<li>Context — QA Delta Context;</li>
+<li>Metrics — Promotion/QA metrics;</li>
+<li>Planning — QA budget и cost decision.</li>
+</ul>
+<p>Orchestration остаётся ответственностью Core согласно §27.</p>
+<h2 id="36-20-машинные-контракты">36.20. Машинные контракты</h2>
+<p>Минимальные новые схемы v1:</p>
+<ol>
+<li><code>PromotionRequest.json</code> — durable Promotion/queue state;</li>
+<li><code>ChangeEvidence.json</code> — структурированный QA proof конкретного ChangeSet;</li>
+<li><code>ImpactAssessment.json</code> — оценка применимости/влияния и решение REUSE/DELTA/FULL/BLOCKED;</li>
+<li><code>PromotionTicket.json</code> — sealed final bundle точного Promotion.</li>
+</ol>
+<p>Переиспользуются:</p>
+<ul>
+<li><code>Evidence.json</code> — техническое Evidence, включая Integration Evidence;</li>
+<li><code>ApprovalRecord.json</code> — Human Approval (<code>mtd</code>);</li>
+<li><code>SecurityDecision.json</code> — разрешение Security; версия 1.1 добавляет <code>PROMOTE_CHANGE</code> и обязательный для него <code>action_hash</code>;</li>
+<li><code>JournalEvent.json</code> — audit/recovery events;</li>
+<li><code>Checkpoint.json</code> — Recovery state.</li>
+</ul>
+<p>Не создаются отдельные <code>MtdApproval</code>, <code>MergeSecurity</code> или <code>QueueEvidence</code>.</p>
+<h2 id="36-21-journal-и-recovery">36.21. Journal и Recovery</h2>
+<p>Критические переходы Promotion фиксируются Event Journal.</p>
+<p>Канонические event types включают:</p>
+<ul>
+<li><code>PROMOTION_ENQUEUED</code>;</li>
+<li><code>PROMOTION_CLASSIFIED</code>;</li>
+<li><code>CHANGE_EVIDENCE_ACCEPTED</code>;</li>
+<li><code>PROMOTION_HEAD_ACQUIRED</code>;</li>
+<li><code>CANDIDATE_CREATED</code>;</li>
+<li><code>INTEGRATION_PASSED</code>;</li>
+<li><code>PROMOTION_TICKET_SEALED</code>;</li>
+<li><code>PROMOTION_APPROVED</code>;</li>
+<li><code>PROMOTION_COMMITTED</code>;</li>
+<li><code>PROMOTION_BLOCKED</code>;</li>
+<li><code>QA_REUSED</code>;</li>
+<li><code>QA_INVALIDATED</code>;</li>
+<li><code>DELTA_QA_REQUIRED</code>;</li>
+<li><code>CANDIDATE_STALE</code>.</li>
+</ul>
+<p>Recovery восстанавливает очередь и side-effect ownership из SSoT + Journal + Checkpoint + внешнего фактического состояния, а не из догадки модели.</p>
+<h2 id="36-22-метрики">36.22. Метрики</h2>
+<p>Минимальный архитектурный набор:</p>
+<ul>
+<li><code>full_qa_runs</code>;</li>
+<li><code>delta_qa_runs</code>;</li>
+<li><code>qa_reuse_count</code>;</li>
+<li><code>qa_reuse_rate</code>;</li>
+<li><code>qa_invalidation_reason</code>;</li>
+<li><code>saved_full_qa_runs</code>;</li>
+<li><code>external_qa_tokens</code>;</li>
+<li><code>external_qa_cost</code>;</li>
+<li><code>queue_wait_time</code>;</li>
+<li><code>candidate_rebuild_count</code>;</li>
+<li><code>integration_retry_count</code>;</li>
+<li><code>promotion_block_reason</code>;</li>
+<li><code>promotion_lead_time</code>;</li>
+<li><code>qa_amplification_factor</code>.</li>
+</ul>
+<p>Обычный сбор и визуализация этих чисел не требуют LLM.</p>
+<h2 id="36-23-системные-инварианты">36.23. Системные инварианты</h2>
+<p>P1. Один target → максимум один активный Promotion Lease.</p>
+<p>P2. SAFE не обходит фактическую голову Promotion Queue.</p>
+<p>P3. FULL QA может включать временный merge barrier по policy, но barrier не является correctness invariant.</p>
+<p>P4. Изменение target не инвалидирует Change Evidence автоматически.</p>
+<p>P5. Изменение ChangeSet требует Impact Assessment.</p>
+<p>P6. AI не может единолично понизить риск до SAFE.</p>
+<p>P7. Promotion разрешён только по sealed PromotionTicket.</p>
+<p>P8. Human Approval связывается с hash точного PromotionTicket.</p>
+<p>P9. Target сравнивается непосредственно перед side effect.</p>
+<p>P10. Старый executor блокируется fencing generation.</p>
+<p>P11. Native platform feature не является обязательным для Core behavior.</p>
+<p>P12. Missing capability вызывает safe degradation, а не rule bypass.</p>
+<p>P13. Повторный FULL QA требует machine-readable reason.</p>
+<p>P14. Promotion state имеет ровно один SSoT.</p>
+<p>P15. Turbo ускоряет подготовку, но не нарушает serialized Promotion.</p>
+<h2 id="36-24-github-vertical">36.24. GitHub vertical</h2>
+<p>Для GitHub:</p>
+<ul>
+<li>ChangeRef обычно указывает на PR/head;</li>
+<li>target_ref обычно <code>main</code> или release branch;</li>
+<li>synthetic candidate строится из current target + checked ChangeSet;</li>
+<li>final CI выполняется на synthetic candidate;</li>
+<li>expected head SHA/CAS/non-fast-forward guard используется при возможности;</li>
+<li>native Merge Queue используется только как optional acceleration adapter.</li>
+</ul>
+<p>GitHub Actions <code>concurrency</code> не является FIFO SSoT и не заменяет PromotionStore.</p>
+<h2 id="36-25-что-не-входит-в-этот-архитектурный-этап">36.25. Что не входит в этот архитектурный этап</h2>
+<p>Этот раздел не реализует:</p>
+<ul>
+<li>GitHub Actions Promotion Bridge;</li>
+<li>GitHub App;</li>
+<li>runtime PromotionStore;</li>
+<li>реальный auto-merge;</li>
+<li>native Merge Queue integration;</li>
+<li>batch/multi-PR merge.</li>
+</ul>
+<p>Следующий implementation PR должен dogfood этот протокол на GitHub Actions, сохраняя те же контракты и пользовательские команды.</p>
     </section>
         
 

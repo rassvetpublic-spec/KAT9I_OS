@@ -376,3 +376,9 @@ Recovery Manager не может самостоятельно менять Rules
 ## 21.40. Главный принцип
 
 > **KAT9I_OS должна проектироваться так, будто любой Worker, Provider, процесс, сеть или внешний сервис однажды обязательно откажет: состояние должно быть восстановимо, побочные действия защищены от повторения, операционные пороги обучаться на реальной истории, а пользователь должен видеть, что произошло, что удалось сохранить и как система продолжит работу.**
+
+## Recovery Portable Promotion (§36)
+
+Promotion переиспользует существующий Lease + generation + fencing. Один target имеет максимум одного активного владельца финального side effect. Старое поколение не может выполнить Promotion после reassignment.
+
+Event Journal фиксирует Promotion transitions, включая enqueue/classify/head/candidate/ticket/approval/commit/block и QA reuse/invalidation. Recovery восстанавливает состояние из authoritative PromotionStore + Journal + Checkpoint + фактического внешнего target.

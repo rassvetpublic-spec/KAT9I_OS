@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/ChangeEvidence.json",
+  "title": "ChangeEvidence",
+  "description": "Структурированный независимый QA proof конкретного ChangeSet. QA REUSE не создаёт новый ChangeEvidence: переиспользуется прежний proof вместе с ImpactAssessment.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "change_evidence_id",
+    "task_id",
+    "change_digest",
+    "source_revision",
+    "scope_refs",
+    "policy_ref",
+    "policy_version",
+    "qa_verdict",
+    "qa_mode",
+    "qa_worker",
+    "created_at"
+  ],
+  "properties": {
+    "change_evidence_id": {
+      "type": "string",
+      "pattern": "^cev-[a-zA-Z0-9_-]{8,64}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$"
+    },
+    "change_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "source_revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "scope_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "policy_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "policy_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "qa_verdict": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NEEDS_REVISION",
+        "BLOCKED"
+      ]
+    },
+    "qa_mode": {
+      "type": "string",
+      "enum": [
+        "FULL",
+        "DELTA"
+      ]
+    },
+    "qa_worker": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "previous_change_evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "findings_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 4096,
+      "default": ""
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -427,3 +427,8 @@ QA Pass Rate упал ниже минимального уровня
    - Trace фиксирует последовательность, тайминги и иерархию шагов;
    - Evidence доказывает факт корректности полученного результата или прохождения приёмочных тестов.
 
+## Метрики Portable Promotion (§36)
+
+Минимально измеряются `full_qa_runs`, `delta_qa_runs`, `qa_reuse_count`, `qa_reuse_rate`, `qa_invalidation_reason`, `saved_full_qa_runs`, `external_qa_tokens`, `external_qa_cost`, `queue_wait_time`, `candidate_rebuild_count`, `integration_retry_count`, `promotion_block_reason`, `promotion_lead_time` и `qa_amplification_factor`.
+
+Обычный сбор и визуализация этих метрик не требуют LLM.
