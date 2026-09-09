@@ -2,8 +2,8 @@
 """Безопасный reference handler команды «Раскопать идею».
 
 No GitHub Issue/ADR/TaskContract side effects. Production Electron/Rust wiring is
-still gated by G3. CLI approval consumes replay nonce under a cross-process lock
-and atomically replaces the nonce-state file.
+still gated by G3. CLI approval consumes replay nonce under a cross-process lock,
+uses trusted system time, and atomically replaces the nonce-state file.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,11 @@ from scripts.graveyard_context import (
 
 def _fail(message: str) -> None:
     raise ValueError(message)
+
+
+def _trusted_now_iso() -> str:
+    """CLI security boundary: current time comes only from system UTC clock."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -111,7 +117,7 @@ def approve_excavate_request(
     now: str,
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """In-memory approval helper. Caller owns serialization of used_nonces."""
+    """In-memory approval helper. Tests/internal callers may inject time explicitly."""
     if prepared.get("status") != "AWAITING_OWNER_CONFIRMATION":
         _fail("Approve разрешён только для AWAITING_OWNER_CONFIRMATION bundle")
     candidate = prepared.get("candidate")
@@ -230,7 +236,6 @@ def main() -> int:
     approve.add_argument("--approval", type=Path, required=True)
     approve.add_argument("--identity", type=Path, required=True)
     approve.add_argument("--used-nonces", type=Path, required=True)
-    approve.add_argument("--now", required=True)
     approve.add_argument("--output", type=Path)
 
     args = parser.parse_args()
@@ -251,7 +256,7 @@ def main() -> int:
         approval_record=_load_json(args.approval),
         identity=_load_json(args.identity),
         nonce_state_path=args.used_nonces,
-        now=args.now,
+        now=_trusted_now_iso(),
     )
     _write_json(result, args.output)
     return 0
