@@ -1,0 +1,49 @@
+name: T0 baseline sync after main drift
+on:
+  push:
+    branches:
+      - docs/issue-129-t0-requirements-registry
+permissions:
+  contents: write
+jobs:
+  sync:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/issue-129-t0-requirements-registry
+          fetch-depth: 0
+      - name: Sync T0 baseline to current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "d28547da5286eb7f275a74449d88d398018de8e4"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          old = 'c2b15c87b7310c1b26e79d2088a2be3137ba13d5'
+          new = 'd28547da5286eb7f275a74449d88d398018de8e4'
+          p = Path('requirements_registry.json')
+          data = json.loads(p.read_text(encoding='utf-8'))
+          assert data['baseline_revision'] == old, data['baseline_revision']
+          data['baseline_revision'] = new
+          p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          r = Path('docs/reports/T0_REQUIREMENTS_REGISTRY.md')
+          text = r.read_text(encoding='utf-8')
+          assert f'Baseline current main: `{old}`.' in text
+          text = text.replace(f'Baseline current main: `{old}`.', f'Baseline current main: `{new}`.')
+          marker = '- Graveyard SSoT corrective provenance: `0252f888f8a0a32ddf1644fde284bda4a10aa9cc`.\n'
+          extra = '- Integrated G0 control-plane baseline: `d28547da5286eb7f275a74449d88d398018de8e4` (PR #133); новых нормативных Requirement не добавлено.\n'
+          if extra not in text:
+              text = text.replace(marker, marker + extra)
+          r.write_text(text, encoding='utf-8')
+          PY
+          python -m unittest tests/test_requirements_registry.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/t0-baseline-sync.yml
+          git add requirements_registry.json docs/reports/T0_REQUIREMENTS_REGISTRY.md
+          git commit -m 'chore(T0): sync baseline after PR #133'
+          git push origin HEAD:docs/issue-129-t0-requirements-registry
