@@ -13,12 +13,12 @@ $ErrorActionPreference='Stop'
 
 function QueueProfile([string]$Name,[string]$WorkerName,[string]$QaName){
   switch($Name){
-    'READY'   { return [ordered]@{'Исполнитель'=$WorkerName;'Проверяющий'=$QaName;'Доказательство'='Нет';'Исполнение'='Свободно';'Статус'='Готово к работе'} }
+    'READY'   { return [ordered]@{'Доказательство'='Нет';'Исполнение'='Свободно';'Статус'='Готово к работе'} }
     'ACTIVE'  { return [ordered]@{'Исполнитель'=$WorkerName;'Проверяющий'=$QaName;'Доказательство'='Частично';'Исполнение'='Активно';'Статус'='В работе'} }
-    'QA'      { return [ordered]@{'Исполнитель'=$WorkerName;'Проверяющий'=$QaName;'Доказательство'='Автопроверки пройдены';'Исполнение'='На проверке';'Статус'='Проверка QA'} }
+    'QA'      { return [ordered]@{'Исполнитель'=$WorkerName;'Проверяющий'=$QaName;'Доказательство'='Частично';'Исполнение'='На проверке';'Статус'='Проверка QA'} }
     'QUEUED'  { return [ordered]@{'Исполнитель'=$WorkerName;'Проверяющий'=$QaName;'Доказательство'='Проверка качества пройдена';'Исполнение'='В очереди';'Статус'='Проверка QA'} }
-    'BLOCKED' { return [ordered]@{'Исполнитель'=$WorkerName;'Проверяющий'=$QaName;'Доказательство'='Частично';'Исполнение'='Заблокировано';'Статус'='Заблокировано'} }
-    'DONE'    { return [ordered]@{'Исполнитель'=$WorkerName;'Проверяющий'=$QaName;'Доказательство'='Проверка качества пройдена';'Исполнение'='Освобождено';'Статус'='Готово'} }
+    'BLOCKED' { return [ordered]@{'Доказательство'='Частично';'Исполнение'='Заблокировано';'Статус'='Заблокировано'} }
+    'DONE'    { return [ordered]@{'Исполнение'='Освобождено';'Статус'='Готово'} }
   }
   throw "Неизвестное состояние очереди: $Name"
 }
@@ -41,9 +41,9 @@ function Sync-ProjectQueueState{
   Assert-ProjectAccess
   $profile=QueueProfile $State $Worker $QaWorker
 
-  # Статус меняется последним и служит видимым commit marker карточки.
+  # Остальные поля меняются раньше, а Статус последним служит видимым commit marker карточки.
   foreach($field in @('Исполнитель','Проверяющий','Доказательство','Исполнение')){
-    Invoke-ProjectEdit $field ([string]$profile[$field])
+    if($profile.Contains($field)){Invoke-ProjectEdit $field ([string]$profile[$field])}
   }
   Invoke-ProjectEdit 'Статус' ([string]$profile['Статус'])
   Write-Host "Project queue synced: state=$State; url=$Url; worker=$Worker; qa=$QaWorker"
