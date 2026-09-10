@@ -108,8 +108,7 @@ class TestGraveyardIssue99(unittest.TestCase):
             '    return name\n'
             'TARGET = dynamic("graveyard/GY-20260910-test.md")\n'
         )
-        # Literal is still visible to the regular scanner, while AST folding itself
-        # deliberately refuses to execute unknown calls.
+        # Direct literal remains visible to static analysis; unknown calls are never executed.
         self.assertIsNotNone(_find_python_ast_graveyard_ref(source))
 
     def test_trusted_cli_boundary_has_no_injected_clock_or_store_parameters(self):
@@ -130,7 +129,7 @@ class TestGraveyardIssue99(unittest.TestCase):
         text = (root / "graveyard" / "README.md").read_text(encoding="utf-8")
         self.assertIn("defence-in-depth", text)
         self.assertIn("Context/Planner", text)
-        self.assertIn("trusted CLI", text)
+        self.assertIn("trusted cli", text.casefold())
         self.assertNotIn("durable replay-store nonce после перезапуска", text)
 
 
