@@ -81,6 +81,12 @@ class Kat9iScopeGuard:
             if bad in target_path:
                 raise ScopeViolationError(f"Target path contains forbidden characters: {bad}")
 
+        # UNC нужно отклонять до Path.resolve(): на POSIX runner обратные слеши
+        # считаются обычными символами, и опасный Windows-путь превращается в
+        # безобидный на вид относительный путь внутри workspace.
+        if target_path.startswith("\\\\") or target_path.startswith("//"):
+            raise ScopeViolationError("UNC network paths are strictly forbidden in local scope")
+
         raw_path = Path(target_path)
 
         # Если путь относительный, он трактуется строго относительно workspace_dir
