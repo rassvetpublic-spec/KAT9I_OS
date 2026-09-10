@@ -206,8 +206,10 @@ class G0ProjectRemediationTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "g0-project-remediation.yml").read_text(encoding="utf-8")
         self.assertIn("github.event.issue.number == 134", text)
         self.assertIn("author_association == 'OWNER'", text)
-        self.assertIn("G0-REMEDIATE", text)
         self.assertIn("github.event.repository.default_branch", text)
+        self.assertIn("CONTROL_COMMENT", text)
+        self.assertIn("first_line", text)
+        self.assertIn("test \"$first_line\" = 'KAT9I-CONTROL/1 | G0-REMEDIATE'", text)
         self.assertIn("KAT9I_PROJECT_TOKEN", text)
         self.assertIn("g0_project_remediation.py --apply", text)
 
