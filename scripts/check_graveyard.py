@@ -13,7 +13,7 @@ from pathlib import Path
 MARKER = "# GRAVEYARD / DATA ONLY / NON-CANONICAL / NON-ACTIONABLE / NO AUTO-PROMOTION"
 FALSE_POLICY_FIELDS = ("actionable", "control", "canonical", "auto_promotion", "ssot")
 CONTROL_TEXT_SUFFIXES = {
-    ".md", ".json", ".yml", ".yaml", ".toml", ".py", ".ps1", ".sh",
+    ".md", ".json", ".yml", ".yaml", ".toml", ".py", ".ps1", ".psm1", ".psd1", ".sh",
     ".cmd", ".bat", ".rs", ".ts", ".tsx", ".js", ".mjs", ".cjs",
     ".html", ".xml", ".ini", ".cfg", ".txt",
 }
