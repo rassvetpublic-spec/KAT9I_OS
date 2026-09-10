@@ -27,7 +27,8 @@ def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
         if not part:
             continue
         if "=" not in part:
-            if part.lower() in IDENTITY_KEYS:
+            lowered = part.lower()
+            if lowered in IDENTITY_KEYS or lowered.startswith("worker") or lowered.startswith("qa"):
                 raise ValueError(f"FAST identity metadata '{part}' должна иметь форму key=value")
             continue
         key, value = part.split("=", 1)
