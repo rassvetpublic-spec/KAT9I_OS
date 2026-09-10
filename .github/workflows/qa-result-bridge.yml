@@ -1,0 +1,74 @@
+name: QA — мост результата в Project lifecycle
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: qa-result-bridge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  bridge:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.review.body, 'KAT9I-QA-RESULT/1')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить доверенную версию bridge из main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Прочитать текущий PR и owner issue comments
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments.json
+
+      - name: Проверить QA-COMMAND и QA-RESULT fail-closed
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/qa_result_bridge.py \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --comments-path issue-comments.json \
+            --current-pr-path current-pr.json \
+            --output bridge-decision.json \
+            --comment-output bridge-comment.md
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data=json.loads(Path('bridge-decision.json').read_text(encoding='utf-8'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write(f"decision={data.get('decision','')}\n")
+              out.write(f"command_id={data.get('command_id','')}\n")
+          PY
+
+      - name: Нет нового управляющего перехода
+        if: steps.validate.outputs.decision != 'ACCEPT'
+        run: echo "QA result не требует нового lifecycle transition."
+
+      - name: Опубликовать trusted lifecycle marker от bridge
+        if: steps.validate.outputs.decision == 'ACCEPT'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::SECRET_MISSING: KAT9I_PROJECT_TOKEN не передан; lifecycle не изменён."
+            exit 1
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$(cat bridge-comment.md)" >/dev/null
