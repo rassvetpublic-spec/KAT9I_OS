@@ -1,23 +1,19 @@
 name: T0 registry corrective worker
-
 on:
   push:
     branches:
       - docs/issue-129-t0-requirements-registry
-
 permissions:
   contents: write
-
 jobs:
   fix:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: docs/issue-129-t0-requirements-registry
           fetch-depth: 0
-      - name: Integrate current main and correct T0 registry
+      - name: Apply corrective pass
         shell: bash
         run: |
           set -euo pipefail
@@ -25,216 +21,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git merge --no-edit origin/main
-          python - <<'PY'
-          import json, subprocess
-          from pathlib import Path
-
-          root = Path('.')
-          registry_path = root / 'requirements_registry.json'
-          schema_path = root / 'schemas/v1/RequirementsRegistry.json'
-          tests_path = root / 'tests/test_requirements_registry.py'
-          report_path = root / 'docs/reports/T0_REQUIREMENTS_REGISTRY.md'
-
-          reg = json.loads(registry_path.read_text(encoding='utf-8'))
-          reg['baseline_revision'] = subprocess.check_output(['git','rev-parse','origin/main'], text=True).strip()
-          reg['registry_version'] = '1.0.0'
-
-          owner_map = {
-              'Architecture / Owner': 'Architecture governance',
-              'Execution / QA by evidence type': 'Architecture governance',
-              'Security / Secret Store': 'Security',
-              'Architecture / contract owner per entity': 'Architecture governance',
-              'Architecture / Runtime': 'Architecture governance',
-              'Architecture / Coworker / Security': 'Architecture governance',
-              'Architecture / Release': 'Architecture governance',
-              'Architecture / Research': 'Architecture governance',
-              'Context / Security / Core by transition stage': 'Architecture governance',
-          }
-
-          for req in reg['requirements']:
-              raw = req['canonical_ssot']
-              parts = [part.strip() for part in raw.split(';') if part.strip()]
-              req['canonical_ssot'] = parts[0]
-              supporting = list(req.get('supporting_refs', []))
-              for ref in parts[1:]:
-                  if ref.startswith(('Issue #', 'PR #')):
-                      if ref not in req['issue_refs']:
-                          req['issue_refs'].append(ref)
-                  elif ref not in supporting:
-                      supporting.append(ref)
-              if supporting:
-                  req['supporting_refs'] = supporting
-              elif 'supporting_refs' in req:
-                  del req['supporting_refs']
-              req['canonical_owner'] = owner_map.get(req['canonical_owner'], req['canonical_owner'])
-              if ' / ' in req['canonical_owner']:
-                  raise SystemExit(f"compound canonical_owner remains: {req['requirement_id']}={req['canonical_owner']}")
-
-          by_id = {r['requirement_id']: r for r in reg['requirements']}
-          by_id['REQ-TASKGRAPH-001']['status'] = 'ACCEPTED'
-
-          oq = by_id['REQ-OQ010-001']
-          oq['status'] = 'ACCEPTED'
-          oq['canonical_owner'] = 'Architecture governance'
-          oq['evidence_refs'] = ['PR #123 merged as c2b15c87b7310c1b26e79d2088a2be3137ba13d5']
-          oq['coverage_notes'] = 'OQ-010 закрыт и принят как ADR-047 после merge PR #123; T0 фиксирует уже канонический статус current main.'
-
-          if 'REQ-LIFECYCLE-001' not in by_id:
-              lifecycle = {
-                  'requirement_id': 'REQ-LIFECYCLE-001',
-                  'title': 'Task проходит явный управляемый lifecycle от intake до проверенного результата',
-                  'area': 'Core / Lifecycle',
-                  'type': 'PROCESS',
-                  'canonical_ssot': 'docs/architecture/20_TASK_LIFECYCLE_AND_ORCHESTRATION.md',
-                  'canonical_owner': 'Core',
-                  'target_gate': 'G3',
-                  'target_version': 'v0.1',
-                  'status': 'ACCEPTED',
-                  'dependencies': ['REQ-TASK-001','REQ-RULES-001','REQ-SEC-001','REQ-QA-001','REQ-EVIDENCE-001'],
-                  'machine_contract_refs': ['schemas/v1/TaskContract.json','schemas/v1/TaskRuntimeState.json','schemas/v1/SecurityDecision.json','schemas/v1/Evidence.json'],
-                  'evidence_refs': [],
-                  'issue_refs': [],
-                  'coverage_status': 'COVERED',
-                  'abc': 'UNASSESSED',
-                  'xyz': 'UNASSESSED',
-                  'materialization': 'LOGICAL_ONLY',
-                  'supporting_refs': ['docs/architecture/03_TASK_CONTRACT.md','docs/architecture/26_INTERNAL_CONTRACTS.md']
-              }
-              insert_at = next(i for i,r in enumerate(reg['requirements']) if r['requirement_id']=='REQ-RULES-001')
-              reg['requirements'].insert(insert_at, lifecycle)
-
-          for gap in reg['gaps']:
-              if gap['kind'] == 'CONTRACT_GAP' and 'REQ-CONTRACTS-001' not in gap['requirement_refs']:
-                  gap['requirement_refs'].append('REQ-CONTRACTS-001')
-
-          registry_path.write_text(json.dumps(reg, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-
-          schema = json.loads(schema_path.read_text(encoding='utf-8'))
-          props = schema['$defs']['requirement']['properties']
-          props['canonical_ssot']['pattern'] = '^[^;]+$'
-          props['canonical_owner']['pattern'] = '^[^/]+$'
-          props['supporting_refs'] = {'$ref': '#/$defs/refArray'}
-          schema_path.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-
-          text = tests_path.read_text(encoding='utf-8')
-          marker = '\n\nif __name__ == "__main__":\n'
-          extra = r'''
-
-class TestRequirementsRegistryCorrectiveInvariants(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        with REGISTRY_PATH.open("r", encoding="utf-8") as stream:
-            cls.registry = json.load(stream)
-
-    @staticmethod
-    def _repo_path(ref):
-        return ref.split("#", 1)[0].strip()
-
-    def test_canonical_ssot_is_single_resolvable_repo_ref(self):
-        for item in self.registry["requirements"]:
-            ref = item["canonical_ssot"]
-            self.assertNotIn(";", ref, f"{item['requirement_id']}: canonical_ssot содержит список")
-            path = REPO_ROOT / self._repo_path(ref)
-            self.assertTrue(path.is_file(), f"{item['requirement_id']}: canonical_ssot не разрешается: {ref}")
-            for supporting in item.get("supporting_refs", []):
-                support_path = REPO_ROOT / self._repo_path(supporting)
-                self.assertTrue(support_path.exists(), f"{item['requirement_id']}: supporting_ref не разрешяется: {supporting}")
-
-    def test_each_requirement_has_one_canonical_owner(self):
-        for item in self.registry["requirements"]:
-            owner = item["canonical_owner"]
-            self.assertNotIn("/", owner, f"{item['requirement_id']}: составной canonical_owner: {owner}")
-
-    def test_noncovered_requirement_has_gap_of_same_kind(self):
-        by_kind = {}
-        for gap in self.registry["gaps"]:
-            by_kind.setdefault(gap["kind"], set()).update(gap["requirement_refs"])
-        for item in self.registry["requirements"]:
-            kind = item["coverage_status"]
-            if kind != "COVERED":
-                self.assertIn(item["requirement_id"], by_kind.get(kind, set()), f"{item['requirement_id']}: {kind} без gap того же вида")
-
-    def test_each_canonical_inventory_document_is_linked_to_requirement(self):
-        linked = set()
-        for item in self.registry["requirements"]:
-            linked.add(self._repo_path(item["canonical_ssot"]))
-            linked.update(self._repo_path(ref) for ref in item.get("supporting_refs", []))
-        missing = []
-        for source in self.registry["source_inventory"]:
-            if source["role"] != "CANONICAL_SSoT":
-                continue
-            for path in REPO_ROOT.glob(source["path"]):
-                if path.is_file():
-                    rel = path.relative_to(REPO_ROOT).as_posix()
-                    if rel not in linked:
-                        missing.append(rel)
-        self.assertFalse(missing, f"CANONICAL_SSoT без Requirement linkage: {sorted(missing)}")
-'''
-          if 'class TestRequirementsRegistryCorrectiveInvariants' not in text:
-              if marker not in text:
-                  raise SystemExit('unittest main marker not found')
-              text = text.replace(marker, extra + marker)
-          tests_path.write_text(text, encoding='utf-8')
-
-          counts = {}
-          for r in reg['requirements']:
-              counts[r['coverage_status']] = counts.get(r['coverage_status'], 0) + 1
-          gap_counts = {}
-          for g in reg['gaps']:
-              gap_counts[g['kind']] = gap_counts.get(g['kind'], 0) + 1
-          report = f'''# T0 — полный Requirements Registry KAT9I_OS
-
-## Назначение
-
-T0 материализует inventory/traceability для следующей ABC/XYZ-классификации. Реестр не заменяет канонические SSoT и не принимает архитектурные решения.
-
-- Baseline current main: `{reg['baseline_revision']}`.
-- Requirements: **{len(reg['requirements'])}**.
-- Findings/gaps: **{len(reg['gaps'])}**.
-- ABC: `UNASSESSED` для всех Requirement.
-- XYZ: `UNASSESSED` для всех Requirement.
-
-## Инварианты T0
-
-- один Requirement имеет ровно один `canonical_ssot`;
-- дополнительные документы хранятся в `supporting_refs`;
-- один Requirement имеет ровно одного `canonical_owner`;
-- Requirement status отделён от `coverage_status`;
-- любой non-COVERED Requirement связан с gap того же вида;
-- каждый документ из `CANONICAL_SSoT` source inventory связан хотя бы с одним Requirement;
-- логический owner не означает физическую materialization модуля;
-- Graveyard остаётся DATA-only;
-- T0 не назначает ABC/XYZ.
-
-## Coverage snapshot
-
-{chr(10).join(f'- `{k}`: {v}' for k,v in sorted(counts.items()))}
-
-## Зарегистрированные findings
-
-{chr(10).join(f'- `{k}`: {v}' for k,v in sorted(gap_counts.items()))}
-
-Ключевые findings остаются DATA для последующего convergence: неверная Execution→§27.14 traceability-ссылка, противоречие §32.45 с принятым ADR-034, а также отсутствующие физические схемы устойчивых контрактов.
-
-## OQ-010
-
-OQ-010 уже закрыт в current main как **ACCEPTED / ADR-047** после merge PR #123 (`c2b15c87b7310c1b26e79d2088a2be3137ba13d5`). Реестр фиксирует этот канонический статус; pending-кандидатом он больше не считается.
-
-## Исправления после review
-
-- добавлена явная Requirement-связь для §20 Task Lifecycle;
-- `canonical_ssot` нормализован до одной разрешимой ссылки, дополнительные ссылки вынесены в `supporting_refs`;
-- составные canonical owners устранены;
-- `REQ-TASKGRAPH-001` сохраняет принятый Requirement status, а отсутствие схемы отражается только через `CONTRACT_GAP`;
-- coverage↔gap-kind проверяется детерминированно;
-- полнота canonical source→Requirement linkage проверяется тестом.
-
-## DoD T0
-
-T0 готов к независимому QA только если JSON Schema валидна, все ссылки/IDs/dependencies разрешаются, все перечисленные инварианты проходят локальные тесты и полный Quality Gate на exact HEAD.
-'''
-          report_path.write_text(report, encoding='utf-8')
-          PY
+          echo 'CmltcG9ydCBqc29uLCBzdWJwcm9jZXNzCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKcm9vdCA9IFBhdGgoJy4nKQpyZWdpc3RyeV9wYXRoID0gcm9vdCAvICdyZXF1aXJlbWVudHNfcmVnaXN0cnkuanNvbicKc2NoZW1hX3BhdGggPSByb290IC8gJ3NjaGVtYXMvdjEvUmVxdWlyZW1lbnRzUmVnaXN0cnkuanNvbicKdGVzdHNfcGF0aCA9IHJvb3QgLyAndGVzdHMvdGVzdF9yZXF1aXJlbWVudHNfcmVnaXN0cnkucHknCnJlcG9ydF9wYXRoID0gcm9vdCAvICdkb2NzL3JlcG9ydHMvVDBfUkVRVUlSRU1FTlRTX1JFR0lTVFJZLm1kJwoKcmVnID0ganNvbi5sb2FkcyhyZWdpc3RyeV9wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKSkKcmVnWydiYXNlbGluZV9yZXZpc2lvbiddID0gc3VicHJvY2Vzcy5jaGVja19vdXRwdXQoWydnaXQnLCdyZXYtcGFyc2UnLCdvcmlnaW4vbWFpbiddLCB0ZXh0PVRydWUpLnN0cmlwKCkKcmVnWydyZWdpc3RyeV92ZXJzaW9uJ10gPSAnMS4wLjAnCgpvd25lcl9tYXAgPSB7CiAgICAnQXJjaGl0ZWN0dXJlIC8gT3duZXInOiAnQXJjaGl0ZWN0dXJlIGdvdmVybmFuY2UnLAogICAgJ0V4ZWN1dGlvbiAvIFFBIGJ5IGV2aWRlbmNlIHR5cGUnOiAnQXJjaGl0ZWN0dXJlIGdvdmVybmFuY2UnLAogICAgJ1NlY3VyaXR5IC8gU2VjcmV0IFN0b3JlJzogJ1NlY3VyaXR5JywKICAgICdBcmNoaXRlY3R1cmUgLyBjb250cmFjdCBvd25lciBwZXIgZW50aXR5JzogJ0FyY2hpdGVjdHVyZSBnb3Zlcm5hbmNlJywKICAgICdBcmNoaXRlY3R1cmUgLyBSdW50aW1lJzogJ0FyY2hpdGVjdHVyZSBnb3Zlcm5hbmNlJywKICAgICdBcmNoaXRlY3R1cmUgLyBDb3dvcmtlciAvIFNlY3VyaXR5JzogJ0FyY2hpdGVjdHVyZSBnb3Zlcm5hbmNlJywKICAgICdBcmNoaXRlY3R1cmUgLyBSZWxlYXNlJzogJ0FyY2hpdGVjdHVyZSBnb3Zlcm5hbmNlJywKICAgICdBcmNoaXRlY3R1cmUgLyBSZXNlYXJjaCc6ICdBcmNoaXRlY3R1cmUgZ292ZXJuYW5jZScsCiAgICAnQ29udGV4dCAvIFNlY3VyaXR5IC8gQ29yZSBieSB0cmFuc2l0aW9uIHN0YWdlJzogJ0FyY2hpdGVjdHVyZSBnb3Zlcm5hbmNlJywKfQoKZm9yIHJlcSBpbiByZWdbJ3JlcXVpcmVtZW50cyddOgogICAgcGFydHMgPSBbcGFydC5zdHJpcCgpIGZvciBwYXJ0IGluIHJlcVsnY2Fub25pY2FsX3Nzb3QnXS5zcGxpdCgnOycpIGlmIHBhcnQuc3RyaXAoKV0KICAgIHJlcVsnY2Fub25pY2FsX3Nzb3QnXSA9IHBhcnRzWzBdCiAgICBzdXBwb3J0aW5nID0gbGlzdChyZXEuZ2V0KCdzdXBwb3J0aW5nX3JlZnMnLCBbXSkpCiAgICBmb3IgcmVmIGluIHBhcnRzWzE6XToKICAgICAgICBpZiByZWYuc3RhcnRzd2l0aCgoJ0lzc3VlICMnLCAnUFIgIycpKToKICAgICAgICAgICAgaWYgcmVmIG5vdCBpbiByZXFbJ2lzc3VlX3JlZnMnXToKICAgICAgICAgICAgICAgIHJlcVsnaXNzdWVfcmVmcyddLmFwcGVuZChyZWYpCiAgICAgICAgZWxpZiByZWYgbm90IGluIHN1cHBvcnRpbmc6CiAgICAgICAgICAgIHN1cHBvcnRpbmcuYXBwZW5kKHJlZikKICAgIGlmIHN1cHBvcnRpbmc6CiAgICAgICAgcmVxWydzdXBwb3J0aW5nX3JlZnMnXSA9IHN1cHBvcnRpbmcKICAgIGVsc2U6CiAgICAgICAgcmVxLnBvcCgnc3VwcG9ydGluZ19yZWZzJywgTm9uZSkKICAgIHJlcVsnY2Fub25pY2FsX293bmVyJ10gPSBvd25lcl9tYXAuZ2V0KHJlcVsnY2Fub25pY2FsX293bmVyJ10sIHJlcVsnY2Fub25pY2FsX293bmVyJ10pCiAgICBpZiAnLycgaW4gcmVxWydjYW5vbmljYWxfb3duZXInXToKICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KGYiY29tcG91bmQgY2Fub25pY2FsX293bmVyIHJlbWFpbnM6IHtyZXFbJ3JlcXVpcmVtZW50X2lkJ119PXtyZXFbJ2Nhbm9uaWNhbF9vd25lciddfSIpCgpieV9pZCA9IHtyWydyZXF1aXJlbWVudF9pZCddOiByIGZvciByIGluIHJlZ1sncmVxdWlyZW1lbnRzJ119CmJ5X2lkWydSRVEtVEFTS0dSQVBILTAwMSddWydzdGF0dXMnXSA9ICdBQ0NFUFRFRCcKCm9xID0gYnlfaWRbJ1JFUS1PUTAxMC0wMDEnXQpvcVsnc3RhdHVzJ10gPSAnQUNDRVBURUQnCm9xWydjYW5vbmljYWxfb3duZXInXSA9ICdBcmNoaXRlY3R1cmUgZ292ZXJuYW5jZScKb3FbJ2V2aWRlbmNlX3JlZnMnXSA9IFsnUFIgIzEyMyBtZXJnZWQgYXMgYzJiMTVjODdiNzMxMGMxYjI2ZTc5ZDIwODhhMmJlMzEzN2JhMTNkNSddCm9xWydjb3ZlcmFnZV9ub3RlcyddID0gJ09RLTAxMCDQt9Cw0LrRgNGL0YIg0Lgg0L/RgNC40L3Rj9GCINC60LDQuiBBRFItMDQ3INC/0L7RgdC70LUgbWVyZ2UgUFIgIzEyMzsgVDAg0YTQuNC60YHQuNGA0YPQtdGCINGD0LbQtSDQutCw0L3QvtC90LjRh9C10YHQutC40Lkg0YHRgtCw0YLRg9GBIGN1cnJlbnQgbWFpbi4nCgppZiAnUkVRLUxJRkVDWUNMRS0wMDEnIG5vdCBpbiBieV9pZDoKICAgIGxpZmVjeWNsZSA9IHsKICAgICAgICAncmVxdWlyZW1lbnRfaWQnOiAnUkVRLUxJRkVDWUNMRS0wMDEnLAogICAgICAgICd0aXRsZSc6ICdUYXNrINC/0YDQvtGF0L7QtNC40YIg0Y/QstC90YvQuSDRg9C/0YDQsNCy0LvRj9C10LzRi9C5IGxpZmVjeWNsZSDQvtGCIGludGFrZSDQtNC+INC/0YDQvtCy0LXRgNC10L3QvdC+0LPQviDRgNC10LfRg9C70YzRgtCw0YLQsCcsCiAgICAgICAgJ2FyZWEnOiAnQ29yZSAvIExpZmVjeWNsZScsCiAgICAgICAgJ3R5cGUnOiAnUFJPQ0VTUycsCiAgICAgICAgJ2Nhbm9uaWNhbF9zc290JzogJ2RvY3MvYXJjaGl0ZWN0dXJlLzIwX1RBU0tfTElGRUNZQ0xFX0FORF9PUkNIRVNUUkFUSU9OLm1kJywKICAgICAgICAnY2Fub25pY2FsX293bmVyJzogJ0NvcmUnLAogICAgICAgICd0YXJnZXRfZ2F0ZSc6ICdHMycsCiAgICAgICAgJ3RhcmdldF92ZXJzaW9uJzogJ3YwLjEnLAogICAgICAgICdzdGF0dXMnOiAnQUNDRVBURUQnLAogICAgICAgICdkZXBlbmRlbmNpZXMnOiBbJ1JFUS1UQVNLLTAwMScsJ1JFUS1SVUxFUy0wMDEnLCdSRVEtU0VDLTAwMScsJ1JFUS1RQS0wMDEnLCdSRVEtRVZJREVOQ0UtMDAxJ10sCiAgICAgICAgJ21hY2hpbmVfY29udHJhY3RfcmVmcyc6IFsnc2NoZW1hcy92MS9UYXNrQ29udHJhY3QuanNvbicsJ3NjaGVtYXMvdjEvVGFza1J1bnRpbWVTdGF0ZS5qc29uJywnc2NoZW1hcy92MS9TZWN1cml0eURlY2lzaW9uLmpzb24nLCdzY2hlbWFzL3YxL0V2aWRlbmNlLmpzb24nXSwKICAgICAgICAnZXZpZGVuY2VfcmVmcyc6IFtdLAogICAgICAgICdpc3N1ZV9yZWZzJzogW10sCiAgICAgICAgJ2NvdmVyYWdlX3N0YXR1cyc6ICdDT1ZFUkVEJywKICAgICAgICAnYWJjJzogJ1VOQVNTRVNTRUQnLAogICAgICAgICd4eXonOiAnVU5BU1NFU1NFRCcsCiAgICAgICAgJ21hdGVyaWFsaXphdGlvbic6ICdMT0dJQ0FMX09OTFknLAogICAgICAgICdzdXBwb3J0aW5nX3JlZnMnOiBbJ2RvY3MvYXJjaGl0ZWN0dXJlLzAzX1RBU0tfQ09OVFJBQ1QubWQnLCdkb2NzL2FyY2hpdGVjdHVyZS8yNl9JTlRFUk5BTF9DT05UUkFDVFMubWQnXQogICAgfQogICAgaW5zZXJ0X2F0ID0gbmV4dChpIGZvciBpLHIgaW4gZW51bWVyYXRlKHJlZ1sncmVxdWlyZW1lbnRzJ10pIGlmIHJbJ3JlcXVpcmVtZW50X2lkJ109PSdSRVEtUlVMRVMtMDAxJykKICAgIHJlZ1sncmVxdWlyZW1lbnRzJ10uaW5zZXJ0KGluc2VydF9hdCwgbGlmZWN5Y2xlKQoKZm9yIGdhcCBpbiByZWdbJ2dhcHMnXToKICAgIGlmIGdhcFsna2luZCddID09ICdDT05UUkFDVF9HQVAnIGFuZCAnUkVRLUNPTlRSQUNUUy0wMDEnIG5vdCBpbiBnYXBbJ3JlcXVpcmVtZW50X3JlZnMnXToKICAgICAgICBnYXBbJ3JlcXVpcmVtZW50X3JlZnMnXS5hcHBlbmQoJ1JFUS1DT05UUkFDVFMtMDAxJykKCnJlZ2lzdHJ5X3BhdGgud3JpdGVfdGV4dChqc29uLmR1bXBzKHJlZywgZW5zdXJlX2FzY2lpPUZhbHNlLCBpbmRlbnQ9MikgKyAnXG4nLCBlbmNvZGluZz0ndXRmLTgnKQoKc2NoZW1hID0ganNvbi5sb2FkcyhzY2hlbWFfcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9J3V0Zi04JykpCnByb3BzID0gc2NoZW1hWyckZGVmcyddWydyZXF1aXJlbWVudCddWydwcm9wZXJ0aWVzJ10KcHJvcHNbJ2Nhbm9uaWNhbF9zc290J11bJ3BhdHRlcm4nXSA9ICdeW147XSskJwpwcm9wc1snY2Fub25pY2FsX293bmVyJ11bJ3BhdHRlcm4nXSA9ICdeW14vXSskJwpwcm9wc1snc3VwcG9ydGluZ19yZWZzJ10gPSB7JyRyZWYnOiAnIy8kZGVmcy9yZWZBcnJheSd9CnNjaGVtYV9wYXRoLndyaXRlX3RleHQoanNvbi5kdW1wcyhzY2hlbWEsIGVuc3VyZV9hc2NpaT1GYWxzZSwgaW5kZW50PTIpICsgJ1xuJywgZW5jb2Rpbmc9J3V0Zi04JykKCnRleHQgPSB0ZXN0c19wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0ndXRmLTgnKQptYXJrZXIgPSAnXG5cbmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6XG4nCmV4dHJhID0gcicnJwoKY2xhc3MgVGVzdFJlcXVpcmVtZW50c1JlZ2lzdHJ5Q29ycmVjdGl2ZUludmFyaWFudHModW5pdHRlc3QuVGVzdENhc2UpOgogICAgQGNsYXNzbWV0aG9kCiAgICBkZWYgc2V0VXBDbGFzcyhjbHMpOgogICAgICAgIHdpdGggUkVHSVNUUllfUEFUSC5vcGVuKCJyIiwgZW5jb2Rpbmc9InV0Zi04IikgYXMgc3RyZWFtOgogICAgICAgICAgICBjbHMucmVnaXN0cnkgPSBqc29uLmxvYWQoc3RyZWFtKQoKICAgIEBzdGF0aWNtZXRob2QKICAgIGRlZiBfcmVwb19wYXRoKHJlZik6CiAgICAgICAgcmV0dXJuIHJlZi5zcGxpdCgiIyIsIDEpWzBdLnN0cmlwKCkKCiAgICBkZWYgdGVzdF9jYW5vbmljYWxfc3NvdF9pc19zaW5nbGVfcmVzb2x2YWJsZV9yZXBvX3JlZihzZWxmKToKICAgICAgICBmb3IgaXRlbSBpbiBzZWxmLnJlZ2lzdHJ5WyJyZXF1aXJlbWVudHMiXToKICAgICAgICAgICAgcmVmID0gaXRlbVsiY2Fub25pY2FsX3Nzb3QiXQogICAgICAgICAgICBzZWxmLmFzc2VydE5vdEluKCI7IiwgcmVmLCBmIntpdGVtWydyZXF1aXJlbWVudF9pZCddfTogY2Fub25pY2FsX3Nzb3Qg0YHQvtC00LXRgNC20LjRgiDRgdC/0LjRgdC+0LoiKQogICAgICAgICAgICBwYXRoID0gUkVQT19ST09UIC8gc2VsZi5fcmVwb19wYXRoKHJlZikKICAgICAgICAgICAgc2VsZi5hc3NlcnRUcnVlKHBhdGguaXNfZmlsZSgpLCBmIntpdGVtWydyZXF1aXJlbWVudF9pZCddfTogY2Fub25pY2FsX3Nzb3Qg0L3QtSDRgNCw0LfRgNC10YjQsNC10YLRgdGPOiB7cmVmfSIpCiAgICAgICAgICAgIGZvciBzdXBwb3J0aW5nIGluIGl0ZW0uZ2V0KCJzdXBwb3J0aW5nX3JlZnMiLCBbXSk6CiAgICAgICAgICAgICAgICBzdXBwb3J0X3BhdGggPSBSRVBPX1JPT1QgLyBzZWxmLl9yZXBvX3BhdGgoc3VwcG9ydGluZykKICAgICAgICAgICAgICAgIHNlbGYuYXNzZXJ0VHJ1ZShzdXBwb3J0X3BhdGguZXhpc3RzKCksIGYie2l0ZW1bJ3JlcXVpcmVtZW50X2lkJ119OiBzdXBwb3J0aW5nX3JlZiDQvdC1INGA0LDQt9GA0LXRiNCw0LXRgtGB0Y86IHtzdXBwb3J0aW5nfSIpCgogICAgZGVmIHRlc3RfZWFjaF9yZXF1aXJlbWVudF9oYXNfb25lX2Nhbm9uaWNhbF9vd25lcihzZWxmKToKICAgICAgICBmb3IgaXRlbSBpbiBzZWxmLnJlZ2lzdHJ5WyJyZXF1aXJlbWVudHMiXToKICAgICAgICAgICAgb3duZXIgPSBpdGVtWyJjYW5vbmljYWxfb3duZXIiXQogICAgICAgICAgICBzZWxmLmFzc2VydE5vdEluKCIvIiwgb3duZXIsIGYie2l0ZW1bJ3JlcXVpcmVtZW50X2lkJ119OiDRgdC+0YHRgtCw0LLQvdC+0LkgY2Fub25pY2FsX293bmVyOiB7b3duZXJ9IikKCiAgICBkZWYgdGVzdF9ub25jb3ZlcmVkX3JlcXVpcmVtZW50X2hhc19nYXBfb2Zfc2FtZV9raW5kKHNlbGYpOgogICAgICAgIGJ5X2tpbmQgPSB7fQogICAgICAgIGZvciBnYXAgaW4gc2VsZi5yZWdpc3RyeVsiZ2FwcyJdOgogICAgICAgICAgICBieV9raW5kLnNldGRlZmF1bHQoZ2FwWyJraW5kIl0sIHNldCgpKS51cGRhdGUoZ2FwWyJyZXF1aXJlbWVudF9yZWZzIl0pCiAgICAgICAgZm9yIGl0ZW0gaW4gc2VsZi5yZWdpc3RyeVsicmVxdWlyZW1lbnRzIl06CiAgICAgICAgICAgIGtpbmQgPSBpdGVtWyJjb3ZlcmFnZV9zdGF0dXMiXQogICAgICAgICAgICBpZiBraW5kICE9ICJDT1ZFUkVEIjoKICAgICAgICAgICAgICAgIHNlbGYuYXNzZXJ0SW4oaXRlbVsicmVxdWlyZW1lbnRfaWQiXSwgYnlfa2luZC5nZXQoa2luZCwgc2V0KCkpLCBmIntpdGVtWydyZXF1aXJlbWVudF9pZCddfToge2tpbmR9INCx0LXQtyBnYXAg0YLQvtCz0L4g0LbQtSDQstC40LTQsCIpCgogICAgZGVmIHRlc3RfZWFjaF9jYW5vbmljYWxfaW52ZW50b3J5X2RvY3VtZW50X2lzX2xpbmtlZF90b19yZXF1aXJlbWVudChzZWxmKToKICAgICAgICBsaW5rZWQgPSBzZXQoKQogICAgICAgIGZvciBpdGVtIGluIHNlbGYucmVnaXN0cnlbInJlcXVpcmVtZW50cyJdOgogICAgICAgICAgICBsaW5rZWQuYWRkKHNlbGYuX3JlcG9fcGF0aChpdGVtWyJjYW5vbmljYWxfc3NvdCJdKSkKICAgICAgICAgICAgbGlua2VkLnVwZGF0ZShzZWxmLl9yZXBvX3BhdGgocmVmKSBmb3IgcmVmIGluIGl0ZW0uZ2V0KCJzdXBwb3J0aW5nX3JlZnMiLCBbXSkpCiAgICAgICAgbWlzc2luZyA9IFtdCiAgICAgICAgZm9yIHNvdXJjZSBpbiBzZWxmLnJlZ2lzdHJ5WyJzb3VyY2VfaW52ZW50b3J5Il06CiAgICAgICAgICAgIGlmIHNvdXJjZVsicm9sZSJdICE9ICJDQU5PTklDQUxfU1NvVCI6CiAgICAgICAgICAgICAgICBjb250aW51ZQogICAgICAgICAgICBmb3IgcGF0aCBpbiBSRVBPX1JPT1QuZ2xvYihzb3VyY2VbInBhdGgiXSk6CiAgICAgICAgICAgICAgICBpZiBwYXRoLmlzX2ZpbGUoKToKICAgICAgICAgICAgICAgICAgICByZWwgPSBwYXRoLnJlbGF0aXZlX3RvKFJFUE9fUk9PVCkuYXNfcG9zaXgoKQogICAgICAgICAgICAgICAgICAgIGlmIHJlbCBub3QgaW4gbGlua2VkOgogICAgICAgICAgICAgICAgICAgICAgICBtaXNzaW5nLmFwcGVuZChyZWwpCiAgICAgICAgc2VsZi5hc3NlcnRGYWxzZShtaXNzaW5nLCBmIkNBTk9OSUNBTF9TU29UINCx0LXQtyBSZXF1aXJlbWVudCBsaW5rYWdlOiB7c29ydGVkKG1pc3NpbmcpfSIpCicnJwppZiAnY2xhc3MgVGVzdFJlcXVpcmVtZW50c1JlZ2lzdHJ5Q29ycmVjdGl2ZUludmFyaWFudHMnIG5vdCBpbiB0ZXh0OgogICAgaWYgbWFya2VyIG5vdCBpbiB0ZXh0OgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoJ3VuaXR0ZXN0IG1haW4gbWFya2VyIG5vdCBmb3VuZCcpCiAgICB0ZXh0ID0gdGV4dC5yZXBsYWNlKG1hcmtlciwgZXh0cmEgKyBtYXJrZXIpCnRlc3RzX3BhdGgud3JpdGVfdGV4dCh0ZXh0LCBlbmNvZGluZz0ndXRmLTgnKQoKY291bnRzID0ge30KZm9yIHIgaW4gcmVnWydyZXF1aXJlbWVudHMnXToKICAgIGNvdW50c1tyWydjb3ZlcmFnZV9zdGF0dXMnXV0gPSBjb3VudHMuZ2V0KHJbJ2NvdmVyYWdlX3N0YXR1cyddLCAwKSArIDEKZ2FwX2NvdW50cyA9IHt9CmZvciBnIGluIHJlZ1snZ2FwcyddOgogICAgZ2FwX2NvdW50c1tnWydraW5kJ11dID0gZ2FwX2NvdW50cy5nZXQoZ1sna2luZCddLCAwKSArIDEKCmNvdmVyYWdlX2xpbmVzID0gJ1xuJy5qb2luKGYiLSBge2t9YDoge3Z9IiBmb3Igayx2IGluIHNvcnRlZChjb3VudHMuaXRlbXMoKSkpCmdhcF9saW5lcyA9ICdcbicuam9pbihmIi0gYHtrfWA6IHt2fSIgZm9yIGssdiBpbiBzb3J0ZWQoZ2FwX2NvdW50cy5pdGVtcygpKSkKcmVwb3J0ID0gZicnJyMgVDAg4oCUINC/0L7Qu9C90YvQuSBSZXF1aXJlbWVudHMgUmVnaXN0cnkgS0FUOUlfT1MKCiMjINCd0LDQt9C90LDRh9C10L3QuNC1CgpUMCDQvNCw0YLQtdGA0LjQsNC70LjQt9GD0LXRgiBpbnZlbnRvcnkvdHJhY2VhYmlsaXR5INC00LvRjyDRgdC70LXQtNGD0Y7RidC10LkgQUJDL1hZWi3QutC70LDRgdGB0LjRhNC40LrQsNGG0LjQuC4g0KDQtdC10YHRgtGAINC90LUg0LfQsNC80LXQvdGP0LXRgiDQutCw0L3QvtC90LjRh9C10YHQutC40LUgU1NvVCDQuCDQvdC1INC/0YDQuNC90LjQvNCw0LXRgiDQsNGA0YXQuNGC0LXQutGC0YPRgNC90YvQtSDRgNC10YjQtdC90LjRjy4KCi0gQmFzZWxpbmUgY3VycmVudCBtYWluOiBge3JlZ1snYmFzZWxpbmVfcmV2aXNpb24nXX1gLgotIFJlcXVpcmVtZW50czogKip7bGVuKHJlZ1sncmVxdWlyZW1lbnRzJ10pfSoqLgotIEZpbmRpbmdzL2dhcHM6ICoqe2xlbihyZWdbJ2dhcHMnXSl9KiouCi0gQUJDOiBgVU5BU1NFU1NFRGAg0LTQu9GPINCy0YHQtdGFIFJlcXVpcmVtZW50LgotIFhZWjogYFVOQVNTRVNTRURgINC00LvRjyDQstGB0LXRhSBSZXF1aXJlbWVudC4KCiMjINCY0L3QstCw0YDQuNCw0L3RgtGLIFQwCgotINC+0LTQuNC9IFJlcXVpcmVtZW50INC40LzQtdC10YIg0YDQvtCy0L3QviDQvtC00LjQvSBgY2Fub25pY2FsX3Nzb3RgOwotINC00L7Qv9C+0LvQvdC40YLQtdC70YzQvdGL0LUg0LTQvtC60YPQvNC10L3RgtGLINGF0YDQsNC90Y/RgtGB0Y8g0LIgYHN1cHBvcnRpbmdfcmVmc2A7Ci0g0L7QtNC40L0gUmVxdWlyZW1lbnQg0LjQvNC10LXRgiDRgNC+0LLQvdC+INC+0LTQvdC+0LPQviBgY2Fub25pY2FsX293bmVyYDsKLSBSZXF1aXJlbWVudCBzdGF0dXMg0L7RgtC00LXQu9GR0L0g0L7RgiBgY292ZXJhZ2Vfc3RhdHVzYDsKLSDQu9GO0LHQvtC5IG5vbi1DT1ZFUkVEIFJlcXVpcmVtZW50INGB0LLRj9C30LDQvSDRgSBnYXAg0YLQvtCz0L4g0LbQtSDQstC40LTQsDsKLSDQutCw0LbQtNGL0Lkg0LTQvtC60YPQvNC10L3RgiDQuNC3IGBDQU5PTklDQUxfU1NvVGAgc291cmNlIGludmVudG9yeSDRgdCy0Y/Qt9Cw0L0g0YXQvtGC0Y8g0LHRiyDRgSDQvtC00L3QuNC8IFJlcXVpcmVtZW50OwotINC70L7Qs9C40YfQtdGB0LrQuNC5IG93bmVyINC90LUg0L7Qt9C90LDRh9Cw0LXRgiDRhNC40LfQuNGH0LXRgdC60YPRjiBtYXRlcmlhbGl6YXRpb24g0LzQvtC00YPQu9GPOwotIEdyYXZleWFyZCDQvtGB0YLQsNGR0YLRgdGPIERBVEEtb25seTsKLSBUMCDQvdC1INC90LDQt9C90LDRh9Cw0LXRgiBBQkMvWFlaLgoKIyMgQ292ZXJhZ2Ugc25hcHNob3QKCntjb3ZlcmFnZV9saW5lc30KCiMjINCX0LDRgNC10LPQuNGB0YLRgNC40YDQvtCy0LDQvdC90YvQtSBmaW5kaW5ncwoKe2dhcF9saW5lc30KCtCa0LvRjtGH0LXQstGL0LUgZmluZGluZ3Mg0L7RgdGC0LDRjtGC0YHRjyBEQVRBINC00LvRjyDQv9C+0YHQu9C10LTRg9GO0YnQtdCz0L4gY29udmVyZ2VuY2U6INC90LXQstC10YDQvdCw0Y8gRXhlY3V0aW9u4oaSwqcyNy4xNCB0cmFjZWFiaWxpdHkt0YHRgdGL0LvQutCwLCDQv9GA0L7RgtC40LLQvtGA0LXRh9C40LUgwqczMi40NSDRgSDQv9GA0LjQvdGP0YLRi9C8IEFEUi0wMzQsINCwINGC0LDQutC20LUg0L7RgtGB0YPRgtGB0YLQstGD0Y7RidC40LUg0YTQuNC30LjRh9C10YHQutC40LUg0YHRhdC10LzRiyDRg9GB0YLQvtC50YfQuNCy0YvRhSDQutC+0L3RgtGA0LDQutGC0L7Qsi4KCiMjIE9RLTAxMAoKT1EtMDEwINGD0LbQtSDQt9Cw0LrRgNGL0YIg0LIgY3VycmVudCBtYWluINC60LDQuiAqKkFDQ0VQVEVEIC8gQURSLTA0NyoqINC/0L7RgdC70LUgbWVyZ2UgUFIgIzEyMyAoYGMyYjE1Yzg3YjczMTBjMWIyNmU3OWQyMDg4YTJiZTMxMzdiYTEzZDVgKS4g0KDQtdC10YHRgtGAINGE0LjQutGB0LjRgNGD0LXRgiDRjdGC0L7RgiDQutCw0L3QvtC90LjRh9C10YHQutC40Lkg0YHRgtCw0YLRg9GBOyBwZW5kaW5nLdC60LDQvdC00LjQtNCw0YLQvtC8INC+0L0g0LHQvtC70YzRiNC1INC90LUg0YHRh9C40YLQsNC10YLRgdGPLgoKIyMg0JjRgdC/0YDQsNCy0LvQtdC90LjRjyDQv9C+0YHQu9C1IHJldmlldwoKLSDQtNC+0LHQsNCy0LvQtdC90LAg0Y/QstC90LDRjyBSZXF1aXJlbWVudC3RgdCy0Y/Qt9GMINC00LvRjyDCpzIwIFRhc2sgTGlmZWN5Y2xlOwotIGBjYW5vbmljYWxfc3NvdGAg0L3QvtGA0LzQsNC70LjQt9C+0LLQsNC9INC00L4g0L7QtNC90L7QuSDRgNCw0LfRgNC10YjQuNC80L7QuSDRgdGB0YvQu9C60LgsINC00L7Qv9C+0LvQvdC40YLQtdC70YzQvdGL0LUg0YHRgdGL0LvQutC4INCy0YvQvdC10YHQtdC90Ysg0LIgYHN1cHBvcnRpbmdfcmVmc2A7Ci0g0YHQvtGB0YLQsNCy0L3Ri9C1IGNhbm9uaWNhbCBvd25lcnMg0YPRgdGC0YDQsNC90LXQvdGLOwotIGBSRVEtVEFTS0dSQVBILTAwMWAg0YHQvtGF0YDQsNC90Y/QtdGCINC/0YDQuNC90Y/RgtGL0LkgUmVxdWlyZW1lbnQgc3RhdHVzLCDQsCDQvtGC0YHRg9GC0YHRgtCy0LjQtSDRgdGF0LXQvNGLINC+0YLRgNCw0LbQsNC10YLRgdGPINGC0L7Qu9GM0LrQviDRh9C10YDQtdC3IGBDT05UUkFDVF9HQVBgOwotIGNvdmVyYWdl4oaUZ2FwLWtpbmQg0L/RgNC+0LLQtdGA0Y/QtdGC0YHRjyDQtNC10YLQtdGA0LzQuNC90LjRgNC+0LLQsNC90L3QvjsKLSDQv9C+0LvQvdC+0YLQsCBjYW5vbmljYWwgc291cmNl4oaSUmVxdWlyZW1lbnQgbGlua2FnZSDQv9GA0L7QstC10YDRj9C10YLRgdGPINGC0LXRgdGC0L7QvC4KCiMjIERvRCBUMAoKVDAg0LPQvtGC0L7QsiDQuiDQvdC10LfQsNCy0LjRgdC40LzQvtC80YMgUUEg0YLQvtC70YzQutC+INC10YHQu9C4IEpTT04gU2NoZW1hINCy0LDQu9C40LTQvdCwLCDQstGB0LUg0YHRgdGL0LvQutC4L0lEcy9kZXBlbmRlbmNpZXMg0YDQsNC30YDQtdGI0LDRjtGC0YHRjywg0LLRgdC1INC/0LXRgNC10YfQuNGB0LvQtdC90L3Ri9C1INC40L3QstCw0YDQuNCw0L3RgtGLINC/0YDQvtGF0L7QtNGP0YIg0LvQvtC60LDQu9GM0L3Ri9C1INGC0LXRgdGC0Ysg0Lgg0L/QvtC70L3Ri9C5IFF1YWxpdHkgR2F0ZSDQvdCwIGV4YWN0IEhFQUQuCicnJwpyZXBvcnRfcGF0aC53cml0ZV90ZXh0KHJlcG9ydCwgZW5jb2Rpbmc9J3V0Zi04JykK' | base64 -d > /tmp/t0_fix.py
+          python /tmp/t0_fix.py
           git rm .github/workflows/t0-registry-corrective.yml
           python -m unittest tests.test_requirements_registry
           git add requirements_registry.json schemas/v1/RequirementsRegistry.json tests/test_requirements_registry.py docs/reports/T0_REQUIREMENTS_REGISTRY.md schemas/README.md
