@@ -1,0 +1,242 @@
+name: T0 registry corrective worker
+
+on:
+  push:
+    branches:
+      - docs/issue-129-t0-requirements-registry
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/issue-129-t0-requirements-registry
+          fetch-depth: 0
+      - name: Integrate current main and correct T0 registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          root = Path('.')
+          registry_path = root / 'requirements_registry.json'
+          schema_path = root / 'schemas/v1/RequirementsRegistry.json'
+          tests_path = root / 'tests/test_requirements_registry.py'
+          report_path = root / 'docs/reports/T0_REQUIREMENTS_REGISTRY.md'
+
+          reg = json.loads(registry_path.read_text(encoding='utf-8'))
+          reg['baseline_revision'] = subprocess.check_output(['git','rev-parse','origin/main'], text=True).strip()
+          reg['registry_version'] = '1.0.0'
+
+          owner_map = {
+              'Architecture / Owner': 'Architecture governance',
+              'Execution / QA by evidence type': 'Architecture governance',
+              'Security / Secret Store': 'Security',
+              'Architecture / contract owner per entity': 'Architecture governance',
+              'Architecture / Runtime': 'Architecture governance',
+              'Architecture / Coworker / Security': 'Architecture governance',
+              'Architecture / Release': 'Architecture governance',
+              'Architecture / Research': 'Architecture governance',
+              'Context / Security / Core by transition stage': 'Architecture governance',
+          }
+
+          for req in reg['requirements']:
+              raw = req['canonical_ssot']
+              parts = [part.strip() for part in raw.split(';') if part.strip()]
+              req['canonical_ssot'] = parts[0]
+              supporting = list(req.get('supporting_refs', []))
+              for ref in parts[1:]:
+                  if ref.startswith(('Issue #', 'PR #')):
+                      if ref not in req['issue_refs']:
+                          req['issue_refs'].append(ref)
+                  elif ref not in supporting:
+                      supporting.append(ref)
+              if supporting:
+                  req['supporting_refs'] = supporting
+              elif 'supporting_refs' in req:
+                  del req['supporting_refs']
+              req['canonical_owner'] = owner_map.get(req['canonical_owner'], req['canonical_owner'])
+              if ' / ' in req['canonical_owner']:
+                  raise SystemExit(f"compound canonical_owner remains: {req['requirement_id']}={req['canonical_owner']}")
+
+          by_id = {r['requirement_id']: r for r in reg['requirements']}
+          by_id['REQ-TASKGRAPH-001']['status'] = 'ACCEPTED'
+
+          oq = by_id['REQ-OQ010-001']
+          oq['status'] = 'ACCEPTED'
+          oq['canonical_owner'] = 'Architecture governance'
+          oq['evidence_refs'] = ['PR #123 merged as c2b15c87b7310c1b26e79d2088a2be3137ba13d5']
+          oq['coverage_notes'] = 'OQ-010 закрыт и принят как ADR-047 после merge PR #123; T0 фиксирует уже канонический статус current main.'
+
+          if 'REQ-LIFECYCLE-001' not in by_id:
+              lifecycle = {
+                  'requirement_id': 'REQ-LIFECYCLE-001',
+                  'title': 'Task проходит явный управляемый lifecycle от intake до проверенного результата',
+                  'area': 'Core / Lifecycle',
+                  'type': 'PROCESS',
+                  'canonical_ssot': 'docs/architecture/20_TASK_LIFECYCLE_AND_ORCHESTRATION.md',
+                  'canonical_owner': 'Core',
+                  'target_gate': 'G3',
+                  'target_version': 'v0.1',
+                  'status': 'ACCEPTED',
+                  'dependencies': ['REQ-TASK-001','REQ-RULES-001','REQ-SEC-001','REQ-QA-001','REQ-EVIDENCE-001'],
+                  'machine_contract_refs': ['schemas/v1/TaskContract.json','schemas/v1/TaskRuntimeState.json','schemas/v1/SecurityDecision.json','schemas/v1/Evidence.json'],
+                  'evidence_refs': [],
+                  'issue_refs': [],
+                  'coverage_status': 'COVERED',
+                  'abc': 'UNASSESSED',
+                  'xyz': 'UNASSESSED',
+                  'materialization': 'LOGICAL_ONLY',
+                  'supporting_refs': ['docs/architecture/03_TASK_CONTRACT.md','docs/architecture/26_INTERNAL_CONTRACTS.md']
+              }
+              insert_at = next(i for i,r in enumerate(reg['requirements']) if r['requirement_id']=='REQ-RULES-001')
+              reg['requirements'].insert(insert_at, lifecycle)
+
+          for gap in reg['gaps']:
+              if gap['kind'] == 'CONTRACT_GAP' and 'REQ-CONTRACTS-001' not in gap['requirement_refs']:
+                  gap['requirement_refs'].append('REQ-CONTRACTS-001')
+
+          registry_path.write_text(json.dumps(reg, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          schema = json.loads(schema_path.read_text(encoding='utf-8'))
+          props = schema['$defs']['requirement']['properties']
+          props['canonical_ssot']['pattern'] = '^[^;]+$'
+          props['canonical_owner']['pattern'] = '^[^/]+$'
+          props['supporting_refs'] = {'$ref': '#/$defs/refArray'}
+          schema_path.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+          text = tests_path.read_text(encoding='utf-8')
+          marker = '\n\nif __name__ == "__main__":\n'
+          extra = r'''
+
+class TestRequirementsRegistryCorrectiveInvariants(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with REGISTRY_PATH.open("r", encoding="utf-8") as stream:
+            cls.registry = json.load(stream)
+
+    @staticmethod
+    def _repo_path(ref):
+        return ref.split("#", 1)[0].strip()
+
+    def test_canonical_ssot_is_single_resolvable_repo_ref(self):
+        for item in self.registry["requirements"]:
+            ref = item["canonical_ssot"]
+            self.assertNotIn(";", ref, f"{item['requirement_id']}: canonical_ssot содержит список")
+            path = REPO_ROOT / self._repo_path(ref)
+            self.assertTrue(path.is_file(), f"{item['requirement_id']}: canonical_ssot не разрешается: {ref}")
+            for supporting in item.get("supporting_refs", []):
+                support_path = REPO_ROOT / self._repo_path(supporting)
+                self.assertTrue(support_path.exists(), f"{item['requirement_id']}: supporting_ref не разрешяется: {supporting}")
+
+    def test_each_requirement_has_one_canonical_owner(self):
+        for item in self.registry["requirements"]:
+            owner = item["canonical_owner"]
+            self.assertNotIn("/", owner, f"{item['requirement_id']}: составной canonical_owner: {owner}")
+
+    def test_noncovered_requirement_has_gap_of_same_kind(self):
+        by_kind = {}
+        for gap in self.registry["gaps"]:
+            by_kind.setdefault(gap["kind"], set()).update(gap["requirement_refs"])
+        for item in self.registry["requirements"]:
+            kind = item["coverage_status"]
+            if kind != "COVERED":
+                self.assertIn(item["requirement_id"], by_kind.get(kind, set()), f"{item['requirement_id']}: {kind} без gap того же вида")
+
+    def test_each_canonical_inventory_document_is_linked_to_requirement(self):
+        linked = set()
+        for item in self.registry["requirements"]:
+            linked.add(self._repo_path(item["canonical_ssot"]))
+            linked.update(self._repo_path(ref) for ref in item.get("supporting_refs", []))
+        missing = []
+        for source in self.registry["source_inventory"]:
+            if source["role"] != "CANONICAL_SSoT":
+                continue
+            for path in REPO_ROOT.glob(source["path"]):
+                if path.is_file():
+                    rel = path.relative_to(REPO_ROOT).as_posix()
+                    if rel not in linked:
+                        missing.append(rel)
+        self.assertFalse(missing, f"CANONICAL_SSoT без Requirement linkage: {sorted(missing)}")
+'''
+          if 'class TestRequirementsRegistryCorrectiveInvariants' not in text:
+              if marker not in text:
+                  raise SystemExit('unittest main marker not found')
+              text = text.replace(marker, extra + marker)
+          tests_path.write_text(text, encoding='utf-8')
+
+          counts = {}
+          for r in reg['requirements']:
+              counts[r['coverage_status']] = counts.get(r['coverage_status'], 0) + 1
+          gap_counts = {}
+          for g in reg['gaps']:
+              gap_counts[g['kind']] = gap_counts.get(g['kind'], 0) + 1
+          report = f'''# T0 — полный Requirements Registry KAT9I_OS
+
+## Назначение
+
+T0 материализует inventory/traceability для следующей ABC/XYZ-классификации. Реестр не заменяет канонические SSoT и не принимает архитектурные решения.
+
+- Baseline current main: `{reg['baseline_revision']}`.
+- Requirements: **{len(reg['requirements'])}**.
+- Findings/gaps: **{len(reg['gaps'])}**.
+- ABC: `UNASSESSED` для всех Requirement.
+- XYZ: `UNASSESSED` для всех Requirement.
+
+## Инварианты T0
+
+- один Requirement имеет ровно один `canonical_ssot`;
+- дополнительные документы хранятся в `supporting_refs`;
+- один Requirement имеет ровно одного `canonical_owner`;
+- Requirement status отделён от `coverage_status`;
+- любой non-COVERED Requirement связан с gap того же вида;
+- каждый документ из `CANONICAL_SSoT` source inventory связан хотя бы с одним Requirement;
+- логический owner не означает физическую materialization модуля;
+- Graveyard остаётся DATA-only;
+- T0 не назначает ABC/XYZ.
+
+## Coverage snapshot
+
+{chr(10).join(f'- `{k}`: {v}' for k,v in sorted(counts.items()))}
+
+## Зарегистрированные findings
+
+{chr(10).join(f'- `{k}`: {v}' for k,v in sorted(gap_counts.items()))}
+
+Ключевые findings остаются DATA для последующего convergence: неверная Execution→§27.14 traceability-ссылка, противоречие §32.45 с принятым ADR-034, а также отсутствующие физические схемы устойчивых контрактов.
+
+## OQ-010
+
+OQ-010 уже закрыт в current main как **ACCEPTED / ADR-047** после merge PR #123 (`c2b15c87b7310c1b26e79d2088a2be3137ba13d5`). Реестр фиксирует этот канонический статус; pending-кандидатом он больше не считается.
+
+## Исправления после review
+
+- добавлена явная Requirement-связь для §20 Task Lifecycle;
+- `canonical_ssot` нормализован до одной разрешимой ссылки, дополнительные ссылки вынесены в `supporting_refs`;
+- составные canonical owners устранены;
+- `REQ-TASKGRAPH-001` сохраняет принятый Requirement status, а отсутствие схемы отражается только через `CONTRACT_GAP`;
+- coverage↔gap-kind проверяется детерминированно;
+- полнота canonical source→Requirement linkage проверяется тестом.
+
+## DoD T0
+
+T0 готов к независимому QA только если JSON Schema валидна, все ссылки/IDs/dependencies разрешаются, все перечисленные инварианты проходят локальные тесты и полный Quality Gate на exact HEAD.
+'''
+          report_path.write_text(report, encoding='utf-8')
+          PY
+          git rm .github/workflows/t0-registry-corrective.yml
+          python -m unittest tests.test_requirements_registry
+          git add requirements_registry.json schemas/v1/RequirementsRegistry.json tests/test_requirements_registry.py docs/reports/T0_REQUIREMENTS_REGISTRY.md schemas/README.md
+          git commit -m "fix(T0): close registry traceability review findings"
+          git push origin HEAD:docs/issue-129-t0-requirements-registry
