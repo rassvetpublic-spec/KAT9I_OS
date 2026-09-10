@@ -189,6 +189,7 @@ mutation($input:CreateProjectV2FieldInput!){
   if($f.name -cne $Name -and $Name -eq 'Статус' -and $f.name -eq 'Status'){
     Write-Host 'Проверено встроенное поле Status: системное имя GitHub неизменно; значения отображаются по-русски.'
   } elseif($f.name -cne $Name){
+    if($script:ProjectPreflightOnly){return}
 $q=@'
 mutation($input:UpdateProjectV2FieldInput!){
  updateProjectV2Field(input:$input){
@@ -363,6 +364,8 @@ function Invoke-ProjectConfiguration([scriptblock]$Apply){
 
 function EnsureViews{
   if($script:ProjectPreflightOnly){return}
+  $p=(Snapshot).user.projectV2
+  if(-not $p){throw "Project #$ProjectNumber не найден."}
   $required=@('Этап','Приоритет','Область','Исполнитель','Проверяющий','Исполнение')
   $m=$null
   for($attempt=1;$attempt -le 10;$attempt++){
@@ -396,7 +399,7 @@ function EnsureViews{
   }
 
   $views=@(
-    @{n='00 — Все задачи';l='table';gl='TABLE_LAYOUT';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
+    @{n='00 — Все задачи';l='TABLE_LAYOUT';gl='TABLE_LAYOUT';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
     @{n='01 — Готово к работе';l='TABLE_LAYOUT';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Готово к работе`" -Исполнение:`"Заблокировано`""},
     @{n='02 — В работе';l='BOARD_LAYOUT';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"В работе`""},
     @{n='03 — Проверка';l='BOARD_LAYOUT';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"Проверка QA`""},
