@@ -179,14 +179,49 @@ mutation($input:CreateProjectV2FieldInput!){
     }
   }
 
-  if($missing.Count -gt 0 -or $legacy.Count -gt 0){
-    $details=@()
-    if($missing.Count -gt 0){$details+="отсутствуют: $(($missing)-join ', ')"}
-    if($legacy.Count -gt 0){$details+="нужна миграция значений: $(($legacy)-join ', ')"}
-    throw "Поле '$($f.name)' требует изменения option ID ($($details -join '; ')). GitHub API не позволяет доказуемо сохранить привязки Items при таком переименовании, поэтому скрипт остановлен без изменения значений. Выполните явную миграцию данных и повторите запуск."
-  }
+  if($legacy.Count -gt 0){
+  throw "Поле '$($f.name)' требует небезопасной миграции существующих option ID: $(($legacy)-join ', '). Скрипт остановлен без изменения значений."
+}
 
-  if($f.name -cne $Name -and $Name -eq 'Статус' -and $f.name -eq 'Status'){
+if($missing.Count -gt 0){
+  foreach($existing in @($f.options)){
+    if([string]::IsNullOrWhiteSpace([string]$existing.id)){
+      throw "Поле '$($f.name)' содержит существующее значение '$($existing.name)' без option ID. Безопасное добавление новых значений невозможно."
+    }
+  }
+  if(-not $script:ProjectPreflightOnly){
+    $opts=@()
+    foreach($existing in @($f.options)){
+      $opts+=[ordered]@{id=[string]$existing.id;name=[string]$existing.name;color=[string]$existing.color;description=[string]$existing.description}
+    }
+    foreach($d in $Defs){
+      if($missing -ccontains $d.name){$opts+=[ordered]@{name=$d.name;color=$d.color;description=$d.description}}
+    }
+$q=@'
+mutation($input:UpdateProjectV2FieldInput!){
+ updateProjectV2Field(input:$input){
+   projectV2Field{... on ProjectV2SingleSelectField{id name options{id name}}}
+ }
+}
+'@
+    $null=Gql $q @{input=@{fieldId=$f.id;singleSelectOptions=$opts}}
+    $after=Find-Field (Snapshot).user.projectV2.fields.nodes $aliases
+    foreach($existing in @($f.options)){
+      $preserved=@($after.options|Where-Object{$_.id -ceq $existing.id})
+      if($preserved.Count -ne 1 -or $preserved[0].name -cne $existing.name){
+        throw "После добавления значений поле '$($f.name)' не сохранило option ID '$($existing.id)' для '$($existing.name)'."
+      }
+    }
+    foreach($nameToAdd in $missing){
+      if(@($after.options|Where-Object{$_.name -ceq $nameToAdd}).Count -ne 1){
+        throw "После обновления поле '$($f.name)' не содержит новое каноническое значение '$nameToAdd'."
+      }
+    }
+    Write-Host "Безопасно добавлены значения поля '$($f.name)': $(($missing)-join ', ')"
+  }
+}
+
+if($f.name -cne $Name -and $Name -eq 'Статус'  -and $f.name -eq 'Status'){
     Write-Host 'Проверено встроенное поле Status: системное имя GitHub неизменно; значения отображаются по-русски.'
   } elseif($f.name -cne $Name){
     if($script:ProjectPreflightOnly){return}
@@ -590,6 +625,7 @@ $workers=@(
  (Opt 'ChatGPT' 'GREEN' 'ChatGPT.'),
  (Opt 'AGY' 'BLUE' 'AGY.'),
  (Opt 'Codex' 'PURPLE' 'Codex.'),
+ (Opt 'Антигравити' 'PINK' 'Независимый QA Worker Антигравити.' @('Антигравити','Antigravity')),
  (Opt 'Человек' 'ORANGE' 'Человек.' @('Человек','Human')),
  (Opt 'Другой' 'GRAY' 'Другой исполнитель.' @('Другой','Other'))
 )
@@ -598,7 +634,7 @@ EnsureSelect 'Проверяющий' @('Проверяющий','QA Worker') $w
 
 EnsureSelect 'Исполнение' @('Исполнение','Состояние работы','Claim') @(
  (Opt 'Свободно' 'GRAY' 'Никто не взял работу.' @('Свободно','UNCLAIMED')),
- (Opt 'В очереди' 'BLUE' 'Работа зарезервирована.' @('В очереди','QUEUED')),
+ (Opt 'В очереди' 'BLUE' 'Работа ждёт следующего разрешённого этапа; после QA PASS — отдельного mtd.' @('В очереди','QUEUED')),
  (Opt 'Активно' 'ORANGE' 'Исполнитель прямо сейчас работает над задачей.' @('Активно','ACTIVE')),
  (Opt 'На проверке' 'PURPLE' 'Работа передана отдельному проверяющему.' @('На проверке','QA')),
  (Opt 'Заблокировано' 'RED' 'Продолжение работы заблокировано.' @('Заблокировано','BLOCKED')),
