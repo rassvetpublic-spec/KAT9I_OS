@@ -33,6 +33,7 @@ SECRET_PATTERNS = (
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
     re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
 )
+MENTION_RE = re.compile(r"(?<![A-Za-z0-9_])@(?=[A-Za-z0-9])")
 WORD_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9_./+-]+")
 BULLET_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)(.+?)\s*$")
 
@@ -44,9 +45,23 @@ def _redact(text: str) -> str:
     return result
 
 
+def _neutralize_mentions(text: str) -> str:
+    return MENTION_RE.sub("@\u200b", text)
+
+
 def _compact(text: str, limit: int = 700) -> str:
-    text = re.sub(r"\s+", " ", _redact(text)).strip()
+    text = re.sub(r"\s+", " ", _neutralize_mentions(_redact(text))).strip()
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _sanitize_evidence(value: Any) -> Any:
+    if isinstance(value, str):
+        return _compact(value, 700)
+    if isinstance(value, list):
+        return [_sanitize_evidence(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _sanitize_evidence(item) for key, item in value.items()}
+    return value
 
 
 def _normalized_words(text: str) -> list[str]:
@@ -153,7 +168,7 @@ def _item(category: str, text: str, *, confidence: str, evidence: dict[str, Any]
         "category": category,
         "text": _compact(text),
         "confidence": confidence,
-        "evidence": evidence or {},
+        "evidence": _sanitize_evidence(evidence or {}),
     }
 
 
@@ -268,7 +283,7 @@ def build_audit(payload: dict[str, Any], *, root: Path) -> dict[str, Any]:
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "repository": repository,
+        "repository": _compact(repository, 200),
         "pr_number": int(pr.get("number", 0)),
         "title": _compact(str(pr.get("title", "")), 240),
         "source_head_sha": str(pr.get("head_sha", "")),
