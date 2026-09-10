@@ -57,6 +57,7 @@ jobs:
             printf 'state=%s\n' "$DISPATCH_STATE" >> "$GITHUB_OUTPUT"
             printf 'worker=\n' >> "$GITHUB_OUTPUT"
             printf 'qa=\n' >> "$GITHUB_OUTPUT"
+            printf 'expected_head=\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           python scripts/project_queue_event.py --event-name "$EVENT_NAME" --action "$EVENT_ACTION" --event-path "$GITHUB_EVENT_PATH" --output queue-event.json
@@ -69,11 +70,30 @@ jobs:
               out.write(f"state={data.get('state','')}\n")
               out.write(f"worker={data.get('worker','')}\n")
               out.write(f"qa={data.get('qa','')}\n")
+              out.write(f"expected_head={data.get('expected_head','')}\n")
           PY
 
       - name: Нет управляющего перехода
         if: steps.resolve.outputs.state == ''
         run: echo "Событие не содержит доверенного перехода Project queue; изменений нет."
+
+      - name: Проверить exact HEAD перед QUEUED
+        if: steps.resolve.outputs.state == 'QUEUED'
+        shell: bash
+        env:
+          ITEM_URL: ${{ steps.resolve.outputs.url }}
+          EXPECTED_HEAD: ${{ steps.resolve.outputs.expected_head }}
+        run: |
+          set -euo pipefail
+          if [ -z "$EXPECTED_HEAD" ]; then
+            echo "::error::FAST-QA-PASS не содержит exact HEAD; QUEUED запрещён."
+            exit 1
+          fi
+          LIVE_HEAD="$(gh pr view "$ITEM_URL" --json headRefOid --jq '.headRefOid')"
+          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::STALE_QA: live PR HEAD=$LIVE_HEAD, QA HEAD=$EXPECTED_HEAD; QUEUED запрещён."
+            exit 1
+          fi
 
       - name: Диагностический preflight Project credential
         if: steps.resolve.outputs.state != ''
