@@ -47,6 +47,21 @@ class ProvenBoardViewTests(unittest.TestCase):
         self.assertEqual(before, core.LEGACY_VIEWS)
         self.assertNotIn(safe.PROVEN_LEGACY_BOARD_VIEW, core.LEGACY_VIEWS)
 
+    def test_ephemeral_authorization_builds_exact_delete_plan_and_restores_allowlist(self):
+        names = self.canonical_names() + [safe.PROVEN_LEGACY_BOARD_VIEW]
+        snap = snapshot(names)
+        before = set(core.LEGACY_VIEWS)
+        core.LEGACY_VIEWS.update(safe.proven_legacy_views(snap))
+        try:
+            deletion = core.view_delete_plan(snap)
+        finally:
+            core.LEGACY_VIEWS.clear()
+            core.LEGACY_VIEWS.update(before)
+        self.assertEqual(1, len(deletion))
+        self.assertEqual(safe.PROVEN_LEGACY_BOARD_VIEW, deletion[0]["name"])
+        self.assertTrue(deletion[0]["id"].startswith("VIEW_"))
+        self.assertEqual(before, core.LEGACY_VIEWS)
+
 
 if __name__ == "__main__":
     unittest.main()
