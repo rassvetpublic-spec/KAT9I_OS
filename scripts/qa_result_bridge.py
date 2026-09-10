@@ -10,11 +10,13 @@ COMMAND_MARKER = "KAT9I-CONTROL/1 | QA-COMMAND"
 RESULT_MARKER = "KAT9I-QA-RESULT/1"
 ATTEST_MARKER = "KAT9I-CONTROL/1 | QA-ACCEPT"
 BRIDGE_MARKER = "KAT9I-BRIDGE/1"
+FOLLOW_UP_HEADER = "FOLLOW_UP_CANDIDATES"
 CONTROLLER = "ChatGPT"
 ROLE = "QA_EXECUTOR"
 RESULT_SINK = "PR_REVIEW"
 QA_MODES = {"FULL", "DELTA", "REUSE"}
 VERDICTS = {"QA PASS", "CHANGES REQUESTED", "BLOCKED", "QA ABORTED"}
+REVIEW_STATES = {"COMMENTED", "APPROVED", "CHANGES_REQUESTED"}
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 COMMAND_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{5,127}$")
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -104,6 +106,22 @@ def parse_envelope(body: str, marker: str, fields: set[str]) -> dict[str, str]:
     if missing:
         raise BridgeError(f"missing envelope keys: {', '.join(missing)}")
     return meta
+
+
+def _section_lines(body: str, header: str) -> list[str] | None:
+    lines = (body or "").splitlines()
+    separator = None
+    for index, raw in enumerate(lines[1:], start=1):
+        if not raw.strip():
+            separator = index
+            break
+    if separator is None:
+        return None
+    tail = lines[separator + 1:]
+    for index, raw in enumerate(tail):
+        if raw.strip() == header:
+            return [line.strip() for line in tail[index + 1:] if line.strip()]
+    return None
 
 
 def validate_command(meta: dict[str, str]) -> dict[str, Any]:
@@ -234,6 +252,51 @@ def extract_attestation(event: dict[str, Any]) -> dict[str, Any] | None:
     return validate_attestation(parse_envelope(body, ATTEST_MARKER, ATTEST_FIELDS))
 
 
+def _latest_command(
+    comments: list[dict[str, Any]],
+    pr_number: int,
+    before: datetime,
+    expected_command_id: str,
+) -> tuple[datetime, dict[str, Any]]:
+    candidates: list[tuple[datetime, int, str]] = []
+    for comment in comments:
+        if comment.get("author_association") != "OWNER":
+            continue
+        body = comment.get("body") or ""
+        if _first_line(body) != COMMAND_MARKER:
+            continue
+        created_at = _parse_time(comment.get("created_at"))
+        if created_at >= before:
+            continue
+        candidates.append((created_at, int(comment.get("id") or 0), body))
+
+    if not candidates:
+        raise BridgeError("unknown command_id: no owner QA-COMMAND before attestation")
+
+    latest_time, latest_id, latest_body = max(candidates, key=lambda item: (item[0], item[1]))
+    try:
+        command = validate_command(parse_envelope(latest_body, COMMAND_MARKER, COMMAND_FIELDS))
+    except BridgeError as exc:
+        raise BridgeError(f"latest owner QA-COMMAND is malformed: {exc}") from exc
+
+    if command["target_pr"] != pr_number:
+        raise BridgeError("latest owner QA-COMMAND is posted in the wrong PR conversation")
+    if command["command_id"] != expected_command_id:
+        raise BridgeError("QA result references a superseded command")
+
+    for created_at, comment_id, body in candidates:
+        if created_at == latest_time and comment_id == latest_id:
+            continue
+        try:
+            older = validate_command(parse_envelope(body, COMMAND_MARKER, COMMAND_FIELDS))
+        except BridgeError:
+            continue
+        if older["target_pr"] == pr_number and older["command_id"] == expected_command_id:
+            raise BridgeError("duplicate command_id across valid QA-COMMAND envelopes")
+
+    return latest_time, command
+
+
 def resolve_bridge(
     event: dict[str, Any],
     comments_payload: Any,
@@ -264,7 +327,21 @@ def resolve_bridge(
         raise BridgeError("QA-ACCEPT review_id does not match fetched review")
     if review_payload.get("author_association") != "OWNER":
         raise BridgeError("referenced QA review is not owner-associated evidence")
-    result = validate_result(parse_envelope(review_payload.get("body") or "", RESULT_MARKER, RESULT_FIELDS))
+    review_state = str(review_payload.get("state") or "").upper()
+    if review_state not in REVIEW_STATES:
+        raise BridgeError("referenced QA review is not in an accepted submitted state")
+    review_commit = str(review_payload.get("commit_id") or "").lower()
+    if not SHA_RE.fullmatch(review_commit) or review_commit != live_head:
+        raise BridgeError("referenced QA review commit_id does not match live PR HEAD")
+
+    review_body = review_payload.get("body") or ""
+    result = validate_result(parse_envelope(review_body, RESULT_MARKER, RESULT_FIELDS))
+    follow_up_lines = _section_lines(review_body, FOLLOW_UP_HEADER)
+    if follow_up_lines is None:
+        raise BridgeError("QA result must contain a separate FOLLOW_UP_CANDIDATES section")
+    if result["follow_up_candidates"] > 0 and not follow_up_lines:
+        raise BridgeError("QA result declares follow-up candidates but section has no content")
+
     if result["target_pr"] != pr_number:
         raise BridgeError("QA result target_pr does not match PR")
     if result["exact_head"] != live_head:
@@ -295,31 +372,12 @@ def resolve_bridge(
             "command_id": result["command_id"],
         }
 
-    valid_commands: list[tuple[datetime, int, dict[str, Any]]] = []
-    for comment in comments:
-        if comment.get("author_association") != "OWNER":
-            continue
-        body = comment.get("body") or ""
-        if _first_line(body) != COMMAND_MARKER:
-            continue
-        created_at = _parse_time(comment.get("created_at"))
-        if created_at >= attested_at:
-            continue
-        try:
-            command = validate_command(parse_envelope(body, COMMAND_MARKER, COMMAND_FIELDS))
-        except BridgeError as exc:
-            raise BridgeError(f"malformed owner QA-COMMAND before attestation: {exc}") from exc
-        if command["target_pr"] != pr_number:
-            raise BridgeError("owner QA-COMMAND is posted in the wrong PR conversation")
-        valid_commands.append((created_at, int(comment.get("id") or 0), command))
-
-    matching = [item for item in valid_commands if item[2]["command_id"] == result["command_id"]]
-    if len(matching) != 1:
-        raise BridgeError("unknown or ambiguous command_id")
-    latest = max(valid_commands, default=None, key=lambda item: (item[0], item[1]))
-    if latest is None or latest[2]["command_id"] != result["command_id"]:
-        raise BridgeError("QA result references a superseded command")
-    command_created_at, _, command = matching[0]
+    command_created_at, command = _latest_command(
+        comments,
+        pr_number=pr_number,
+        before=attested_at,
+        expected_command_id=result["command_id"],
+    )
     if command_created_at >= submitted_at:
         raise BridgeError("QA-COMMAND must exist before the QA review")
 
