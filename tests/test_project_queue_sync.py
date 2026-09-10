@@ -37,6 +37,22 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertNotIn("gh pr merge", sync)
         self.assertNotIn("merge_pull_request", sync)
 
+    def test_diagnostic_preflight_contract_is_pinned(self):
+        sync = SYNC.read_text(encoding="utf-8")
+        for code in (
+            "SECRET_MISSING",
+            "TOKEN_INVALID",
+            "PROJECT_ACCESS_DENIED",
+            "PROJECT_WRITE_DENIED",
+            "PROJECT_SCHEMA_MISMATCH",
+            "PROJECT_SYNC_FAILED",
+        ):
+            self.assertIn(code, sync)
+        self.assertIn("viewerCanUpdate", sync)
+        self.assertIn("KAT9I_PROJECT_PREFLIGHT=OK", sync)
+        self.assertIn("gh api user", sync)
+        self.assertNotIn("$env:GITHUB_TOKEN", sync)
+
     def test_workflow_is_trusted_and_never_merges(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("KAT9I_PROJECT_TOKEN", text)
@@ -68,7 +84,7 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertIn(expected, result.stdout)
 
     def test_queue_behavior_suite(self):
-        self._run_pwsh(QUEUE_BEHAVIOR, "PASS: Project queue identity metadata")
+        self._run_pwsh(QUEUE_BEHAVIOR, "PASS: Project queue identity metadata, diagnostic preflight")
 
 
 if __name__ == "__main__":
