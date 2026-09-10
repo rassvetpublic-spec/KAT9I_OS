@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = "1.0.0"
+SALVAGE_MARKER = "<!-- graveyard-pr-salvage-audit -->"
 MIN_CHANGED_FILES = 5
 MIN_CHANGED_LINES = 250
 MIN_COMMITS = 5
@@ -75,6 +76,17 @@ def _extract_statements(text: str) -> list[str]:
     return items[:80]
 
 
+def _external_issue_comments(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Исключает собственные salvage-комментарии, чтобы повторный запуск не кормил сам себя."""
+    result: list[dict[str, Any]] = []
+    for comment in payload.get("issue_comments", []):
+        body = str(comment.get("body", ""))
+        if SALVAGE_MARKER in body:
+            continue
+        result.append(comment)
+    return result
+
+
 def _load_canon_text(root: Path, filenames: list[str]) -> str:
     chunks: list[str] = []
     total = 0
@@ -97,20 +109,22 @@ def _load_canon_text(root: Path, filenames: list[str]) -> str:
 
 def _statement_in_canon(statement: str, canon_text: str) -> tuple[bool, float]:
     compact = re.sub(r"\s+", " ", statement.lower()).strip()
-    if len(compact) >= 24 and compact in re.sub(r"\s+", " ", canon_text):
+    normalized_canon = re.sub(r"\s+", " ", canon_text)
+    if len(compact) >= 24 and compact in normalized_canon:
         return True, 1.0
     words = _normalized_words(statement)
     if len(words) < 5:
         return False, 0.0
-    present = sum(1 for word in set(words) if word in canon_text)
-    coverage = present / max(1, len(set(words)))
+    unique_words = set(words)
+    present = sum(1 for word in unique_words if word in canon_text)
+    coverage = present / max(1, len(unique_words))
     return coverage >= 0.78, coverage
 
 
 def _superseded_evidence(payload: dict[str, Any]) -> bool:
     pr = payload["pr"]
     labels = " ".join(str(x) for x in pr.get("labels", []))
-    comments = "\n".join(str(x.get("body", "")) for x in payload.get("issue_comments", []))
+    comments = "\n".join(str(x.get("body", "")) for x in _external_issue_comments(payload))
     text = "\n".join((str(pr.get("title", "")), str(pr.get("body", "")), labels, comments)).lower()
     return any(marker in text for marker in SUPERSEDED_MARKERS)
 
@@ -215,7 +229,7 @@ def build_audit(payload: dict[str, Any], *, root: Path) -> dict[str, Any]:
                     evidence={"source": "PR_BODY", "token_coverage": round(score, 3)},
                 ))
 
-        for comment in payload.get("issue_comments", []):
+        for comment in _external_issue_comments(payload):
             body = str(comment.get("body", ""))
             if not any(marker in body.lower() for marker in SUPERSEDED_MARKERS):
                 continue
@@ -252,7 +266,7 @@ def build_audit(payload: dict[str, Any], *, root: Path) -> dict[str, Any]:
     for item in items:
         counts[item["category"]] = counts.get(item["category"], 0) + 1
 
-    report = {
+    return {
         "schema_version": SCHEMA_VERSION,
         "repository": repository,
         "pr_number": int(pr.get("number", 0)),
@@ -278,7 +292,6 @@ def build_audit(payload: dict[str, Any], *, root: Path) -> dict[str, Any]:
         "requires_canon_check_before_capture": True,
         "promotion_requires_owner_approval": True,
     }
-    return report
 
 
 def render_markdown(report: dict[str, Any]) -> str:
