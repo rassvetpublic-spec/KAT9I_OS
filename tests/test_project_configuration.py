@@ -32,7 +32,8 @@ class ProjectConfigurationTests(unittest.TestCase):
         names = re.findall(r"@\{n='([^']+)'", active_block)
         self.assertEqual(CANONICAL_VIEWS, names)
         self.assertEqual(5, len(names))
-        self.assertIn('Статус:\"Проверка QA\"', active_block)
+        self.assertIn("Проверка QA", active_block)
+        self.assertIn("@('Статус','Status')", text)
         self.assertEqual(3, active_block.count("gl='TABLE_LAYOUT'"))
         self.assertEqual(2, active_block.count("gl='BOARD_LAYOUT'"))
 

@@ -184,7 +184,9 @@ mutation($input:CreateProjectV2FieldInput!){
     throw "Поле '$($f.name)' требует изменения option ID ($($details -join '; ')). GitHub API не позволяет доказуемо сохранить привязки Items при таком переименовании, поэтому скрипт остановлен без изменения значений. Выполните явную миграцию данных и повторите запуск."
   }
 
-  if($f.name -cne $Name){
+  if($f.name -cne $Name -and $Name -eq 'Статус' -and $f.name -eq 'Status'){
+    Write-Host 'Проверено встроенное поле Status: системное имя GitHub неизменно; значения отображаются по-русски.'
+  } elseif($f.name -cne $Name){
 $q=@'
 mutation($input:UpdateProjectV2FieldInput!){
  updateProjectV2Field(input:$input){
@@ -295,12 +297,15 @@ function Find-MapField($Map,[string[]]$Aliases){
 }
 
 function PreflightViews{
+  $project=(Snapshot).user.projectV2
+  $statusField=Find-Field $project.fields.nodes @('Статус','Status')
+  $statusName=if($statusField){$statusField.name}else{'Статус'}
   $views=@(
     @{n='00 — Все задачи';gl='TABLE_LAYOUT';f='is:open'},
-    @{n='01 — Готово к работе';gl='TABLE_LAYOUT';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"'},
-    @{n='02 — В работе';gl='BOARD_LAYOUT';f='is:open Статус:"В работе"'},
-    @{n='03 — Проверка';gl='BOARD_LAYOUT';f='is:open Статус:"Проверка QA"'},
-    @{n='04 — Заблокировано';gl='TABLE_LAYOUT';f='is:open Статус:"Заблокировано"'}
+    @{n='01 — Готово к работе';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Готово к работе`" -Исполнение:`"Заблокировано`""},
+    @{n='02 — В работе';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"В работе`""},
+    @{n='03 — Проверка';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"Проверка QA`""},
+    @{n='04 — Заблокировано';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Заблокировано`""}
   )
   $canonicalNames=@($views|ForEach-Object{$_.n})
   $legacyViewNames=@(
@@ -349,9 +354,7 @@ function Invoke-ProjectConfiguration([scriptblock]$Apply){
 }
 
 function EnsureViews{
-  Start-Sleep -Seconds 2
-
-  $required=@('Статус','Этап','Приоритет','Область','Исполнитель','Проверяющий','Исполнение')
+  $required=@('Этап','Приоритет','Область','Исполнитель','Проверяющий','Исполнение')
   $m=$null
   for($attempt=1;$attempt -le 10;$attempt++){
     $m=FieldMapViaGraphQL
@@ -372,39 +375,23 @@ function EnsureViews{
   }
   if($missing.Count -gt 0){throw "После ожидания API не видит поля: $(($missing)-join ', ')."}
 
-  $rf=Rest "users/$Owner/projectsV2/$ProjectNumber/fields?per_page=100"
-  $rm=@{}
-  foreach($f in @($rf)){$rm[$f.name]=$f}
-
-  function RestFieldId([string[]]$Aliases){
-    foreach($key in @($rm.Keys)){
-      if(Is-Alias $key $Aliases){return [int64]$rm[$key].id}
-    }
-    return $null
-  }
-
-  $id=@{}
-  foreach($n in $required){
-    $fid=RestFieldId @($n)
-    if($null -eq $fid){throw "REST API пока не видит поле '$n'. Повторите запуск через несколько секунд."}
-    $id[$n]=$fid
-  }
-
+  $status=Find-MapField $m @('Статус','Status')
+  if(-not $status){throw 'Project не содержит системное поле Status/Статус.'}
+  $statusName=$status.name
+  $id=@{'Статус'=$status.id}
+  foreach($n in $required){$id[$n]=(Find-MapField $m @($n)).id}
   $vid=@()
-  foreach($n in @('Title','Assignees','Статус','Этап','Приоритет','Область','Тип','Размер','Итерация','Исполнитель','Проверяющий','Исполнение','Цель','Риск','Доказательство','Linked pull requests','Sub-issues progress')){
-    $fid=RestFieldId @($n)
-    if($null -ne $fid){$vid+=$fid}
+  foreach($aliases in @(@('Title'),@('Assignees'),@('Статус','Status'),@('Этап'),@('Приоритет'),@('Область'),@('Тип'),@('Размер'),@('Итерация'),@('Исполнитель'),@('Проверяющий'),@('Исполнение'),@('Цель'),@('Риск'),@('Доказательство'),@('Linked pull requests'),@('Sub-issues progress'))){
+    $field=Find-MapField $m $aliases
+    if($field){$vid+=$field.id}
   }
-
-  $u=Rest "users/$Owner"
-  $uid=[string]$u.id
 
   $views=@(
     @{n='00 — Все задачи';l='table';gl='TABLE_LAYOUT';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
-    @{n='01 — Готово к работе';l='table';gl='TABLE_LAYOUT';f='is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"';s=@(@($id['Приоритет'],'asc'))},
-    @{n='02 — В работе';l='board';gl='BOARD_LAYOUT';f='is:open Статус:"В работе"';s=@(@($id['Приоритет'],'asc'));v=@($id['Исполнитель'])},
-    @{n='03 — Проверка';l='board';gl='BOARD_LAYOUT';f='is:open Статус:"Проверка QA"';s=@(@($id['Приоритет'],'asc'));v=@($id['Проверяющий'])},
-    @{n='04 — Заблокировано';l='table';gl='TABLE_LAYOUT';f='is:open Статус:"Заблокировано"';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'))}
+    @{n='01 — Готово к работе';l='TABLE_LAYOUT';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Готово к работе`" -Исполнение:`"Заблокировано`""},
+    @{n='02 — В работе';l='BOARD_LAYOUT';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"В работе`""},
+    @{n='03 — Проверка';l='BOARD_LAYOUT';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"Проверка QA`""},
+    @{n='04 — Заблокировано';l='TABLE_LAYOUT';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Заблокировано`""}
   )
 
   $canonicalNames=@($views|ForEach-Object{$_.n})
@@ -449,11 +436,11 @@ function EnsureViews{
     $matches=@($initialViews|Where-Object{$_.name -ceq $v['n']})
     if($matches.Count -eq 1){continue}
 
-    $b=[ordered]@{name=$v['n'];layout=$v['l'];filter=$v['f'];visible_fields=$vid}
-    if($v.ContainsKey('s')){$b.sort_by=$v['s']}
-    if($v.ContainsKey('v')){$b.vertical_group_by=$v['v']}
-
-    $null=Rest "users/$uid/projectsV2/$ProjectNumber/views" 'POST' $b
+    $q='mutation($input:CreateProjectV2ViewInput!){createProjectV2View(input:$input){projectV2View{id}}}'
+    $created=Gql $q @{input=@{projectId=$p.id;name=$v['n'];layout=$v['l'];configuration=@{visibleFieldIds=$vid}}}
+    $viewId=$created.data.createProjectV2View.projectV2View.id
+    $q='mutation($input:UpdateProjectV2ViewInput!){updateProjectV2View(input:$input){projectV2View{id}}}'
+    $null=Gql $q @{input=@{viewId=$viewId;filter=$v['f'];configuration=@{visibleFieldIds=$vid}}}
     Write-Host "Создано представление: $($v['n'])"
   }
 
