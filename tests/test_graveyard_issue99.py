@@ -17,6 +17,7 @@ from scripts.check_graveyard import (
     validate_graveyard,
 )
 from scripts.graveyard_excavate import _approve_via_trusted_cli_boundary
+from scripts.graveyard_trusted_handoff import approve_trusted
 
 
 class TestGraveyardIssue99(unittest.TestCase):
@@ -111,14 +112,20 @@ class TestGraveyardIssue99(unittest.TestCase):
         # Direct literal remains visible to static analysis; unknown calls are never executed.
         self.assertIsNotNone(_find_python_ast_graveyard_ref(source))
 
-    def test_trusted_cli_boundary_has_no_injected_clock_or_store_parameters(self):
-        params = tuple(inspect.signature(_approve_via_trusted_cli_boundary).parameters)
-        self.assertEqual(params, ("prepared", "approval_record", "identity"))
-        with patch("scripts.graveyard_excavate._trusted_now_iso", return_value="2026-09-10T10:00:00Z"), patch(
-            "scripts.graveyard_excavate._trusted_nonce_state_path",
+    def test_trusted_adapter_has_no_injected_clock_or_store_parameters(self):
+        self.assertEqual(
+            tuple(inspect.signature(approve_trusted).parameters),
+            ("prepared", "approval_record", "identity"),
+        )
+        self.assertEqual(
+            tuple(inspect.signature(_approve_via_trusted_cli_boundary).parameters),
+            ("prepared", "approval_record", "identity"),
+        )
+        with patch("scripts.graveyard_trusted_handoff.trusted_now_iso", return_value="2026-09-10T10:00:00Z"), patch(
+            "scripts.graveyard_trusted_handoff.trusted_nonce_state_path",
             return_value=Path("/trusted/graveyard-used-nonces.json"),
         ), patch("scripts.graveyard_excavate.approve_excavate_request_with_nonce_file", return_value={"status": "OK"}) as call:
-            result = _approve_via_trusted_cli_boundary({}, {}, {})
+            result = approve_trusted({}, {}, {})
         self.assertEqual(result, {"status": "OK"})
         kwargs = call.call_args.kwargs
         self.assertEqual(kwargs["now"], "2026-09-10T10:00:00Z")
@@ -130,6 +137,7 @@ class TestGraveyardIssue99(unittest.TestCase):
         self.assertIn("defence-in-depth", text)
         self.assertIn("Context/Planner", text)
         self.assertIn("trusted cli", text.casefold())
+        self.assertIn("graveyard_trusted_handoff.py", text)
         self.assertNotIn("durable replay-store nonce после перезапуска", text)
 
 
