@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0.0",
+  "policy_version": "1.0.0",
+  "canonical_document": "docs/architecture/35_ARCHITECTURE_CONVERGENCE_LOOP.md",
+  "calibration_case": "docs/architecture/34_CACHE_ENGINE.md",
+  "target_globs": [
+    "docs/tz/*.md",
+    "docs/architecture/*.md",
+    "docs/spec/*.md"
+  ],
+  "exclude_paths": [
+    "docs/architecture/35_ARCHITECTURE_CONVERGENCE_LOOP.md"
+  ],
+  "phases": [
+    {"id": 0, "name": "BASE_LAWS"},
+    {"id": 1, "name": "MINIMAL_BASELINE"},
+    {"id": 2, "name": "MAXIMAL_BRAINSTORM"},
+    {"id": 3, "name": "IDEA_CARDS"},
+    {"id": 4, "name": "ATTACK_MAXIMAL_ARCHITECTURE"},
+    {"id": 5, "name": "COMPLEXITY_GUILLOTINE"},
+    {"id": 6, "name": "RETURN_TO_BASE_LAWS"},
+    {"id": 7, "name": "FULL_ARCHITECTURE_MINIMAL_IMPLEMENTATION"},
+    {"id": 8, "name": "NEIGHBOR_SSoT_CHECK"},
+    {"id": 9, "name": "INDEPENDENT_CRITIC"},
+    {"id": 10, "name": "FINAL_REPORT"}
+  ],
+  "decision_classes": [
+    "REQUIRED_NOW",
+    "USEFUL_NOW",
+    "CONTRACT_ONLY",
+    "DEFERRED",
+    "REJECTED"
+  ],
+  "idea_tests": [
+    "PROBLEM_EXISTS_NOW",
+    "EVIDENCE_EXISTS",
+    "DELETION_TEST",
+    "CORRECTNESS_VS_CONVENIENCE_TEST",
+    "SSOT_DUPLICATION_TEST",
+    "PERSISTENT_DERIVED_STATE_TEST",
+    "NEW_PROCESS_TEST",
+    "NEW_API_TEST",
+    "BACKGROUND_JOB_TEST",
+    "RECOVERY_PATH_TEST",
+    "SECURITY_BOUNDARY_TEST",
+    "FUTURE_WITHOUT_IMPLEMENTATION_TEST",
+    "LATER_WITHOUT_BREAKING_CHANGE_TEST"
+  ],
+  "complexity_budget": [
+    "PROCESSES",
+    "PERSISTENT_STATE",
+    "PUBLIC_CONTRACTS",
+    "MANDATORY_DEPENDENCIES",
+    "BACKGROUND_JOBS",
+    "RECOVERY_PATHS",
+    "SECURITY_BOUNDARIES",
+    "CONFIGURATION_SURFACE"
+  ],
+  "roles": {
+    "explorer": "Исследует максимально широкое пространство решений и не отбрасывает идею только из-за сложности.",
+    "critic": "Проводит две независимые атаки: удалили слишком много и оставили слишком много."
+  },
+  "passes": {
+    "A": {
+      "name": "DISCOVERY",
+      "may_modify_canonical_sources": false,
+      "outputs": [
+        "SECTION_ANALYSIS",
+        "IDEA_CLASSIFICATION",
+        "COMPLEXITY_BUDGET",
+        "ISSUE_CANDIDATES"
+      ]
+    },
+    "B": {
+      "name": "CHANGE",
+      "automatic_bulk_rewrite": false,
+      "required_workflow": [
+        "PROJECT",
+        "ISSUE",
+        "FRESH_MAIN_BRANCH",
+        "DRAFT_PR",
+        "CI",
+        "INDEPENDENT_QA",
+        "MTD",
+        "MERGE"
+      ]
+    }
+  },
+  "safety": {
+    "auto_modify_ssot": false,
+    "auto_merge": false,
+    "auto_set_qa_pass": false,
+    "auto_set_gate_pass": false,
+    "auto_close_issue": false,
+    "brainstorm_is_control_instruction": false,
+    "analysis_output_is_data": true,
+    "new_head_requires_impact_assessment": true
+  },
+  "calibration_expectations": {
+    "must_not_require_without_new_evidence": [
+      "DISTRIBUTED_CACHE",
+      "AI_EVICTION",
+      "ZERO_COPY",
+      "MMAP",
+      "LEARNING_TUNED_POLICY"
+    ]
+  }
+}
