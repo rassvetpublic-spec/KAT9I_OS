@@ -43,7 +43,8 @@ class TestCanonicalContractSchemas(unittest.TestCase):
             Draft202012Validator.check_schema(schema)
             self.assertEqual(schema.get("$schema"), "https://json-schema.org/draft/2020-12/schema")
             self.assertTrue(schema.get("$id", "").startswith("https://kat9i.org/schemas/v1/"))
-            self.assertEqual(schema.get("version"), "1.0.0")
+            expected_version = "1.1.0" if sf == "SecurityDecision.json" else "1.0.0"
+            self.assertEqual(schema.get("version"), expected_version)
             self.assertFalse(schema.get("additionalProperties", True), f"Схема {sf} обязана иметь additionalProperties: False")
 
     def test_task_contract_valid_and_invalid(self):

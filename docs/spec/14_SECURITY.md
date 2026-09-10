@@ -304,3 +304,11 @@ USER/ADMIN должен иметь возможность остановить �
 ## 14.52. Главный принцип
 
 KAT9I_OS не должна пытаться сделать ИИ абсолютно доверенным. Она должна строиться так, чтобы ошибка, галлюцинация или внедрённая управляющая команда не могли превратиться в опасное действие без прохождения независимых программных границ прав, Scope, Security и Evidence.
+
+## Authorization Evidence для Promotion (§36)
+
+Для STRICT Promotion команда `mtd` создаёт/фиксирует Human Approval через существующий `ApprovalRecord`. `ApprovalRecord.action_hash` должен соответствовать `sha256:` + lowercase hex SHA-256 от RFC 8785 JCS всего точного sealed PromotionTicket. ApprovalRecord создаётся после seal и хранится как отдельное Authorization Evidence; изменившийся или expired ticket делает прежнее одобрение неприменимым.
+
+`SecurityDecision` версии 1.1 использует `action.operation = PROMOTE_CHANGE`. Для такого решения `action_hash` обязателен и должен совпадать с `PromotionTicket.action_hash`, вычисленным по каноническим side-effect параметрам §36. Это связывает Security verdict с точным target/candidate/method без циклической зависимости от Human Approval.
+
+AI не может создавать Human Approval и не может единолично понижать risk class до SAFE. Перед side effect Security повторно проверяет capability, policy, ticket, совпадение action hash и актуальность authorization; неопределённость блокирует действие.

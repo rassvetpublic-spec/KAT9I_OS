@@ -4,7 +4,7 @@
   "title": "SecurityDecision",
   "description": "Решение модуля безопасности (Scope Guard / Policy Engine) по запросу действия.",
   "type": "object",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "additionalProperties": false,
   "required": [
     "decision_id",
@@ -44,14 +44,23 @@
             "WRITE_FILE",
             "EXECUTE_COMMAND",
             "NETWORK_REQUEST",
-            "ACCESS_SECRET"
+            "ACCESS_SECRET",
+            "PROMOTE_CHANGE"
           ]
         },
         "target": {
           "type": "string",
-          "description": "Путь к файлу, команда или URL."
+          "description": "Путь к файлу, команда, URL или target_ref для Promotion."
         }
       }
+    },
+    "action_hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Хэш точных параметров side effect. Для PROMOTE_CHANGE обязателен и должен совпадать с PromotionTicket.action_hash."
     },
     "verdict": {
       "type": "string",
@@ -72,5 +81,34 @@
       "format": "date-time",
       "description": "Временная метка принятия решения в ISO 8601."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "properties": {
+              "operation": {
+                "const": "PROMOTE_CHANGE"
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "action_hash"
+        ],
+        "properties": {
+          "action_hash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  ]
 }

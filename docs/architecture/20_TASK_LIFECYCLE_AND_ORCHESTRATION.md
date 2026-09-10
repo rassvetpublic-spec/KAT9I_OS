@@ -640,3 +640,9 @@ LOW → NORMAL → HIGH допускается только по измерим�
 ## 20.54. Главный принцип
 
 > **KAT9I_OS должна превращать запрос в управляемую цепочку контрактов, прогнозов, ссылок, разрешений, исполняемых действий и доказательств: заранее оценивать стоимость результата, пересчитывать ожидания по ходу выполнения, проверять фактический результат и использовать разницу между прогнозом и фактом для дальнейшего самообучения.**
+
+## Связь с Portable Promotion Protocol (§36)
+
+Core является владельцем оркестрации Promotion lifecycle и порядка PromotionRequest. Детальная state machine, PromotionTicket и правила serialized side effect определены в §36. Новый top-level MergeQueue/Promotion supermodule не создаётся.
+
+После QA результат не публикуется напрямую в target: если ResultSink требует изменяющего Promotion, Core проходит через §36 и передаёт Execution только sealed PromotionTicket с действующими Evidence, Security Decision и Authorization Evidence.

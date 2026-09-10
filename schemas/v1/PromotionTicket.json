@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/PromotionTicket.json",
+  "title": "PromotionTicket",
+  "description": "Sealed immutable bundle точного финального Promotion-действия.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "promotion_ticket_id",
+    "promotion_id",
+    "task_id",
+    "sealed",
+    "change_ref",
+    "change_digest",
+    "target_ref",
+    "target_revision",
+    "candidate_revision",
+    "risk_class",
+    "change_evidence_ref",
+    "integration_evidence_ref",
+    "security_decision_ref",
+    "action_hash",
+    "policy_ref",
+    "policy_version",
+    "promotion_method",
+    "authorization_mode",
+    "lease_generation",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "promotion_ticket_id": {
+      "type": "string",
+      "pattern": "^ptkt-[a-zA-Z0-9_-]{8,64}$"
+    },
+    "promotion_id": {
+      "type": "string",
+      "pattern": "^promo-[a-zA-Z0-9_-]{8,64}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$"
+    },
+    "sealed": {
+      "const": true
+    },
+    "change_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "change_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "target_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "target_revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "candidate_revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "risk_class": {
+      "type": "string",
+      "enum": [
+        "SAFE",
+        "NORMAL",
+        "STRICT",
+        "TEAM_STRICT"
+      ]
+    },
+    "change_evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "integration_evidence_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "security_decision_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "action_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "SHA-256 канонического Promotion action payload; должен совпадать с SecurityDecision.action_hash для PROMOTE_CHANGE."
+    },
+    "policy_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "policy_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "promotion_method": {
+      "type": "string",
+      "enum": [
+        "MERGE",
+        "SQUASH",
+        "REBASE",
+        "FAST_FORWARD",
+        "PLATFORM_NATIVE",
+        "MANUAL_VERIFIED"
+      ]
+    },
+    "authorization_mode": {
+      "type": "string",
+      "enum": [
+        "AUTO_POLICY",
+        "HUMAN_APPROVAL"
+      ]
+    },
+    "lease_generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "risk_class": {
+            "enum": [
+              "NORMAL",
+              "STRICT",
+              "TEAM_STRICT"
+            ]
+          }
+        },
+        "required": [
+          "risk_class"
+        ]
+      },
+      "then": {
+        "properties": {
+          "change_evidence_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "risk_class": {
+            "enum": [
+              "NORMAL",
+              "STRICT",
+              "TEAM_STRICT"
+            ]
+          }
+        },
+        "required": [
+          "risk_class"
+        ]
+      },
+      "then": {
+        "properties": {
+          "authorization_mode": {
+            "const": "HUMAN_APPROVAL"
+          }
+        }
+      }
+    }
+  ]
+}

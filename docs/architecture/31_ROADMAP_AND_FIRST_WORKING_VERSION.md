@@ -880,3 +880,9 @@ Roadmap не должен:
 ## 31.90. Главный принцип
 
 > **KAT9I_OS должна расти не количеством модулей, а количеством полностью работающих и доказанных путей от задачи до результата: сначала один локальный путь, затем GitHub-разработка, затем восстановление, прогнозирование, обучение и только после этого распределённая работа и расширение системы.**
+
+## Portable Promotion в первой GitHub-вертикали (§36)
+
+GitHub dogfood использует единый Portable Promotion Protocol: PR → Change Evidence → Promotion Queue → synthetic candidate → Integration Evidence → sealed PromotionTicket → AUTO или `mtd` → verified side effect.
+
+Первая реализация допускает GitHub Actions Promotion Bridge без собственной GitHub App. Native Merge Queue остаётся optional acceleration и не является условием работы на personal account.

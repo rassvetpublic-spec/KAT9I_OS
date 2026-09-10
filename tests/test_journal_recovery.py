@@ -45,7 +45,8 @@ class TestEventJournalRecoveryContracts(unittest.TestCase):
             Draft202012Validator.check_schema(schema)
             self.assertEqual(schema.get("$schema"), "https://json-schema.org/draft/2020-12/schema")
             self.assertTrue(schema.get("$id", "").startswith("https://kat9i.org/schemas/v1/"))
-            self.assertEqual(schema.get("version"), "1.0.0")
+            expected_version = "1.1.0" if name == "JournalEvent" else "1.0.0"
+            self.assertEqual(schema.get("version"), expected_version)
             self.assertFalse(schema.get("additionalProperties", True), f"{name} обязана иметь additionalProperties: false")
 
     def test_valid_journal_event(self):

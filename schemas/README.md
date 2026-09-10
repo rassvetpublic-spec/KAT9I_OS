@@ -33,6 +33,10 @@ schemas/
     ├── ModuleRegistry.json     # Машинный реестр модулей и граф зависимостей
     ├── Identity.json           # Идентичность субъекта и привязка к Windows
     ├── ApprovalRecord.json     # Структурированное одобрение человеком с защитой от replay
+    ├── PromotionRequest.json   # Durable состояние Portable Promotion Protocol
+    ├── ChangeEvidence.json     # QA proof конкретного ChangeSet
+    ├── ImpactAssessment.json   # Оценка влияния и REUSE / DELTA / FULL решение
+    ├── PromotionTicket.json    # Sealed bundle точного финального Promotion
     ├── JournalEvent.json       # Элемент append-only журнала событий Event Journal
     ├── Checkpoint.json         # Снимок состояния задачи для Replay Recovery
     ├── CoreIpcMessage.json     # Контракт типизированного IPC между Electron и Rust Core

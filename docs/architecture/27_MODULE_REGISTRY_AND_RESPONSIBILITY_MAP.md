@@ -537,3 +537,9 @@ Quality Gate должен со временем обнаруживать:
 ## 27.47. Главный принцип
 
 > **KAT9I_OS должна иметь настолько чёткие границы ответственности, чтобы для любой функции можно было однозначно ответить: какой модуль ею владеет, кто её использует, через какой контракт она доступна и какой другой модуль не имеет права незаметно присвоить её себе; человек взаимодействует с системой через штатное Electron-приложение, но Electron не получает права обходить эти границы.**
+
+## Portable Promotion: распределение ответственности (§36)
+
+Promotion не создаёт новый верхнеуровневый модуль. Core владеет orchestration; Rule Manager — classification/policy; Security — authorization; QA — Change Evidence; Execution — candidate и side effect; Integrations — transport; Storage — PromotionStore; Recovery — Lease/fencing; Context — QA Delta Context; Metrics — измерения; Planning — QA budget.
+
+Новые ключевые контракты: `PromotionRequest`, `ChangeEvidence`, `ImpactAssessment`, `PromotionTicket`. Они не меняют правило одного канонического владельца ответственности.
