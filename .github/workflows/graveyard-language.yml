@@ -1,0 +1,50 @@
+name: Graveyard — русский язык и пояснения терминов
+
+on:
+  pull_request:
+    paths:
+      - 'graveyard/**'
+      - 'scripts/graveyard_*.py'
+      - 'schemas/v1/Graveyard*.json'
+      - 'tests/test_graveyard_language.py'
+      - '.github/workflows/graveyard-language.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'graveyard/**'
+      - 'scripts/graveyard_*.py'
+      - 'schemas/v1/Graveyard*.json'
+      - 'tests/test_graveyard_language.py'
+      - '.github/workflows/graveyard-language.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  graveyard-language:
+    name: Проверить русский язык Graveyard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить репозиторий
+        uses: actions/checkout@v4
+
+      - name: Проверить обязательную языковую политику и автоматизацию
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f graveyard/LANGUAGE_POLICY.md
+          test -f scripts/graveyard_language.py
+          test -f scripts/graveyard_capture.py
+          test -f schemas/v1/GraveyardKnowledgeCapture.json
+          test -f tests/test_graveyard_language.py
+          grep -q 'Основной язык Graveyard — русский' graveyard/LANGUAGE_POLICY.md
+          grep -q 'автоматически' graveyard/LANGUAGE_POLICY.md
+          grep -q 'русское пояснение' graveyard/LANGUAGE_POLICY.md
+
+      - name: Запустить тесты русскоязычной нормализации
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m unittest tests/test_graveyard_language.py
+          python scripts/graveyard_capture.py --help >/dev/null
