@@ -214,6 +214,7 @@
 <a href="#spec-16_domains" data-target-id="spec-16_domains">Спецификация: 16_DOMAINS</a>
 <a href="#spec-23_testing_qa_and_readiness" data-target-id="spec-23_testing_qa_and_readiness">Спецификация: 23_TESTING_QA_AND_READINESS</a>
 <a href="#spec-24_github_project_management" data-target-id="spec-24_github_project_management">Спецификация: 24_GITHUB_PROJECT_MANAGEMENT</a>
+<a href="#spec-25_tz_requirements_prioritization_pipeline" data-target-id="spec-25_tz_requirements_prioritization_pipeline">Спецификация: 25_TZ_REQUIREMENTS_PRIORITIZATION_PIPELINE</a>
 <a href="#arch-03_task_contract" data-target-id="arch-03_task_contract">Архитектура: 03_TASK_CONTRACT</a>
 <a href="#arch-04_rules_and_execution_priorities" data-target-id="arch-04_rules_and_execution_priorities">Архитектура: 04_RULES_AND_EXECUTION_PRIORITIES</a>
 <a href="#arch-06_learning_self_improvement" data-target-id="arch-06_learning_self_improvement">Архитектура: 06_LEARNING_SELF_IMPROVEMENT</a>
@@ -3556,6 +3557,306 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Команда <code>мерж</code> означает постановку/продолжение PromotionRequest, а не немедленный merge. GitHub PR является ChangeRef первой вертикали, <code>main</code> — target_ref, а final CI выполняется на synthetic candidate current target + checked ChangeSet.</p>
 <p>GitHub Project остаётся control plane и представлением. Runtime FIFO/Promotion state хранится только в authoritative PromotionStore. Native GitHub Merge Queue и Actions concurrency не являются обязательным SSoT.</p>
 <p>SAFE auto-promotion возможен только по детерминированной policy §36; архитектурные, workflow, schema, Security, QA/Gate и неопределённые изменения всегда STRICT.</p>
+    </section>
+        
+
+    <section id="spec-25_tz_requirements_prioritization_pipeline" data-section-level="tech">
+      <div class="badge">Каноническая спецификация</div>
+      <h1 id="25-полный-реестр-тз-и-abc-xyz-приоритизация">25. Полный реестр ТЗ и ABC/XYZ-приоритизация</h1>
+<h2 id="25-1-назначение">25.1. Назначение</h2>
+<p>Этот раздел задаёт обязательный инженерный процесс перехода от набора канонических документов KAT9I_OS к управляемому полному ТЗ, приоритетной архитектурной проработке и только затем к реализации.</p>
+<p>Каноническая последовательность:</p>
+<p><code>T0 Requirements Inventory → T1 ABC → T2 XYZ → T3 ABC×XYZ + Coverage/Contradiction → T4 Architecture Convergence → T5 Architecture Baseline → G2/G3 implementation</code>.</p>
+<p>Процесс относится к engineering/control plane разработки KAT9I_OS и не является runtime-модулем операционной системы.</p>
+<p>Главная цель:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Сначала понять полный набор требований и их риск, затем тратить архитектурное время и только потом кодировать.</strong></div>
+<h2 id="25-2-почему-нужен-отдельный-requirements-registry">25.2. Почему нужен отдельный Requirements Registry</h2>
+<p>Фактическое ТЗ KAT9I_OS распределено между <code>docs/tz</code>, <code>docs/architecture</code>, <code>docs/spec</code>, ADR/OQ, machine schemas и связанными Issues/PR.</p>
+<p>Само наличие большого количества качественных документов не гарантирует, что:</p>
+<ul>
+<li>все требования вообще учтены;</li>
+<li>у каждого требования есть один canonical owner;</li>
+<li>существует однозначный SSoT;</li>
+<li>machine contract соответствует текстовой архитектуре;</li>
+<li>нет противоречащего описания в соседнем разделе;</li>
+<li>приоритет анализа определяется архитектурным риском, а не порядком появления Issue.</li>
+</ul>
+<p>Поэтому вводится Requirements Registry как слой traceability и классификации.</p>
+<p>Requirements Registry не становится вторым SSoT содержания требований.</p>
+<p>Он хранит ссылку на канонический источник и метаданные анализа.</p>
+<h2 id="25-3-инвариант-registry">25.3. Инвариант Registry</h2>
+<p>Для каждого требования действует модель:</p>
+<p><code>Requirement ID → canonical SSoT → canonical owner → status → dependencies → evidence/contract refs → ABC → XYZ → coverage state → implementation trace</code>.</p>
+<p>Registry может сообщить, где находится требование и в каком оно состоянии.</p>
+<p>Registry не должен самостоятельно изменять смысл требования.</p>
+<p>Если содержимое Registry расходится с профильным SSoT, исправляется Registry либо явно открывается архитектурный конфликт.</p>
+<h2 id="25-4-минимальная-запись-requirement">25.4. Минимальная запись Requirement</h2>
+<p>Каждая запись должна позволять определить минимум:</p>
+<ul>
+<li><code>requirement_id</code> — стабильный идентификатор;</li>
+<li>короткое название;</li>
+<li>область/тип требования;</li>
+<li>canonical SSoT;</li>
+<li>canonical owner;</li>
+<li>целевой Gate или версия;</li>
+<li>статус: <code>ACCEPTED</code>, <code>OPEN</code>, <code>DEFERRED</code>, <code>GAP</code> или <code>BLOCKED</code>;</li>
+<li>зависимости;</li>
+<li>machine contract refs, если они требуются;</li>
+<li>Evidence / traceability refs;</li>
+<li>связанный Issue/PR;</li>
+<li>ABC-класс;</li>
+<li>XYZ-класс;</li>
+<li>Coverage/Contradiction status.</li>
+</ul>
+<p>Дополнительные поля могут вводиться позже, если они не превращают Registry в копию самих спецификаций.</p>
+<h2 id="25-5-t0-полная-инвентаризация-требований-full-requirements-inventory">25.5. T0 — Полная инвентаризация требований (Full Requirements Inventory)</h2>
+<p>T0 отвечает на вопрос:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Что вообще входит в ТЗ KAT9I_OS и где находится каноническая истина по каждому требованию?</strong></div>
+<p>Источники T0:</p>
+<ul>
+<li><code>docs/tz</code>;</li>
+<li><code>docs/architecture</code>;</li>
+<li><code>docs/spec</code>;</li>
+<li>ADR и OQ;</li>
+<li><code>schemas/v1</code> и последующие версии schemas;</li>
+<li>Module Registry и responsibility maps;</li>
+<li>связанные Issues и PR;</li>
+<li>действующие Gate/roadmap документы.</li>
+</ul>
+<p>Graveyard допускается только как DATA для поиска потерянной истории и не становится источником CONTROL автоматически.</p>
+<h3 id="25-5-1-что-t0-делает">25.5.1. Что T0 делает</h3>
+<p>T0:</p>
+<ul>
+<li>выделяет требования;</li>
+<li>нормализует их идентификаторы;</li>
+<li>связывает требование с SSoT;</li>
+<li>определяет текущего canonical owner;</li>
+<li>фиксирует status и Gate;</li>
+<li>связывает machine contracts и Evidence;</li>
+<li>выявляет дублирование;</li>
+<li>выявляет отсутствующий SSoT;</li>
+<li>выявляет отсутствующего owner;</li>
+<li>выявляет противоречащие тексты;</li>
+<li>выявляет потерянные связи между ТЗ и реализационными Issues.</li>
+</ul>
+<h3 id="25-5-2-что-t0-не-делает">25.5.2. Что T0 не делает</h3>
+<p>T0 не должен незаметно принимать новое архитектурное решение.</p>
+<p>Если во время inventory обнаружена неопределённость, она фиксируется как <code>GAP</code> в Requirement status, как <code>CONTRADICTION</code> в Coverage/Contradiction status либо как отдельный OQ/Issue.</p>
+<p>То есть:</p>
+<p><strong>Inventory ≠ Architecture Decision.</strong></p>
+<h3 id="25-5-3-выход-t0">25.5.3. Выход T0</h3>
+<p>T0 считается завершённым, когда существует полный Requirements Registry с traceability и нет требований без явно указанного состояния.</p>
+<p>Неизвестность разрешена только как явно зарегистрированный <code>GAP</code>, <code>OPEN</code>, <code>BLOCKED</code> или <code>DEFERRED</code>.</p>
+<h2 id="25-6-t1-abc-анализ">25.6. T1 — ABC-анализ</h2>
+<p>ABC классифицирует критичность требования для текущей архитектуры и целевого Gate.</p>
+<h3 id="a-критичные-требования-critical">A — Критичные требования (Critical)</h3>
+<p>Класс <code>A</code> используется, если отсутствие или неверная реализация требования приводит хотя бы к одному из последствий:</p>
+<ul>
+<li>нарушается обязательная корректность;</li>
+<li>нарушается Security;</li>
+<li>нарушается Recovery;</li>
+<li>становится недостижим ключевой пользовательский результат текущего Gate;</li>
+<li>нарушается canonical ownership или создаётся второй SSoT;</li>
+<li>ломается обязательный системный контракт;</li>
+<li>возникает неприемлемый риск потери/искажения канонического состояния.</li>
+</ul>
+<p><code>A</code> означает высокий архитектурный приоритет.</p>
+<p><code>A</code> не означает автоматическую немедленную реализацию вне текущего Gate.</p>
+<h3 id="b-важные-требования-important">B — Важные требования (Important)</h3>
+<p>Класс <code>B</code> используется для важной функциональности, отсутствие которой заметно ухудшает продукт, но не разрушает фундаментальные инварианты текущего Gate.</p>
+<h3 id="c-опциональные-требования-и-оптимизация-optional-optimization">C — Опциональные требования и оптимизация (Optional / Optimization)</h3>
+<p>Класс <code>C</code> используется для:</p>
+<ul>
+<li>удобства;</li>
+<li>косметики;</li>
+<li>оптимизации без обязательного benchmark Evidence;</li>
+<li>расширений будущих версий;</li>
+<li>возможностей, которые можно безопасно добавить позже без нарушения текущего Gate.</li>
+</ul>
+<p>ABC должен оцениваться относительно текущего Gate/версии, а не как вечная характеристика требования.</p>
+<h2 id="25-7-t2-xyz-анализ">25.7. T2 — XYZ-анализ</h2>
+<p>XYZ классифицирует не важность, а степень архитектурной определённости и риск переделки.</p>
+<h3 id="x-стабильные-требования-stable">X — Стабильные требования (Stable)</h3>
+<p><code>X</code> означает, что:</p>
+<ul>
+<li>canonical SSoT известен;</li>
+<li>canonical owner известен;</li>
+<li>основные границы стабильны;</li>
+<li>обязательные зависимости понятны;</li>
+<li>необходимый machine contract определён либо явно не требуется;</li>
+<li>вероятность крупной архитектурной переделки низкая.</li>
+</ul>
+<h3 id="y-умеренная-неопределённость-moderate-uncertainty">Y — Умеренная неопределённость (Moderate uncertainty)</h3>
+<p><code>Y</code> означает умеренную неопределённость:</p>
+<ul>
+<li>часть деталей ещё открыта;</li>
+<li>есть значимые зависимости;</li>
+<li>возможны локальные изменения контрактов;</li>
+<li>требуется дополнительный convergence или Evidence;</li>
+<li>фундаментальная роль модуля при этом уже понятна.</li>
+</ul>
+<h3 id="z-высокая-неопределённость-high-uncertainty">Z — Высокая неопределённость (High uncertainty)</h3>
+<p><code>Z</code> означает высокий риск архитектурной переделки или отсутствие критически важной определённости.</p>
+<p>Типовые признаки:</p>
+<ul>
+<li>неизвестен canonical owner;</li>
+<li>нет SSoT;</li>
+<li>конкурируют несколько SSoT;</li>
+<li>отсутствует обязательный machine contract;</li>
+<li>существует серьёзный открытый OQ;</li>
+<li>решение зависит от непроверенного внешнего ограничения;</li>
+<li>нет достаточного Evidence для фундаментального выбора;</li>
+<li>изменение может затронуть Core, Security, Recovery, ownership или несколько системных контрактов.</li>
+</ul>
+<p><code>Z</code> не означает низкое качество требования.</p>
+<p>Это означает высокую неопределённость, которую нужно управляемо снять.</p>
+<h2 id="25-8-t3-матрица-abc-xyz">25.8. T3 — матрица ABC×XYZ</h2>
+<p>ABC и XYZ анализируются независимо.</p>
+<p>Критичность не должна автоматически повышать или понижать оценку неопределённости.</p>
+<p>Приоритет архитектурной проработки:</p>
+<ol>
+<li><code>AZ</code>;</li>
+<li><code>AY</code>;</li>
+<li><code>AX</code>;</li>
+<li><code>BZ</code>;</li>
+<li><code>BY</code>;</li>
+<li><code>BX</code>;</li>
+<li><code>CZ</code>;</li>
+<li><code>CY</code>;</li>
+<li><code>CX</code>.</li>
+</ol>
+<p>Главная группа риска — <code>AZ</code>:</p>
+<div class="note"><strong>Примечание:</strong> критично для системы и одновременно архитектурно плохо определено.</div>
+<p>Такие требования анализируются до массовой реализации зависимых компонентов.</p>
+<p><code>AX</code> обычно не требует повторного максимального исследования только из-за высокого класса A: если границы действительно стабильны, его можно быстрее переводить в контракт, тест и реализацию.</p>
+<h2 id="25-9-проверка-покрытия-и-противоречий-coverage-contradiction-pass">25.9. Проверка покрытия и противоречий (Coverage / Contradiction Pass)</h2>
+<p>После ABC/XYZ каждое требование проходит отдельную проверку покрытия и непротиворечивости.</p>
+<p>Минимальные вопросы:</p>
+<ol>
+<li>Есть ли один canonical SSoT?</li>
+<li>Есть ли один canonical owner?</li>
+<li>Есть ли machine contract, если архитектура его требует?</li>
+<li>Есть ли достаточная traceability/Evidence?</li>
+<li>Нет ли конкурирующего SSoT?</li>
+<li>Нет ли соседнего канонического документа с противоположной семантикой?</li>
+<li>Совпадает ли status в подробном SSoT и сводных реестрах?</li>
+<li>Не используется ли <code>DEFERRED</code> для маскировки обязательного GAP текущего Gate?</li>
+<li>Не используется ли DATA как CONTROL?</li>
+<li>Не объявляется ли Capability как Permission или Result как Evidence?</li>
+</ol>
+<p>Типовые результаты проверки:</p>
+<ul>
+<li><code>COVERED</code>;</li>
+<li><code>GAP</code>;</li>
+<li><code>CONTRADICTION</code>;</li>
+<li><code>TRACEABILITY_GAP</code>;</li>
+<li><code>CONTRACT_GAP</code>;</li>
+<li><code>OWNER_GAP</code>;</li>
+<li><code>BLOCKED</code>.</li>
+</ul>
+<p>Классификация Coverage не заменяет ABC/XYZ.</p>
+<p>Например <code>AZ + OWNER_GAP</code> является более срочным архитектурным риском, чем <code>CX + COVERED</code>.</p>
+<h2 id="25-10-t4-архитектурная-сходимость-architecture-convergence">25.10. T4 — Архитектурная сходимость (Architecture Convergence)</h2>
+<p>Architecture Convergence выполняется по каноническому §35.</p>
+<p>Этот раздел не создаёт второй Convergence Loop.</p>
+<p>Он определяет только порядок выбора объектов для §35.</p>
+<p>В первую очередь анализируются требования с наиболее высоким риском из T3, особенно <code>AZ</code> и <code>AY</code>.</p>
+<p>Внутри каждого объекта сохраняется полный §35:</p>
+<p><code>исходные законы → Minimal Baseline → Maximal Brainstorm → классификация идей → Deletion Test → Complexity Guillotine → возврат к законам → blast-radius → independent Critic → финальное решение</code>.</p>
+<h3 id="25-10-1-запрет-бессмысленного-одинакового-анализа">25.10.1. Запрет бессмысленного одинакового анализа</h3>
+<p>Все разделы не обязаны получать одинаковую глубину Convergence.</p>
+<p>Если требование классифицировано как <code>AX</code>, полностью покрыто и уже имеет устойчивый контракт, повторное максималистское исследование допускается сократить, если нет нового Evidence риска.</p>
+<p>Если требование <code>AZ</code>, сокращённый review недостаточен.</p>
+<h2 id="25-11-t5-архитектурная-базовая-линия-architecture-baseline">25.11. T5 — Архитектурная базовая линия (Architecture Baseline)</h2>
+<p>T5 отвечает на вопрос:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Можно ли считать архитектуру достаточно определённой для перехода к следующему реализационному Gate?</strong></div>
+<p>Architecture Baseline допускается только если:</p>
+<ul>
+<li>все требования класса <code>A</code> зарегистрированы;</li>
+<li>у всех <code>A</code> есть canonical owner;</li>
+<li>у всех <code>A</code> есть canonical SSoT;</li>
+<li>нет незакрытых <code>AZ</code> для текущего Gate;</li>
+<li>обязательные machine contracts определены либо их отсутствие явно обосновано;</li>
+<li>критические <code>CONTRADICTION</code>, <code>OWNER_GAP</code> и <code>CONTRACT_GAP</code> устранены либо имеют явный <code>BLOCKED</code> с владельцем решения;</li>
+<li><code>DEFERRED</code> не скрывает требование, обязательное для текущего Gate;</li>
+<li>blast-radius значимых архитектурных решений синхронизирован;</li>
+<li>независимый Critic/QA выполнен там, где этого требует §35 или release process.</li>
+</ul>
+<p>T5 не означает, что реализованы все будущие функции.</p>
+<p>T5 означает, что текущий Gate имеет достаточно полную и непротиворечивую архитектурную основу.</p>
+<h2 id="25-12-связь-t0-t5-с-g0-g1-g2-g3">25.12. Связь T0–T5 с G0/G1/G2/G3</h2>
+<p>T0–T5 не заменяют существующие project Gates.</p>
+<p>Это предварительный и повторяемый engineering pipeline для определения готовности требований.</p>
+<p>Типовая связь:</p>
+<ul>
+<li><code>T0–T3</code> — нормализация и приоритизация требований;</li>
+<li><code>T4</code> — архитектурная сходимость;</li>
+<li><code>T5</code> — архитектурный baseline;</li>
+<li>затем соответствующий существующий Gate реализации: G2/G3 или другой, определённый Roadmap/Project.</li>
+</ul>
+<p>При изменении крупного требования T0–T5 может быть запущен локально только для затронутого blast radius, а не для всей системы с нуля.</p>
+<h2 id="25-13-что-не-является-частью-этого-процесса">25.13. Что не является частью этого процесса</h2>
+<p>ABC/XYZ не должны превращаться в:</p>
+<ul>
+<li>runtime scheduler;</li>
+<li>приоритет пользовательских Task;</li>
+<li>AI routing policy;</li>
+<li>Security Policy;</li>
+<li>Worker ranking;</li>
+<li>отдельный persistent сервис;</li>
+<li>второй Issue tracker;</li>
+<li>второй Rule Manager.</li>
+</ul>
+<p>Это метод управления требованиями и архитектурной неопределённостью при разработке KAT9I_OS.</p>
+<h2 id="25-14-архив-graveyard">25.14. Архив Graveyard</h2>
+<p>Graveyard может использоваться во время T0 как источник исторического DATA для восстановления потерянного контекста.</p>
+<p>Однако:</p>
+<p><code>Graveyard DATA ≠ Requirement CONTROL</code>.</p>
+<p>Найденная в Graveyard идея не получает ABC/XYZ как действующее требование, пока не установлена её связь с текущим каноническим SSoT или не проведён отдельный promotion process.</p>
+<h2 id="25-15-изменение-классификации">25.15. Изменение классификации</h2>
+<p>ABC и XYZ являются управляемыми метаданными анализа.</p>
+<p>Они могут изменяться при появлении нового Evidence, смене Gate или устранении неопределённости.</p>
+<p>Типовая эволюция:</p>
+<p><code>AZ → AY → AX</code></p>
+<p>означает, что критичное требование постепенно стало архитектурно определённым.</p>
+<p>Изменение <code>AZ → AX</code> само по себе не изменяет содержание Requirement.</p>
+<h2 id="25-16-порядок-исполнения-первой-полной-итерации">25.16. Порядок исполнения первой полной итерации</h2>
+<p>Для текущего KAT9I_OS первая полная итерация выполняется так:</p>
+<ol>
+<li>T0 — пройти весь текущий канон и собрать Full Requirements Registry;</li>
+<li>проверить traceability с открытыми и закрытыми ADR/OQ/Issues;</li>
+<li>T1 — назначить ABC;</li>
+<li>T2 — назначить XYZ;</li>
+<li>T3 — построить матрицу и Coverage/Contradiction report;</li>
+<li>сформировать ordered worklist <code>AZ → AY → AX → B* → C*</code>;</li>
+<li>T4 — запускать §35 по этому worklist;</li>
+<li>после каждой архитектурной правки повторять blast-radius и локальный reclassification;</li>
+<li>T5 — провести Architecture Baseline Gate;</li>
+<li>только после PASS переводить соответствующий набор требований в реализационный Gate.</li>
+</ol>
+<h2 id="25-17-минимальные-артефакты-первой-итерации">25.17. Минимальные артефакты первой итерации</h2>
+<p>Первая полная итерация должна дать минимум три независимых результата:</p>
+<ol>
+<li><strong>Requirements Registry</strong> — реестр и traceability;</li>
+<li><strong>ABC×XYZ Matrix</strong> — приоритет архитектурной проработки;</li>
+<li><strong>Coverage/Contradiction Report</strong> — список GAP/CONTRADICTION и их владельцев.</li>
+</ol>
+<p>Архитектурные решения, появившиеся в T4, продолжают храниться у своих профильных SSoT/ADR, а не внутри этих отчётов.</p>
+<h2 id="25-18-definition-of-done-первой-итерации">25.18. Definition of Done первой итерации</h2>
+<p>Первая итерация T0–T5 считается завершённой, когда:</p>
+<ul>
+<li>весь актуальный канон охвачен Registry;</li>
+<li>каждый активный Requirement имеет status;</li>
+<li>каждому активному Requirement назначены ABC и XYZ;</li>
+<li>сформирована полная ABC×XYZ Matrix;</li>
+<li>выполнен Coverage/Contradiction pass;</li>
+<li>для всех <code>AZ</code> определено действие: исправить, исследовать, BLOCKED или доказанно DEFERRED вне текущего Gate;</li>
+<li>выполнен требуемый Architecture Convergence;</li>
+<li>Architecture Baseline прошёл независимую проверку;</li>
+<li>дальнейшая реализационная очередь строится из Registry/Matrix, а не из случайного порядка появления задач.</li>
+</ul>
+<h2 id="25-19-главный-принцип">25.19. Главный принцип</h2>
+<div class="note"><strong>Примечание:</strong> <strong>Полное ТЗ сначала становится видимым и измеримым. Критичность и неопределённость оцениваются раздельно. Architecture Convergence применяется туда, где риск максимален. Только после этого требования переходят в массовую реализацию.</strong></div>
     </section>
         
 
