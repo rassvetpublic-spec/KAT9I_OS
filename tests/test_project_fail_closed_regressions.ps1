@@ -95,7 +95,7 @@ function gh {
   $global:LASTEXITCODE=0
   if($args.Count -ge 2 -and $args[0] -eq 'issue' -and $args[1] -eq 'list'){
     $global:LASTEXITCODE=$script:IssueListExitCode
-    return '[]'
+    return '[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/issues/101"}]'
   }
   if($args.Count -ge 2 -and $args[0] -eq 'pr' -and $args[1] -eq 'list'){
     $global:LASTEXITCODE=$script:PrListExitCode
