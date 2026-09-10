@@ -56,12 +56,16 @@ jobs:
           OWNER="${GITHUB_REPOSITORY%%/*}"
           REPO="${GITHUB_REPOSITORY#*/}"
           gh api graphql \
-            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated}} pageInfo{hasNextPage endCursor}}}}}}' \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated} pageInfo{hasNextPage endCursor}}} pageInfo{hasNextPage endCursor}}}}}' \
             -f owner="$OWNER" \
             -f repo="$REPO" \
             -F number="$PR_NUMBER" > review-threads.json
           if [ "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' review-threads.json)" != "false" ]; then
             echo "::error::MALFORMED_EVIDENCE: review thread inventory exceeds one deterministic page."
+            exit 1
+          fi
+          if jq -e '[.data.repository.pullRequest.reviewThreads.nodes[].comments.pageInfo.hasNextPage] | any' review-threads.json >/dev/null; then
+            echo "::error::MALFORMED_EVIDENCE: review comment inventory exceeds one deterministic page."
             exit 1
           fi
           if [ "$(jq -r '.total_count // 0' check-runs.json)" -gt "$(jq '.check_runs | length' check-runs.json)" ]; then
@@ -143,18 +147,57 @@ jobs:
             exit 1
           fi
 
+          # Перечитываем owner comments непосредственно перед side effect: новый QA-COMMAND
+          # после QA-ACCEPT должен supersede старый verdict даже при неизменном HEAD.
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments-final.json
+          python - <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+
+          marker = 'KAT9I-CONTROL/1 | QA-COMMAND'
+          event = json.loads(Path(Path(__import__('os').environ['GITHUB_EVENT_PATH'])).read_text(encoding='utf-8'))
+          attest = event.get('comment') or {}
+          attest_time = datetime.fromisoformat(str(attest.get('created_at') or '').replace('Z', '+00:00'))
+          attest_key = (attest_time, int(attest.get('id') or 0))
+          payload = json.loads(Path('issue-comments-final.json').read_text(encoding='utf-8'))
+
+          def flatten(value):
+              if isinstance(value, dict):
+                  return [value]
+              out = []
+              for item in value if isinstance(value, list) else []:
+                  out.extend(flatten(item))
+              return out
+
+          for comment in flatten(payload):
+              if comment.get('author_association') != 'OWNER':
+                  continue
+              first = str(comment.get('body') or '').splitlines()
+              if not first or first[0].strip() != marker:
+                  continue
+              created = datetime.fromisoformat(str(comment.get('created_at') or '').replace('Z', '+00:00'))
+              key = (created, int(comment.get('id') or 0))
+              if key > attest_key:
+                  raise SystemExit('STALE_EVIDENCE: superseding owner QA-COMMAND appeared after QA-ACCEPT')
+          PY
+
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" | jq 'add // []' > reviews-final.json
           gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/check-runs?per_page=100" > check-runs-final.json
           gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/status?per_page=100" > commit-status-final.json
           OWNER="${GITHUB_REPOSITORY%%/*}"
           REPO="${GITHUB_REPOSITORY#*/}"
           gh api graphql \
-            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated}} pageInfo{hasNextPage endCursor}}}}}}' \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated} pageInfo{hasNextPage endCursor}}} pageInfo{hasNextPage endCursor}}}}}' \
             -f owner="$OWNER" \
             -f repo="$REPO" \
             -F number="$PR_NUMBER" > review-threads-final.json
           if [ "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' review-threads-final.json)" != "false" ]; then
             echo "::error::MALFORMED_EVIDENCE: final review thread inventory is incomplete."
+            exit 1
+          fi
+          if jq -e '[.data.repository.pullRequest.reviewThreads.nodes[].comments.pageInfo.hasNextPage] | any' review-threads-final.json >/dev/null; then
+            echo "::error::MALFORMED_EVIDENCE: final review comment inventory is incomplete."
             exit 1
           fi
           if [ "$(jq -r '.total_count // 0' check-runs-final.json)" -gt "$(jq '.check_runs | length' check-runs-final.json)" ]; then
@@ -164,7 +207,7 @@ jobs:
 
           python scripts/qa_evidence_epoch.py validate \
             --command-id "$COMMAND_ID" \
-            --comments-path issue-comments.json \
+            --comments-path issue-comments-final.json \
             --review-path qa-review.json \
             --event-path "$GITHUB_EVENT_PATH" \
             --head "$LIVE_HEAD" \
