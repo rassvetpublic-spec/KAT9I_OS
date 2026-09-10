@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/GraveyardPrSalvageAudit.json",
+  "title": "GraveyardPrSalvageAudit",
+  "description": "DATA-only результат автоматического salvage-аудита закрытого несмерженного Pull Request. Классификация является evidence-кандидатом и никогда не создаёт работу автоматически.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "pr_number",
+    "title",
+    "source_head_sha",
+    "canon_revision",
+    "audit_required",
+    "audit_reason",
+    "source_is_superseded_candidate",
+    "metrics",
+    "classification_counts",
+    "items",
+    "actionable",
+    "control",
+    "canonical",
+    "auto_promotion",
+    "requires_canon_check_before_capture",
+    "promotion_requires_owner_approval"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "repository": {"type": "string", "minLength": 3, "maxLength": 200},
+    "pr_number": {"type": "integer", "minimum": 1},
+    "title": {"type": "string", "minLength": 1, "maxLength": 240},
+    "source_head_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "canon_revision": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "audit_required": {"type": "boolean"},
+    "audit_reason": {
+      "type": "string",
+      "enum": [
+        "MERGED_INTO_CANON",
+        "PR_NOT_CLOSED",
+        "CLOSED_UNMERGED_LARGE",
+        "CLOSED_UNMERGED_EXPLICITLY_SUPERSEDED",
+        "CLOSED_UNMERGED_SMALL"
+      ]
+    },
+    "source_is_superseded_candidate": {"type": "boolean"},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["changed_files", "additions", "deletions", "commits", "review_comments"],
+      "properties": {
+        "changed_files": {"type": "integer", "minimum": 0},
+        "additions": {"type": "integer", "minimum": 0},
+        "deletions": {"type": "integer", "minimum": 0},
+        "commits": {"type": "integer", "minimum": 0},
+        "review_comments": {"type": "integer", "minimum": 0}
+      }
+    },
+    "classification_counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "text", "confidence", "evidence"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "ALREADY_IN_MAIN",
+              "UNIQUE_IDEA_CANDIDATE",
+              "REJECTED_OPTION_CANDIDATE",
+              "NEGATIVE_TEST_CANDIDATE",
+              "NEEDS_SEMANTIC_REVIEW"
+            ]
+          },
+          "text": {"type": "string", "minLength": 1, "maxLength": 700},
+          "confidence": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
+          "evidence": {"type": "object", "additionalProperties": true}
+        }
+      }
+    },
+    "actionable": {"const": false},
+    "control": {"const": false},
+    "canonical": {"const": false},
+    "auto_promotion": {"const": false},
+    "requires_canon_check_before_capture": {"const": true},
+    "promotion_requires_owner_approval": {"const": true}
+  }
+}

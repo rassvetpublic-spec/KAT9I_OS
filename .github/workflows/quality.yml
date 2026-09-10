@@ -49,22 +49,26 @@ jobs:
           test -f scripts/check_graveyard.py
           test -f scripts/graveyard_context.py
           test -f scripts/graveyard_excavate.py
+          test -f scripts/graveyard_pr_salvage.py
           test -f tests/test_docs_ssot.py
           test -f tests/test_project_configuration.py
           test -f tests/test_graveyard.py
           test -f tests/test_graveyard_context.py
           test -f tests/test_graveyard_codex_regressions.py
+          test -f tests/test_graveyard_pr_salvage.py
           test -f graveyard/README.md
           test -f graveyard/MANIFEST.json
           test -f schemas/v1/ContextRef.json
           test -f schemas/v1/GraveyardCandidate.json
           test -f schemas/v1/GraveyardExcavateRequest.json
           test -f schemas/v1/GraveyardActivationTicket.json
+          test -f schemas/v1/GraveyardPrSalvageAudit.json
           test -f schemas/v1/Identity.json
           test -f schemas/v1/ApprovalRecord.json
           test -f .github/ISSUE_TEMPLATE/feedback.yml
           test -f .github/PULL_REQUEST_TEMPLATE.md
           test -f .github/CODEOWNERS
+          test -f .github/workflows/graveyard-pr-salvage.yml
           test -f index.html
 
       - name: Проверить UTF-8, обязательные документы и русские пояснения
@@ -143,6 +147,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_*.py'
           python scripts/verify_module_registry.py
           python scripts/graveyard_excavate.py --help >/dev/null
+          python scripts/graveyard_pr_salvage.py --help >/dev/null
 
       - name: Проверить Graveyard как DATA-only append-only слой
         shell: bash
