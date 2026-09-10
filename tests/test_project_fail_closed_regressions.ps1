@@ -110,9 +110,9 @@ function gh {
 }
 
 function Assert-NoWrites([string]$Scenario){
-  if($script:GqlCalls -ne 0){throw "$Scenario: GraphQL calls = $($script:GqlCalls)"}
-  if($script:RestWrites -ne 0){throw "$Scenario: REST writes = $($script:RestWrites)"}
-  if($script:ItemAddCalls -ne 0){throw "$Scenario: item-add calls = $($script:ItemAddCalls)"}
+  if($script:GqlCalls -ne 0){throw "${Scenario}: GraphQL calls = $($script:GqlCalls)"}
+  if($script:RestWrites -ne 0){throw "${Scenario}: REST writes = $($script:RestWrites)"}
+  if($script:ItemAddCalls -ne 0){throw "${Scenario}: item-add calls = $($script:ItemAddCalls)"}
 }
 
 function Assert-Throws([scriptblock]$Action,[string]$Expected,[string]$Scenario){
@@ -120,10 +120,10 @@ function Assert-Throws([scriptblock]$Action,[string]$Expected,[string]$Scenario)
   try { & $Action } catch {
     $thrown=$true
     if($_.Exception.Message -notmatch $Expected){
-      throw "$Scenario: получена другая ошибка: $($_.Exception.Message)"
+      throw "${Scenario}: получена другая ошибка: $($_.Exception.Message)"
     }
   }
-  if(-not $thrown){throw "$Scenario: ожидалась fail-closed ошибка."}
+  if(-not $thrown){throw "${Scenario}: ожидалась fail-closed ошибка."}
 }
 
 # 1a/1b. Ошибка полного списка Issues или PR должна остановить фактический production entrypoint до item-add.
