@@ -930,9 +930,9 @@ Discovery не должен автоматически выдавать Trust.
    - Защита от дублирующих побочных действий (`SKIP_ALREADY_EXECUTED`);
    - Retention: минимум 30 суток для аудита.
 
-## 32.62. OQ-010 / ADR-046 — жизненный цикл Electron UI и Core
+## 32.62. OQ-010 / ADR-047 — жизненный цикл Electron UI и Core
 
-> **Статус:** `ACCEPTED` (ADR-046; канонические источники: [§22](22_CONFIGURATION_STARTUP_AND_UPDATES.md), [§23](23_TECHNOLOGY_STACK_AND_RUNTIME.md), Issue #122).
+> **Статус:** `ACCEPTED` (ADR-047; канонические источники: [§22](22_CONFIGURATION_STARTUP_AND_UPDATES.md), [§23](23_TECHNOLOGY_STACK_AND_RUNTIME.md), Issue #122).
 
 Принят основной инвариант:
 
