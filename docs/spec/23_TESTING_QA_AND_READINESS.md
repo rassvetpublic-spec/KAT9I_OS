@@ -884,3 +884,9 @@ Learning должен понимать, почему задача останов
 ## 23.50. Главный принцип
 
 > **KAT9I_OS может считать компонент или результат готовым только тогда, когда его требования проверены на точной версии реальными тестами и Evidence, а для значимых изменений результат независимо подтверждён другим исполнителем.**
+
+## Связь QA с Portable Promotion Protocol (§36)
+
+Change Evidence подтверждает ChangeSet, а Integration Evidence подтверждает точную комбинацию checked change + current target. Движение target инвалидирует Integration Evidence, но не является самостоятельной причиной FULL QA ChangeSet.
+
+Повторный FULL QA после PASS требует machine-readable reason из §23.2. Для повторного QA Context должен предпочитать QA Delta Context из §36 вместо повторной передачи всего PR/repository.

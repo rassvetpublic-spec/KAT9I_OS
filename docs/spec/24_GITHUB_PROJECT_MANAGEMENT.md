@@ -224,3 +224,11 @@ Release создаётся только для реально выпущенно
 ## 24.19. Главный принцип
 
 > GitHub должен делать совместную работу KAT9I_OS понятной даже новичку, но не создавать параллельные источники истины: архитектура живёт в канонических документах, работа — в Issues, проверки — в Actions и Evidence, выпуск — в Releases, а Projects, HTML и другие интерфейсы лишь показывают эти данные удобным способом.
+
+## Portable Promotion для GitHub (§36)
+
+Команда `мерж` означает постановку/продолжение PromotionRequest, а не немедленный merge. GitHub PR является ChangeRef первой вертикали, `main` — target_ref, а final CI выполняется на synthetic candidate current target + checked ChangeSet.
+
+GitHub Project остаётся control plane и представлением. Runtime FIFO/Promotion state хранится только в authoritative PromotionStore. Native GitHub Merge Queue и Actions concurrency не являются обязательным SSoT.
+
+SAFE auto-promotion возможен только по детерминированной policy §36; архитектурные, workflow, schema, Security, QA/Gate и неопределённые изменения всегда STRICT.

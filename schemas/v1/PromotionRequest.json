@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/PromotionRequest.json",
+  "title": "PromotionRequest",
+  "description": "Durable state одного запроса Portable Promotion Protocol.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "promotion_id",
+    "task_id",
+    "change_ref",
+    "change_digest",
+    "target_ref",
+    "risk_class",
+    "state",
+    "policy_ref",
+    "policy_version",
+    "enqueued_at"
+  ],
+  "properties": {
+    "promotion_id": {
+      "type": "string",
+      "pattern": "^promo-[a-zA-Z0-9_-]{8,64}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$"
+    },
+    "change_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "change_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "target_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "target_revision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "candidate_revision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "risk_class": {
+      "type": "string",
+      "enum": [
+        "SAFE",
+        "NORMAL",
+        "STRICT",
+        "TEAM_STRICT"
+      ]
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "INTENT",
+        "CLASSIFY",
+        "QUEUED",
+        "PRECHECK",
+        "CHANGE_VERIFIED",
+        "WAITING",
+        "HEAD",
+        "CANDIDATE_BUILD",
+        "INTEGRATION_VERIFIED",
+        "CANDIDATE_STALE",
+        "TICKET_SEALED",
+        "AUTO_AUTHORIZED",
+        "READY_FOR_MANUAL_MERGE",
+        "COMMITTING",
+        "VERIFY_COMMIT",
+        "DONE",
+        "BLOCKED",
+        "CANCELLED"
+      ]
+    },
+    "required_evidence": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "CHANGE_EVIDENCE",
+          "INTEGRATION_EVIDENCE",
+          "AUTHORIZATION_EVIDENCE"
+        ]
+      }
+    },
+    "change_evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "integration_evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "promotion_ticket_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    },
+    "authorization_evidence_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512,
+      "description": "Ссылка на ApprovalRecord или другое разрешённое policy Authorization Evidence, появляющееся после seal ticket."
+    },
+    "policy_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "policy_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "queue_position": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "lease_generation": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "blocked_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1024
+    },
+    "enqueued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "DONE"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "then": {
+        "required": [
+          "target_revision",
+          "candidate_revision",
+          "integration_evidence_ref",
+          "promotion_ticket_ref",
+          "authorization_evidence_ref",
+          "lease_generation"
+        ],
+        "properties": {
+          "target_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "candidate_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "integration_evidence_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "promotion_ticket_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "authorization_evidence_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "lease_generation": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  ]
+}

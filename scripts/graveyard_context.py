@@ -11,6 +11,7 @@ import copy
 import hashlib
 import json
 import posixpath
+from urllib.parse import unquote, urlsplit
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -114,8 +115,9 @@ def _normalized_repo_uri(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     raw = value.strip().replace("\\", "/")
-    if raw.casefold().startswith("file://"):
-        raw = raw[7:]
+    if raw.casefold().startswith("file:"):
+        parsed = urlsplit(raw)
+        raw = unquote(parsed.path).replace("\\", "/")
     normalized = posixpath.normpath(raw)
     while normalized.startswith("./"):
         normalized = normalized[2:]

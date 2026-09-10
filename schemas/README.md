@@ -37,6 +37,10 @@ schemas/
     ├── Checkpoint.json               # Снимок состояния задачи для Replay Recovery
     ├── CoreIpcMessage.json           # Контракт типизированного IPC между Electron и Rust Core
     ├── SecretRef.json                # Ссылка на защищённый секрет (DPAPI) без раскрытия значения
+    ├── PromotionRequest.json         # Состояние очереди продвижения (§36)
+    ├── ChangeEvidence.json           # Доказательства проверки изменения
+    ├── ImpactAssessment.json         # Применимость QA: REUSE / DELTA / FULL
+    ├── PromotionTicket.json          # Точный билет финального продвижения
     ├── ContextRef.json               # Ссылка на контекст с provenance/trust/DATA-CONTROL признаками
     ├── GraveyardCandidate.json       # Неисполняемый кандидат на ручное возвращение идеи
     ├── GraveyardExcavateRequest.json # Запрос команды «Раскопать идею»

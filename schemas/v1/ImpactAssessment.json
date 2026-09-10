@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/ImpactAssessment.json",
+  "title": "ImpactAssessment",
+  "description": "Оценка влияния delta/target на область применимости прежнего Change Evidence.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "impact_assessment_id",
+    "task_id",
+    "previous_change_digest",
+    "current_change_digest",
+    "target_revision",
+    "method_level",
+    "impact_level",
+    "applicability",
+    "decision",
+    "affected_scopes",
+    "reasons",
+    "decided_at"
+  ],
+  "properties": {
+    "impact_assessment_id": {
+      "type": "string",
+      "pattern": "^impact-[a-zA-Z0-9_-]{8,64}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$"
+    },
+    "previous_change_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "current_change_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "target_revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "method_level": {
+      "type": "string",
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ]
+    },
+    "impact_level": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "LOW",
+        "MATERIAL",
+        "INDETERMINATE"
+      ]
+    },
+    "applicability": {
+      "type": "string",
+      "enum": [
+        "APPLICABLE",
+        "NOT_APPLICABLE",
+        "INDETERMINATE"
+      ]
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "QA_REUSE",
+        "DELTA_QA",
+        "FULL_QA",
+        "BLOCKED"
+      ]
+    },
+    "affected_scopes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 512
+      }
+    },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "maxLength": 1024
+      }
+    },
+    "full_qa_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "MATERIAL_CHANGESET_CHANGE",
+        "MATERIAL_POLICY_CHANGE",
+        "MATERIAL_IMPACT_FROM_TARGET",
+        "EVIDENCE_CONFLICT",
+        "QA_SCOPE_WAS_INSUFFICIENT",
+        "USER_FORCED_FULL_QA"
+      ]
+    },
+    "supporting_evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 512
+      }
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "FULL_QA"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "then": {
+        "required": [
+          "full_qa_reason"
+        ],
+        "properties": {
+          "full_qa_reason": {
+            "type": "string",
+            "enum": [
+              "MATERIAL_CHANGESET_CHANGE",
+              "MATERIAL_POLICY_CHANGE",
+              "MATERIAL_IMPACT_FROM_TARGET",
+              "EVIDENCE_CONFLICT",
+              "QA_SCOPE_WAS_INSUFFICIENT",
+              "USER_FORCED_FULL_QA"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "QA_REUSE"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "then": {
+        "properties": {
+          "applicability": {
+            "const": "APPLICABLE"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "applicability": {
+            "const": "INDETERMINATE"
+          }
+        },
+        "required": [
+          "applicability"
+        ]
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "FULL_QA",
+              "BLOCKED"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "full_qa_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "full_qa_reason"
+        ]
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "const": "FULL_QA"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "impact_level": {
+            "const": "MATERIAL"
+          }
+        },
+        "required": [
+          "impact_level"
+        ]
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "FULL_QA",
+              "BLOCKED"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

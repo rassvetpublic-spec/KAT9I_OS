@@ -65,7 +65,10 @@ def _iter_control_text_files(root: Path):
                 or os.access(path, os.X_OK)
             )
         )
-        if suffix_known or extensionless_control:
+        known_control_dir = bool(rel.parts) and rel.parts[0] in CONTROL_EXTENSIONLESS_DIRS
+        if "__pycache__" in rel.parts:
+            continue
+        if suffix_known or extensionless_control or known_control_dir:
             yield path
 
 
@@ -76,6 +79,16 @@ def _read_control_text(path: Path) -> str:
         return data.decode("utf-16")
     if data.startswith(b"\xef\xbb\xbf"):
         return data.decode("utf-8-sig")
+    if b"\x00" in data:
+        even_zeros = data[0::2].count(0)
+        odd_zeros = data[1::2].count(0)
+        if even_zeros == odd_zeros:
+            _fail(f"Неоднозначная кодировка control-файла: {path}")
+        encoding = "utf-16-be" if even_zeros > odd_zeros else "utf-16-le"
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            _fail(f"Некорректный UTF-16 control-файл: {path}")
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
@@ -93,13 +106,26 @@ def _read_control_text(path: Path) -> str:
 
 def _find_concrete_graveyard_ref(text: str) -> str | None:
     match = CONCRETE_GRAVEYARD_REF.search(text)
-    return match.group(0) if match else None
+    if match:
+        return match.group(0)
+    # Консервативно обнаруживаем split literals / Path joins.
+    if re.search(r"['\"]graveyard['\"]", text, re.IGNORECASE):
+        archive = re.search(r"['\"]GY-[A-Za-z0-9._-]+\.md['\"]", text, re.IGNORECASE)
+        if archive:
+            return archive.group(0)
+    return None
 
 
 def validate_graveyard(root: Path) -> None:
     graveyard = root / "graveyard"
     manifest_path = graveyard / "MANIFEST.json"
     readme_path = graveyard / "README.md"
+
+    if graveyard.is_symlink() or getattr(graveyard, "is_junction", lambda: False)():
+        _fail("Graveyard directory не может быть alias")
+    for child in graveyard.iterdir():
+        if child.is_symlink() or child.is_dir() or not child.is_file():
+            _fail(f"Graveyard содержит alias/каталог вместо обычного файла: {child.name}")
 
     if readme_path.is_symlink() or manifest_path.is_symlink():
         _fail("graveyard/README.md и MANIFEST.json должны быть обычными файлами, не symlink")

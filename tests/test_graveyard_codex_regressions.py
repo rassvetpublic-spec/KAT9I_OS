@@ -16,6 +16,7 @@ from scripts.check_graveyard import (
     _find_concrete_graveyard_ref,
     _iter_control_text_files,
     _read_control_text,
+    validate_graveyard,
 )
 from scripts.graveyard_context import (
     REPO_ROOT,
@@ -32,6 +33,38 @@ from scripts.graveyard_excavate import _trusted_nonce_state_path, _trusted_now_i
 
 
 class TestLatestCodexRegressions(unittest.TestCase):
+    def test_nested_graveyard_directory_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "graveyard" / "alias").mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, "alias/каталог"):
+                validate_graveyard(root)
+
+    def test_bomless_utf16_both_endians_detect_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for encoding in ("utf-16-le", "utf-16-be"):
+                path = Path(tmp) / "control.cmd"
+                path.write_bytes('type graveyard/GY-test.md'.encode(encoding))
+                self.assertIsNotNone(_find_concrete_graveyard_ref(_read_control_text(path)))
+
+    def test_split_path_reference_detected(self):
+        self.assertIsNotNone(_find_concrete_graveyard_ref('Path("graveyard") / "GY-test.md"'))
+
+    def test_pyw_control_file_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            path = root / "scripts" / "control.pyw"
+            path.write_text('open("graveyard/GY-test.md")', encoding="utf-8")
+            self.assertIn(path, list(_iter_control_text_files(root)))
+
+    def test_percent_encoded_file_uri_cannot_seed_planning(self):
+        uri = 'file:///workspace/graveyard/%47Y-test.md'
+        self.assertFalse(can_seed_planning({
+            "source_class": "history", "resolver": "history_store", "ref_id": "ctx-history12345678",
+            "uri": uri, "provenance": {"source_uri": uri}, "actionable": True, "control": True,
+        }))
+
     def setUp(self):
         manifest = json.loads((REPO_ROOT / "graveyard" / "MANIFEST.json").read_text(encoding="utf-8"))
         self.manifest = manifest
