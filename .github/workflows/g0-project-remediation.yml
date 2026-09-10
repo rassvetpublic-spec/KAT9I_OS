@@ -1,0 +1,81 @@
+name: G0 — восстановление Project после live-аудита
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: g0-project-remediation
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    if: >-
+      github.event.issue.number == 134 &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, 'KAT9I-CONTROL/1 | G0-REMEDIATE')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить доверенную версию remediation из default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Выполнить bounded Project remediation и read-back audit
+        id: repair
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
+        run: |
+          set -o pipefail
+          python scripts/g0_project_remediation.py --apply --output g0-remediation-result.json
+
+      - name: Опубликовать Evidence remediation
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPAIR_OUTCOME: ${{ steps.repair.outcome }}
+        run: |
+          set -euo pipefail
+          if [ ! -f g0-remediation-result.json ]; then
+            printf '%s\n' '{"schema":"KAT9I_G0_REMEDIATION/1","verdict":"ERROR","reason":"result file missing"}' > g0-remediation-result.json
+          fi
+          VERDICT="$(jq -r '.verdict // .mode // "ERROR"' g0-remediation-result.json)"
+          BEFORE="$(jq '.before_audit | length' g0-remediation-result.json 2>/dev/null || echo '?')"
+          AFTER="$(jq '.after_audit | length' g0-remediation-result.json 2>/dev/null || echo '?')"
+          REASON="$(jq -r '.reason // ""' g0-remediation-result.json)"
+          {
+            echo 'KAT9I-G0-REMEDIATION/1'
+            echo "worker=ChatGPT"
+            echo "qa=Antigravity"
+            echo "workflow_outcome=${REPAIR_OUTCOME}"
+            echo "verdict=${VERDICT}"
+            echo "before_findings=${BEFORE}"
+            echo "after_findings=${AFTER}"
+            if [ -n "$REASON" ]; then echo "reason=${REASON}"; fi
+            echo
+            echo 'Bounded live Project repair выполнен только через trusted default-branch workflow. Auto-close и merge не выполнялись.'
+            echo
+            echo '<details><summary>Machine Evidence</summary>'
+            echo
+            echo '```json'
+            cat g0-remediation-result.json
+            echo '```'
+            echo '</details>'
+          } > remediation-comment.md
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}/comments" -f body="$(cat remediation-comment.md)" >/dev/null
+
+      - name: Fail-closed при неполном remediation
+        if: steps.repair.outcome != 'success'
+        run: |
+          echo '::error::G0 Project remediation не достиг PASS; см. Evidence comment в Issue #134.'
+          exit 1
