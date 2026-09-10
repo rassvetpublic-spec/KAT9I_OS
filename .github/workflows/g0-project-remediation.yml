@@ -44,7 +44,7 @@ jobs:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
         run: |
           set -o pipefail
-          python scripts/g0_project_remediation.py --apply --output g0-remediation-result.json
+          python scripts/g0_project_remediation_safe.py --apply --output g0-remediation-result.json
 
       - name: Опубликовать Evidence remediation
         if: always()
