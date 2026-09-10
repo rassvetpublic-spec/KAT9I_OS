@@ -21,27 +21,33 @@
 
 ```text
 schemas/
-├── README.md             # Настоящий манифест и правила
-└── v1/                   # Канонические схемы версии 1
-    ├── TaskContract.json       # Паспорт и требования к задаче
-    ├── TaskRuntimeState.json   # Текущее состояние исполнения задачи
-    ├── TaskResult.json         # Итоговый результат выполнения
-    ├── Evidence.json           # Запись аудита и доказательства корректности
-    ├── SecurityDecision.json   # Вердикт проверки безопасности Scope Guard
-    ├── CapabilityGrant.json    # Выданный мандат прав и возможностей
-    ├── SystemEvent.json        # Универсальный конверт системных событий
-    ├── ModuleRegistry.json     # Машинный реестр модулей и граф зависимостей
-    ├── Identity.json           # Идентичность субъекта и привязка к Windows
-    ├── ApprovalRecord.json     # Структурированное одобрение человеком с защитой от replay
-    ├── PromotionRequest.json   # Durable состояние Portable Promotion Protocol
-    ├── ChangeEvidence.json     # QA proof конкретного ChangeSet
-    ├── ImpactAssessment.json   # Оценка влияния и REUSE / DELTA / FULL решение
-    ├── PromotionTicket.json    # Sealed bundle точного финального Promotion
-    ├── JournalEvent.json       # Элемент append-only журнала событий Event Journal
-    ├── Checkpoint.json         # Снимок состояния задачи для Replay Recovery
-    ├── CoreIpcMessage.json     # Контракт типизированного IPC между Electron и Rust Core
-    └── SecretRef.json          # Ссылка на защищённый секрет (DPAPI) без раскрытия значения
+├── README.md                         # Настоящий манифест и правила
+└── v1/                               # Канонические схемы версии 1
+    ├── TaskContract.json             # Паспорт и требования к задаче
+    ├── TaskRuntimeState.json         # Текущее состояние исполнения задачи
+    ├── TaskResult.json               # Итоговый результат выполнения
+    ├── Evidence.json                 # Запись аудита и доказательства корректности
+    ├── SecurityDecision.json         # Вердикт проверки безопасности Scope Guard
+    ├── CapabilityGrant.json          # Выданный мандат прав и возможностей
+    ├── SystemEvent.json              # Универсальный конверт системных событий
+    ├── ModuleRegistry.json           # Машинный реестр модулей и граф зависимостей
+    ├── Identity.json                 # Идентичность субъекта и привязка к Windows
+    ├── ApprovalRecord.json           # Структурированное одобрение человеком с защитой от replay
+    ├── JournalEvent.json             # Элемент append-only журнала событий Event Journal
+    ├── Checkpoint.json               # Снимок состояния задачи для Replay Recovery
+    ├── CoreIpcMessage.json           # Контракт типизированного IPC между Electron и Rust Core
+    ├── SecretRef.json                # Ссылка на защищённый секрет (DPAPI) без раскрытия значения
+    ├── PromotionRequest.json         # Состояние очереди продвижения (§36)
+    ├── ChangeEvidence.json           # Доказательства проверки изменения
+    ├── ImpactAssessment.json         # Применимость QA: REUSE / DELTA / FULL
+    ├── PromotionTicket.json          # Точный билет финального продвижения
+    ├── ContextRef.json               # Ссылка на контекст с provenance/trust/DATA-CONTROL признаками
+    ├── GraveyardCandidate.json       # Неисполняемый кандидат на ручное возвращение идеи
+    ├── GraveyardExcavateRequest.json # Запрос команды «Раскопать идею»
+    └── GraveyardActivationTicket.json# Exact DATA-ticket, хэш которого подтверждает ApprovalRecord
 ```
+
+Физический список файлов в `schemas/v1/` может быть шире этого краткого перечня по мере развития уже принятых контрактов. Каноническим является сам каталог и конкретные схемы, а не пример дерева выше.
 
 ## 4. Политика версионирования и эволюции схем
 
@@ -63,3 +69,61 @@ schemas/
    - Размещение в новом каталоге: `schemas/v2/`.
 3. **Принцип Fail-Closed при неизвестной версии:**
    - Если модуль получает сообщение с неизвестной `MAJOR` версией, операция немедленно отклоняется с ошибкой `INCOMPATIBLE_SCHEMA_VERSION`. Никакая интерпретация «по догадке» не допускается.
+
+## 5. Контекст и Graveyard
+
+`ContextRef.json` материализует уже объявленный в Module Registry контракт Context и делает машинными свойства источника: provenance, trust, freshness, `actionable`, `control` и `canonical`.
+
+Для любого ContextRef с Graveyard-provenance обязательны:
+
+- `source_class=graveyard`;
+- `actionable=false`;
+- `control=false`;
+- `canonical=false`;
+- `freshness=ARCHIVED`;
+- `access=read`;
+- resolver `graveyard_manifest`.
+
+Reference policy распознаёт Graveyard не только по `source_class`, но и по `ref_id`, resolver, URI и provenance URI. Поэтому изменение одного поля классификации не должно превращать архив в разрешение для Planner.
+
+`GraveyardCandidate.json` описывает промежуточный DATA-объект. После завершённой сверки с текущим каноном обязательно сохраняется непустая `checked_revision`. Состояния `CONFLICT`, `SUPERSEDED` и `UNKNOWN` блокируются.
+
+## 6. Команда «Раскопать идею» и Human Approval
+
+Путь возврата идеи разделён на независимые объекты:
+
+`Graveyard DATA → ContextRef → GraveyardCandidate → canon check → GraveyardActivationTicket → ApprovalRecord → provenance normal workflow`
+
+`GraveyardExcavateRequest.json` — типизированное пользовательское намерение. Оно относится к уже существующей user-initiated review-задаче и само не создаёт новый Issue, ADR или TaskContract.
+
+`GraveyardActivationTicket.json` запечатывает точные параметры предлагаемого перехода:
+
+- candidate и Archive ID;
+- ContextRef;
+- точную revision проверенного текущего канона;
+- какой обычный рабочий объект предлагается создать;
+- target;
+- время выдачи и истечения.
+
+Ticket остаётся `actionable=false`, `control=false` и `requires_approval=true`.
+
+Human Approval использует уже существующий канонический `ApprovalRecord.json`. Его `action_hash` должен быть равен SHA-256 канонического представления **точного** `GraveyardActivationTicket`. Дополнительно проверяются:
+
+- `approver_identity_id` против `Identity.json`;
+- `HUMAN_USER` и роль `LOCAL_USER`/`LOCAL_ADMIN`;
+- допустимый Trust Level;
+- Windows binding;
+- elevation для `LOCAL_ADMIN`;
+- совпадение `task_id`;
+- срок действия ticket и Approval;
+- одноразовый `nonce` против replay.
+
+Даже после валидного Approval `GraveyardCandidate` остаётся DATA: `actionable=false` и `control=false`. На выход передаётся только provenance в обычный актуальный workflow.
+
+## 7. Граница текущей реализации
+
+`scripts/graveyard_excavate.py` и `scripts/graveyard_context.py` являются исполняемым reference implementation контрактов и security semantics без внешних side effects.
+
+Они **не являются production Rust Core или Electron UI**. Физическая интеграция этих контрактов в Rust Core, IPC и DesktopShell выполняется только после разблокировки соответствующего Runtime Gate согласно управляющему Issue #62 и этапу G3/#41. До этого нельзя выдавать reference Python-слой за готовый product runtime.
+
+Persistence replay-store (durable nonce consumption после перезапуска), Windows token verification в Rust и реальный UI→Core IPC также относятся к будущей Runtime-реализации. Reference tests проверяют семантику fail-closed, но не подменяют эти системные доказательства.

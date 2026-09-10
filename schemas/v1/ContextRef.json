@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/ContextRef.json",
+  "title": "ContextRef",
+  "description": "Структурированная ссылка на источник контекста с provenance, trust и явной границей DATA/CONTROL.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "ref_id",
+    "uri",
+    "source_class",
+    "trust_level",
+    "freshness",
+    "resolver",
+    "actionable",
+    "control",
+    "canonical",
+    "provenance"
+  ],
+  "properties": {
+    "ref_id": {
+      "type": "string",
+      "pattern": "^ctx-[a-zA-Z0-9_-]{8,96}$",
+      "description": "Устойчивый идентификатор ссылки на контекст."
+    },
+    "uri": {
+      "type": "string",
+      "minLength": 1,
+      "description": "URI или относительный путь к источнику."
+    },
+    "source_class": {
+      "type": "string",
+      "enum": [
+        "canonical",
+        "workspace",
+        "knowledge",
+        "external",
+        "history",
+        "graveyard",
+        "result"
+      ],
+      "description": "Класс источника контекста."
+    },
+    "revision": {
+      "type": ["string", "null"],
+      "description": "Revision/hash источника, если он известен."
+    },
+    "scope": {
+      "type": "string",
+      "default": "",
+      "description": "Какая часть источника относится к текущему контексту."
+    },
+    "access": {
+      "type": "string",
+      "enum": ["read", "read_write"],
+      "default": "read",
+      "description": "Режим доступа к источнику."
+    },
+    "trust_level": {
+      "type": "string",
+      "enum": ["UNTRUSTED", "PROVISIONAL", "AUTHENTICATED", "FULL_LOCAL_TRUST"],
+      "description": "Уровень доверия к источнику по модели Security."
+    },
+    "freshness": {
+      "type": "string",
+      "enum": ["CURRENT", "ARCHIVED", "UNKNOWN"],
+      "description": "Актуальность источника."
+    },
+    "resolver": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Resolver, которым источник может быть получен."
+    },
+    "actionable": {
+      "type": "boolean",
+      "description": "Может ли источник сам участвовать в создании новой работы."
+    },
+    "control": {
+      "type": "boolean",
+      "description": "Имеет ли источник управляющую силу. DATA-источники обязаны иметь false."
+    },
+    "canonical": {
+      "type": "boolean",
+      "description": "Является ли источник каноническим SSoT для своей семантики."
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_uri", "source_revision", "retrieved_at", "transformation"],
+      "properties": {
+        "source_uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_revision": {
+          "type": ["string", "null"]
+        },
+        "retrieved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "transformation": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Как источник был преобразован перед передачей."
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_class": {"const": "graveyard"}
+        },
+        "required": ["source_class"]
+      },
+      "then": {
+        "properties": {
+          "actionable": {"const": false},
+          "control": {"const": false},
+          "canonical": {"const": false},
+          "freshness": {"const": "ARCHIVED"},
+          "access": {"const": "read"}
+        }
+      }
+    }
+  ]
+}
