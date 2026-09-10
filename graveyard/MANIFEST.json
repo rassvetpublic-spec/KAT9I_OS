@@ -144,6 +144,17 @@
       "actionable": false,
       "control": false,
       "canonical": false
+    },
+    {
+      "archive_id": "GY-20260910-section2-working-agreement-v1.5.0",
+      "path": "graveyard/GY-20260910-section2-working-agreement_v1.5.0.md",
+      "archive_date": "2026-09-10",
+      "byte_size": 13682,
+      "sha256": "9f1c3de31d7040f84af4faa39efabbe3d6ee716b81b3cb8c9c79546ecc084e01",
+      "git_blob_sha1": "3f381ecae40edab9708ff15df5f12a2c0dc4abec",
+      "actionable": false,
+      "control": false,
+      "canonical": false
     }
   ]
 }
