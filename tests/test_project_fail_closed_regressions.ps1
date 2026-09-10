@@ -27,8 +27,11 @@ $script:MockFields=@()
 $script:GqlCalls=0
 $script:RestWrites=0
 $script:ItemAddCalls=0
+$script:ItemAddedUrls=@()
 $script:IssueListExitCode=0
 $script:PrListExitCode=0
+$script:IssueListJson='[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/issues/101"}]'
+$script:PrListJson='[]'
 
 function New-View([string]$Name,[string]$Id,[string]$Layout,[string]$Filter){
   [pscustomobject]@{id=$Id;name=$Name;layout=$Layout;filter=$Filter}
@@ -59,8 +62,11 @@ function Reset-State {
   $script:GqlCalls=0
   $script:RestWrites=0
   $script:ItemAddCalls=0
+  $script:ItemAddedUrls=@()
   $script:IssueListExitCode=0
   $script:PrListExitCode=0
+  $script:IssueListJson='[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/issues/101"}]'
+  $script:PrListJson='[]'
   $script:ProjectPreflightOnly=$false
 }
 
@@ -95,14 +101,16 @@ function gh {
   $global:LASTEXITCODE=0
   if($args.Count -ge 2 -and $args[0] -eq 'issue' -and $args[1] -eq 'list'){
     $global:LASTEXITCODE=$script:IssueListExitCode
-    return '[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/issues/101"}]'
+    return $script:IssueListJson
   }
   if($args.Count -ge 2 -and $args[0] -eq 'pr' -and $args[1] -eq 'list'){
     $global:LASTEXITCODE=$script:PrListExitCode
-    return '[]'
+    return $script:PrListJson
   }
   if($args.Count -ge 2 -and $args[0] -eq 'project' -and $args[1] -eq 'item-add'){
     $script:ItemAddCalls++
+    $urlIndex=[Array]::IndexOf([object[]]$args,'--url')
+    if($urlIndex -ge 0 -and $urlIndex+1 -lt $args.Count){$script:ItemAddedUrls+=@([string]$args[$urlIndex+1])}
     $global:LASTEXITCODE=0
     return '{}'
   }
@@ -126,7 +134,18 @@ function Assert-Throws([scriptblock]$Action,[string]$Expected,[string]$Scenario)
   if(-not $thrown){throw "${Scenario}: ожидалась fail-closed ошибка."}
 }
 
-# 1a/1b. Ошибка полного списка Issues или PR должна остановить фактический production entrypoint до item-add.
+function Assert-ItemAdds([string]$Scenario,[string[]]$ExpectedUrls){
+  $actual=@($script:ItemAddedUrls|Sort-Object -Unique)
+  $expected=@($ExpectedUrls|Sort-Object -Unique)
+  if($actual.Count -ne $expected.Count){
+    throw "${Scenario}: ожидалось $($expected.Count) item-add, фактически $($actual.Count): $(($actual)-join ', ')"
+  }
+  foreach($url in $expected){
+    if($actual -cnotcontains $url){throw "${Scenario}: не добавлен ожидаемый URL $url"}
+  }
+}
+
+# Сценарии EnsureItems выполняют фактическое production-тело entrypoint; нерелевантные соседи временно no-op.
 $origEnsureLink=(Get-Command EnsureLink -CommandType Function).ScriptBlock
 $origEnsureSelect=(Get-Command EnsureSelect -CommandType Function).ScriptBlock
 $origEnsureIteration=(Get-Command EnsureIteration -CommandType Function).ScriptBlock
@@ -137,6 +156,7 @@ try {
   Set-Item Function:\EnsureIteration -Value {}
   Set-Item Function:\EnsureViews -Value {}
 
+  # 1a/1b. Nonzero exit остаётся fail-closed до item-add.
   Reset-State
   $script:IssueListExitCode=17
   Assert-Throws { Invoke-ProjectConfiguration $script:ProductionApply } 'Не удалось получить полный список открытых Issues' 'issue list failure'
@@ -146,6 +166,33 @@ try {
   $script:PrListExitCode=23
   Assert-Throws { Invoke-ProjectConfiguration $script:ProductionApply } 'Не удалось получить полный список открытых PR' 'pr list failure'
   Assert-NoWrites 'pr list failure'
+
+  # 1c. Пустые Issues + валидный PR: это нормальное состояние, PR и #62 добавляются.
+  Reset-State
+  $script:IssueListJson='[]'
+  $script:PrListJson='[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/pull/103"}]'
+  Invoke-ProjectConfiguration $script:ProductionApply
+  Assert-ItemAdds 'empty issues' @(
+    'https://github.com/rassvetpublic-spec/KAT9I_OS/pull/103',
+    'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/62'
+  )
+
+  # 1d. Валидная Issue + пустые PR: Issue и #62 добавляются.
+  Reset-State
+  $script:IssueListJson='[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/issues/104"}]'
+  $script:PrListJson='[]'
+  Invoke-ProjectConfiguration $script:ProductionApply
+  Assert-ItemAdds 'empty prs' @(
+    'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/104',
+    'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/62'
+  )
+
+  # 1e. Оба списка пустые: обязательная управляющая #62 всё равно добавляется ровно один раз.
+  Reset-State
+  $script:IssueListJson='[]'
+  $script:PrListJson='[]'
+  Invoke-ProjectConfiguration $script:ProductionApply
+  Assert-ItemAdds 'both lists empty' @('https://github.com/rassvetpublic-spec/KAT9I_OS/issues/62')
 }
 finally {
   Set-Item Function:\EnsureLink -Value $origEnsureLink
@@ -176,4 +223,4 @@ $script:MockViews+=New-View '99 — Эксперимент' 'UNKNOWN' 'TABLE_LAY
 Assert-Throws { Invoke-ProjectConfiguration $script:ProductionApply } 'неизвестные или регистрово отличающиеся представления' 'unknown view'
 Assert-NoWrites 'unknown view'
 
-Write-Host 'PASS: #101 regression — issue/pr list failures, legacy option ID migration и полностью неизвестный View fail-closed на реальном production entrypoint без mutation/write.'
+Write-Host 'PASS: #101/#104 regression — nonzero list failures fail-closed; пустые issue/pr списки валидны и сохраняют #62; legacy option ID и неизвестный View остаются fail-closed.'
