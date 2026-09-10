@@ -1,0 +1,76 @@
+name: G0 — live-аудит GitHub control-plane
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: g0-control-plane-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: >-
+      github.event.issue.number == 1 &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.user.login == github.repository_owner &&
+      startsWith(github.event.comment.body, 'KAT9I-CONTROL/1 | G0-AUDIT')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить только доверенный default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Проверить точный управляющий marker
+        shell: bash
+        env:
+          CONTROL_COMMENT: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          first_line="$(printf '%s' "$CONTROL_COMMENT" | head -n 1)"
+          test "$first_line" = 'KAT9I-CONTROL/1 | G0-AUDIT'
+
+      - name: Выполнить read-only live-аудит
+        id: audit
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
+        run: |
+          set -uo pipefail
+          python scripts/g0_control_plane_audit.py --output g0-audit.json
+
+      - name: Опубликовать Evidence в Issue #1
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ ! -s g0-audit.json ]; then
+            printf '%s\n' '{"schema":"KAT9I_G0_AUDIT/1","verdict":"ERROR","finding_count":1,"findings":[{"code":"AUDIT_OUTPUT_MISSING","message":"audit output missing"}]}' > g0-audit.json
+          fi
+          verdict="$(jq -r '.verdict' g0-audit.json)"
+          count="$(jq -r '.finding_count' g0-audit.json)"
+          sha="$(git rev-parse HEAD)"
+          {
+            printf 'KAT9I-G0-AUDIT/1 | verdict=%s | findings=%s | main=%s\n\n' "$verdict" "$count" "$sha"
+            printf 'Read-only live Evidence для acceptance Issue #1. Project/Ruleset/Milestones не изменялись аудитом.\n\n```json\n'
+            cat g0-audit.json
+            printf '\n```\n'
+          } > g0-audit-comment.md
+          gh issue comment 1 --repo "${{ github.repository }}" --body-file g0-audit-comment.md
+
+      - name: Применить fail-closed verdict
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s g0-audit.json
+          test "$(jq -r '.verdict' g0-audit.json)" = 'PASS'
