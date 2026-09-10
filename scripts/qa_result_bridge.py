@@ -8,6 +8,7 @@ from typing import Any
 
 COMMAND_MARKER = "KAT9I-CONTROL/1 | QA-COMMAND"
 RESULT_MARKER = "KAT9I-QA-RESULT/1"
+ATTEST_MARKER = "KAT9I-CONTROL/1 | QA-ACCEPT"
 BRIDGE_MARKER = "KAT9I-BRIDGE/1"
 CONTROLLER = "ChatGPT"
 ROLE = "QA_EXECUTOR"
@@ -19,32 +20,17 @@ COMMAND_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{5,127}$")
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 COMMAND_FIELDS = {
-    "command_id",
-    "target_pr",
-    "controller",
-    "executor",
-    "role",
-    "exact_head",
-    "qa_mode",
-    "result_sink",
-    "allow_issue_create",
-    "allow_merge",
-    "allow_fast_marker",
-    "allow_code_mutation",
-    "project_lifecycle_mutation",
+    "command_id", "target_pr", "controller", "executor", "role", "exact_head",
+    "qa_mode", "result_sink", "allow_issue_create", "allow_merge",
+    "allow_fast_marker", "allow_code_mutation", "project_lifecycle_mutation",
 }
 RESULT_FIELDS = {
-    "command_id",
-    "target_pr",
-    "controller",
-    "executor",
-    "role",
-    "exact_head",
-    "qa_mode",
-    "result_sink",
-    "verdict",
-    "blocking_findings",
-    "follow_up_candidates",
+    "command_id", "target_pr", "controller", "executor", "role", "exact_head",
+    "qa_mode", "result_sink", "verdict", "blocking_findings", "follow_up_candidates",
+}
+ATTEST_FIELDS = {
+    "command_id", "target_pr", "controller", "executor", "role", "review_id",
+    "exact_head", "verdict",
 }
 
 
@@ -66,8 +52,7 @@ def _parse_time(value: str | None) -> datetime:
 
 def _canonical_executor(value: str) -> str:
     normalized = re.sub(r"\s+", " ", value.strip()).lower()
-    aliases = {"agy", "antigravity", "antigravity (agy)", "антигравити"}
-    if normalized in aliases:
+    if normalized in {"agy", "antigravity", "antigravity (agy)", "антигравити"}:
         return "AGY"
     raise BridgeError(f"unsupported QA executor: {value}")
 
@@ -78,6 +63,12 @@ def _bool(value: str, field: str) -> bool:
     if value == "false":
         return False
     raise BridgeError(f"{field} must be true or false")
+
+
+def _positive_int(value: str, field: str) -> int:
+    if not re.fullmatch(r"[1-9][0-9]*", value):
+        raise BridgeError(f"{field} must be a positive integer")
+    return int(value)
 
 
 def _nonnegative_int(value: str, field: str) -> int:
@@ -118,8 +109,7 @@ def parse_envelope(body: str, marker: str, fields: set[str]) -> dict[str, str]:
 def validate_command(meta: dict[str, str]) -> dict[str, Any]:
     if not COMMAND_ID_RE.fullmatch(meta["command_id"]):
         raise BridgeError("invalid command_id")
-    if not meta["target_pr"].isdigit() or int(meta["target_pr"]) <= 0:
-        raise BridgeError("target_pr must be a positive integer")
+    target_pr = _positive_int(meta["target_pr"], "target_pr")
     if meta["controller"] != CONTROLLER:
         raise BridgeError("controller mismatch")
     executor = _canonical_executor(meta["executor"])
@@ -141,19 +131,13 @@ def validate_command(meta: dict[str, str]) -> dict[str, Any]:
     for forbidden in ("allow_merge", "allow_fast_marker", "allow_code_mutation", "project_lifecycle_mutation"):
         if capabilities[forbidden]:
             raise BridgeError(f"QA command grants forbidden capability: {forbidden}")
-    return {
-        **meta,
-        "target_pr": int(meta["target_pr"]),
-        "executor_canonical": executor,
-        **capabilities,
-    }
+    return {**meta, "target_pr": target_pr, "executor_canonical": executor, **capabilities}
 
 
 def validate_result(meta: dict[str, str]) -> dict[str, Any]:
     if not COMMAND_ID_RE.fullmatch(meta["command_id"]):
         raise BridgeError("invalid command_id")
-    if not meta["target_pr"].isdigit() or int(meta["target_pr"]) <= 0:
-        raise BridgeError("target_pr must be a positive integer")
+    target_pr = _positive_int(meta["target_pr"], "target_pr")
     if meta["controller"] != CONTROLLER:
         raise BridgeError("controller mismatch")
     executor = _canonical_executor(meta["executor"])
@@ -173,10 +157,32 @@ def validate_result(meta: dict[str, str]) -> dict[str, Any]:
         raise BridgeError("QA PASS cannot contain blocking findings")
     return {
         **meta,
-        "target_pr": int(meta["target_pr"]),
+        "target_pr": target_pr,
         "executor_canonical": executor,
         "blocking_findings": blocking,
         "follow_up_candidates": follow_ups,
+    }
+
+
+def validate_attestation(meta: dict[str, str]) -> dict[str, Any]:
+    if not COMMAND_ID_RE.fullmatch(meta["command_id"]):
+        raise BridgeError("invalid command_id")
+    target_pr = _positive_int(meta["target_pr"], "target_pr")
+    if meta["controller"] != CONTROLLER:
+        raise BridgeError("controller mismatch")
+    executor = _canonical_executor(meta["executor"])
+    if meta["role"] != ROLE:
+        raise BridgeError("role mismatch")
+    review_id = _positive_int(meta["review_id"], "review_id")
+    if not SHA_RE.fullmatch(meta["exact_head"]):
+        raise BridgeError("invalid exact_head")
+    if meta["verdict"] not in VERDICTS:
+        raise BridgeError("unsupported verdict")
+    return {
+        **meta,
+        "target_pr": target_pr,
+        "review_id": review_id,
+        "executor_canonical": executor,
     }
 
 
@@ -185,15 +191,20 @@ def _flatten_comments(value: Any) -> list[dict[str, Any]]:
         return [value]
     if not isinstance(value, list):
         raise BridgeError("comments payload must be a list")
-    flattened: list[dict[str, Any]] = []
+    result: list[dict[str, Any]] = []
     for item in value:
         if isinstance(item, list):
-            flattened.extend(_flatten_comments(item))
+            result.extend(_flatten_comments(item))
         elif isinstance(item, dict):
-            flattened.append(item)
+            result.append(item)
         else:
             raise BridgeError("comments payload contains unsupported item")
-    return flattened
+    return result
+
+
+def _first_line(body: str) -> str:
+    lines = (body or "").splitlines()
+    return lines[0].strip() if lines else ""
 
 
 def _bridge_receipt_command_id(body: str) -> str | None:
@@ -204,48 +215,70 @@ def _bridge_receipt_command_id(body: str) -> str | None:
         parts = [part.strip() for part in line.split("|")]
         meta: dict[str, str] = {}
         for part in parts[1:]:
-            if "=" not in part:
-                continue
-            key, value = part.split("=", 1)
-            meta[key.strip()] = value.strip()
+            if "=" in part:
+                key, value = part.split("=", 1)
+                meta[key.strip()] = value.strip()
         return meta.get("command_id")
     return None
 
 
-def resolve_bridge(event: dict[str, Any], comments_payload: Any, current_pr: dict[str, Any] | None = None) -> dict[str, Any]:
-    action = event.get("action")
-    if action != "submitted":
-        return {"decision": "IGNORE", "reason": "review action is not submitted"}
-    review = event.get("review") or {}
-    pr = event.get("pull_request") or {}
-    repository = event.get("repository") or {}
-    if review.get("author_association") != "OWNER":
-        return {"decision": "IGNORE", "reason": "review author is not repository OWNER"}
-    body = review.get("body") or ""
-    if not body.startswith(RESULT_MARKER):
-        return {"decision": "IGNORE", "reason": "review is not a QA result envelope"}
+def extract_attestation(event: dict[str, Any]) -> dict[str, Any] | None:
+    if event.get("action") != "created":
+        return None
+    comment = event.get("comment") or {}
+    if comment.get("author_association") != "OWNER":
+        return None
+    body = comment.get("body") or ""
+    if _first_line(body) != ATTEST_MARKER:
+        return None
+    return validate_attestation(parse_envelope(body, ATTEST_MARKER, ATTEST_FIELDS))
 
-    result = validate_result(parse_envelope(body, RESULT_MARKER, RESULT_FIELDS))
-    pr_number = pr.get("number") or event.get("number")
+
+def resolve_bridge(
+    event: dict[str, Any],
+    comments_payload: Any,
+    review_payload: dict[str, Any],
+    current_pr: dict[str, Any],
+) -> dict[str, Any]:
+    attestation = extract_attestation(event)
+    if attestation is None:
+        return {"decision": "IGNORE", "reason": "event is not a trusted Controller QA-ACCEPT"}
+
+    issue = event.get("issue") or {}
+    pr_number = issue.get("number") or event.get("number")
     if not isinstance(pr_number, int) or pr_number <= 0:
         raise BridgeError("event does not contain a valid PR number")
-    if result["target_pr"] != pr_number:
-        raise BridgeError("QA result target_pr does not match event PR")
+    if attestation["target_pr"] != pr_number:
+        raise BridgeError("QA-ACCEPT target_pr does not match event PR")
+    if not issue.get("pull_request"):
+        raise BridgeError("QA-ACCEPT is allowed only on a pull request conversation")
 
-    event_head = ((pr.get("head") or {}).get("sha") or "").lower()
-    if result["exact_head"] != event_head:
-        raise BridgeError("QA result exact_head does not match review event HEAD")
-    live_pr = current_pr or pr
-    if live_pr.get("state") not in (None, "open"):
+    if current_pr.get("state") != "open":
         raise BridgeError("current PR is not open")
-    live_head = ((live_pr.get("head") or {}).get("sha") or "").lower()
+    live_head = ((current_pr.get("head") or {}).get("sha") or "").lower()
+    if attestation["exact_head"] != live_head:
+        raise BridgeError("QA-ACCEPT exact_head is stale against live PR HEAD")
+
+    review_id = review_payload.get("id")
+    if review_id != attestation["review_id"]:
+        raise BridgeError("QA-ACCEPT review_id does not match fetched review")
+    if review_payload.get("author_association") != "OWNER":
+        raise BridgeError("referenced QA review is not owner-associated evidence")
+    result = validate_result(parse_envelope(review_payload.get("body") or "", RESULT_MARKER, RESULT_FIELDS))
+    if result["target_pr"] != pr_number:
+        raise BridgeError("QA result target_pr does not match PR")
     if result["exact_head"] != live_head:
         raise BridgeError("QA result exact_head is stale against live PR HEAD")
+    submitted_at = _parse_time(review_payload.get("submitted_at"))
+    attested_at = _parse_time((event.get("comment") or {}).get("created_at"))
+    if attested_at <= submitted_at:
+        raise BridgeError("Controller QA-ACCEPT must be created after the QA review")
 
-    review_id = review.get("id")
-    if review_id is None:
-        raise BridgeError("review id is missing")
-    submitted_at = _parse_time(review.get("submitted_at"))
+    for field in ("command_id", "controller", "role", "exact_head", "verdict"):
+        if str(attestation[field]) != str(result[field]):
+            raise BridgeError(f"QA-ACCEPT/result mismatch: {field}")
+    if attestation["executor_canonical"] != result["executor_canonical"]:
+        raise BridgeError("QA-ACCEPT/result mismatch: executor")
 
     comments = _flatten_comments(comments_payload)
     processed_ids = {
@@ -266,48 +299,49 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any, current_pr: dic
     for comment in comments:
         if comment.get("author_association") != "OWNER":
             continue
-        comment_body = comment.get("body") or ""
-        if not comment_body.startswith(COMMAND_MARKER):
-            continue
-        try:
-            command = validate_command(parse_envelope(comment_body, COMMAND_MARKER, COMMAND_FIELDS))
-        except BridgeError:
-            continue
-        if command["target_pr"] != pr_number:
+        body = comment.get("body") or ""
+        if _first_line(body) != COMMAND_MARKER:
             continue
         created_at = _parse_time(comment.get("created_at"))
-        if created_at >= submitted_at:
+        if created_at >= attested_at:
             continue
+        try:
+            command = validate_command(parse_envelope(body, COMMAND_MARKER, COMMAND_FIELDS))
+        except BridgeError as exc:
+            raise BridgeError(f"malformed owner QA-COMMAND before attestation: {exc}") from exc
+        if command["target_pr"] != pr_number:
+            raise BridgeError("owner QA-COMMAND is posted in the wrong PR conversation")
         valid_commands.append((created_at, int(comment.get("id") or 0), command))
 
     matching = [item for item in valid_commands if item[2]["command_id"] == result["command_id"]]
     if len(matching) != 1:
         raise BridgeError("unknown or ambiguous command_id")
-    matching_command = matching[0]
     latest = max(valid_commands, default=None, key=lambda item: (item[0], item[1]))
     if latest is None or latest[2]["command_id"] != result["command_id"]:
         raise BridgeError("QA result references a superseded command")
-    command = matching_command[2]
+    command_created_at, _, command = matching[0]
+    if command_created_at >= submitted_at:
+        raise BridgeError("QA-COMMAND must exist before the QA review")
 
-    comparable = ("controller", "role", "exact_head", "qa_mode", "result_sink")
-    for field in comparable:
+    for field in ("controller", "role", "exact_head", "qa_mode", "result_sink"):
         if command[field] != result[field]:
             raise BridgeError(f"command/result mismatch: {field}")
     if command["executor_canonical"] != result["executor_canonical"]:
         raise BridgeError("command/result mismatch: executor")
     if command["exact_head"] != live_head:
-        raise BridgeError("QA command exact_head is stale against live PR HEAD")
+        raise BridgeError("QA-COMMAND exact_head is stale against live PR HEAD")
 
     lifecycle = "FAST-QA-PASS" if result["verdict"] == "QA PASS" else "FAST-BLOCKED"
+    repository = event.get("repository") or {}
     repo_full_name = repository.get("full_name") or ""
     if not repo_full_name:
         raise BridgeError("repository.full_name is missing")
     comment_body = (
-        f"{lifecycle} | worker=ChatGPT | qa=AGY\n"
+        f"{lifecycle} | worker=ChatGPT | qa=AGY | head={live_head}\n"
         f"{BRIDGE_MARKER} | command_id={result['command_id']} | review_id={review_id} | "
         f"verdict={result['verdict']} | exact_head={live_head}\n"
-        f"Controller bridge принял структурированный QA-результат. FOLLOW_UP_CANDIDATES={result['follow_up_candidates']}; "
-        "содержательные кандидаты остаются в PR review и требуют отдельного dedupe/triage."
+        "Controller отдельно аттестовал независимый QA review; review сам по себе не имеет lifecycle-власти. "
+        f"FOLLOW_UP_CANDIDATES={result['follow_up_candidates']}; кандидаты требуют dedupe/triage."
     )
     return {
         "decision": "ACCEPT",
@@ -323,27 +357,46 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any, current_pr: dic
     }
 
 
+def _write_output(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Fail-closed QA command/result bridge KAT9I_OS")
-    parser.add_argument("--event-path", type=Path, required=True)
-    parser.add_argument("--comments-path", type=Path, required=True)
-    parser.add_argument("--current-pr-path", type=Path)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--comment-output", type=Path)
+    parser = argparse.ArgumentParser(description="Fail-closed Controller attestation bridge KAT9I_OS")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    extract = sub.add_parser("extract-review-id")
+    extract.add_argument("--event-path", type=Path, required=True)
+
+    resolve = sub.add_parser("resolve")
+    resolve.add_argument("--event-path", type=Path, required=True)
+    resolve.add_argument("--comments-path", type=Path, required=True)
+    resolve.add_argument("--review-path", type=Path, required=True)
+    resolve.add_argument("--current-pr-path", type=Path, required=True)
+    resolve.add_argument("--output", type=Path, required=True)
+    resolve.add_argument("--comment-output", type=Path)
     args = parser.parse_args()
 
     event = json.loads(args.event_path.read_text(encoding="utf-8"))
-    comments = json.loads(args.comments_path.read_text(encoding="utf-8"))
-    current_pr = json.loads(args.current_pr_path.read_text(encoding="utf-8")) if args.current_pr_path else None
     try:
-        decision = resolve_bridge(event, comments, current_pr=current_pr)
+        if args.command == "extract-review-id":
+            attestation = extract_attestation(event)
+            if attestation is None:
+                return 3
+            print(attestation["review_id"])
+            return 0
+
+        comments = json.loads(args.comments_path.read_text(encoding="utf-8"))
+        review = json.loads(args.review_path.read_text(encoding="utf-8"))
+        current_pr = json.loads(args.current_pr_path.read_text(encoding="utf-8"))
+        decision = resolve_bridge(event, comments, review, current_pr)
     except BridgeError as exc:
-        decision = {"decision": "REJECT", "reason": str(exc)}
-        args.output.write_text(json.dumps(decision, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if args.command == "resolve":
+            _write_output(args.output, {"decision": "REJECT", "reason": str(exc)})
         print(f"KAT9I_QA_BRIDGE=REJECT | {exc}")
         return 2
 
-    args.output.write_text(json.dumps(decision, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _write_output(args.output, decision)
     if args.comment_output and decision.get("decision") == "ACCEPT":
         args.comment_output.write_text(decision["comment_body"] + "\n", encoding="utf-8")
     print(f"KAT9I_QA_BRIDGE={decision.get('decision')} | {decision.get('reason', decision.get('command_id', ''))}")
