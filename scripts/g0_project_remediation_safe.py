@@ -14,6 +14,9 @@ except ModuleNotFoundError:  # Direct `python scripts/...` execution.
     import g0_project_remediation as core
 
 
+PROVEN_LEGACY_BOARD_VIEW = "Доска"
+
+
 def _canonical_identity(value: str | None) -> str:
     text = str(value or "").strip()
     folded = text.casefold()
@@ -44,6 +47,20 @@ def assert_no_canonical_self_qa(snapshot: dict[str, Any]) -> None:
             )
 
 
+def proven_legacy_views(snapshot: dict[str, Any]) -> set[str]:
+    """Authorize only the live-proven sixth default board view from Issue #134 Evidence."""
+    views = list((((snapshot.get("project") or {}).get("views") or {}).get("nodes") or []))
+    names = [str(view.get("name") or "") for view in views]
+    if PROVEN_LEGACY_BOARD_VIEW not in names:
+        return set()
+    if len(names) != len(set(names)):
+        return set()
+    expected = set(core.CANONICAL_VIEWS)
+    if set(names) == expected | {PROVEN_LEGACY_BOARD_VIEW}:
+        return {PROVEN_LEGACY_BOARD_VIEW}
+    return set()
+
+
 def _readback_into_report(
     report: dict[str, Any], owner: str, repository: str, project_number: int
 ) -> list[Any] | None:
@@ -64,33 +81,43 @@ def safe_remediation(owner: str, repository: str, project_number: int, *, apply:
 
     before = core.collect_live(owner, repository, project_number)
 
-    # Полный fail-closed preflight обязан завершиться до первой mutation.
-    core.worker_option_plan(before)
-    core.view_delete_plan(before)
-    core.find_select_field(before, "Приоритет")
-    core.find_select_field(before, "Этап")
-    core.find_select_field(before, "Исполнение")
-    core.find_select_field(before, "Статус")
-    assert_no_canonical_self_qa(before)
+    # `Доска` была доказана post-merge Evidence как единственный шестой view при наличии
+    # всех пяти канонических. Разрешение действует только для этого snapshot/preflight.
+    ephemeral_legacy = proven_legacy_views(before)
+    original_legacy = set(core.LEGACY_VIEWS)
+    core.LEGACY_VIEWS.update(ephemeral_legacy)
+    try:
+        # Полный fail-closed preflight обязан завершиться до первой mutation.
+        core.worker_option_plan(before)
+        core.view_delete_plan(before)
+        core.find_select_field(before, "Приоритет")
+        core.find_select_field(before, "Этап")
+        core.find_select_field(before, "Исполнение")
+        core.find_select_field(before, "Статус")
+        assert_no_canonical_self_qa(before)
 
-    missing = core.missing_open_items(before)
-    if missing:
-        raise core.RemediationError(
-            "Open Project inventory is incomplete; remediation refuses mutation: " + ", ".join(missing)
-        )
+        missing = core.missing_open_items(before)
+        if missing:
+            raise core.RemediationError(
+                "Open Project inventory is incomplete; remediation refuses mutation: " + ", ".join(missing)
+            )
 
-    outcomes = core.collect_closed_outcomes(before)
-    plan = core.build_plan(before, outcomes)
-    if plan.missing_open_items:
-        raise core.RemediationError(
-            "Preflight produced incomplete Project inventory: " + ", ".join(plan.missing_open_items)
-        )
+        outcomes = core.collect_closed_outcomes(before)
+        plan = core.build_plan(before, outcomes)
+        if plan.missing_open_items:
+            raise core.RemediationError(
+                "Preflight produced incomplete Project inventory: " + ", ".join(plan.missing_open_items)
+            )
+    finally:
+        core.LEGACY_VIEWS.clear()
+        core.LEGACY_VIEWS.update(original_legacy)
 
     report: dict[str, Any] = {
         "schema": "KAT9I_G0_REMEDIATION/1",
         "mode": "APPLY" if apply else "PLAN",
         "before_audit": [asdict(f) for f in core.audit_validate(before)],
         "plan": plan.jsonable(),
+        "ephemeral_legacy_views": sorted(ephemeral_legacy),
     }
     if not apply:
         return report
