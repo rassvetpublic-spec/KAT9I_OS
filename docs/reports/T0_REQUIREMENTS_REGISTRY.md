@@ -4,9 +4,10 @@
 
 T0 материализует inventory/traceability для следующей ABC/XYZ-классификации. Реестр не заменяет канонические SSoT и не принимает архитектурные решения.
 
-- Baseline current main: `c2b15c87b7310c1b26e79d2088a2be3137ba13d5`.
+- Baseline current main: `d28547da5286eb7f275a74449d88d398018de8e4`.
 - Corrective implementation provenance: `2e7795fe3dbb47ad54ba6d4325be22d1131557b7`.
 - Graveyard SSoT corrective provenance: `0252f888f8a0a32ddf1644fde284bda4a10aa9cc`.
+- Integrated G0 control-plane baseline: `d28547da5286eb7f275a74449d88d398018de8e4` (PR #133); новых нормативных Requirement не добавлено.
 - Requirements: **50**.
 - Findings/gaps: **18**.
 - ABC: `UNASSESSED` для всех Requirement.
