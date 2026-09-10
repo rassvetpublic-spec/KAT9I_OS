@@ -65,6 +65,10 @@ class ProjectQueueEventTests(unittest.TestCase):
             "FAST-QA | qa=AGY | qa=Codex",
             "FAST-CLAIM | worker-id=Codex",
             "FAST-QA | qa_worker=AGY",
+            "FAST-CLAIM | worker-id",
+            "FAST-QA | qa_worker",
+            "FAST-CLAIM | worker:Codex",
+            "FAST-QA | qa:AGY",
         )
         for body in bad_bodies:
             event = {
