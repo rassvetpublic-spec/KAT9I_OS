@@ -8,6 +8,7 @@ T0 материализует inventory/traceability для следующей A
 - Current accepted integration main: `3388713fa0b5b7c47acbeebee53a1b889d0aed62` — post-G0 remediation/read-back PASS после PR #144; новых нормативных Requirement относительно inventory baseline не добавлено.
 - Corrective implementation provenance: `2e7795fe3dbb47ad54ba6d4325be22d1131557b7`.
 - Graveyard SSoT corrective provenance: `0252f888f8a0a32ddf1644fde284bda4a10aa9cc`.
+- Final review correction provenance: `1fdac14d209daf1e7847a52cf0786e97439f1661` — закрывает 5 оставшихся traceability review findings после G0.
 - Integrated G0 control-plane baseline: `d28547da5286eb7f275a74449d88d398018de8e4` (PR #133); последующие G0 repair-коммиты относятся к control-plane и не расширяют нормативный Requirement inventory T0.
 - Requirements: **51**.
 - Findings/gaps: **19**.
