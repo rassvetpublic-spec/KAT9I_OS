@@ -65,6 +65,24 @@ class TerminalStatePlannerTests(unittest.TestCase):
         self.assertEqual("UNKNOWN", planned["project"]["items"][0]["content"]["state"])
         self.assertEqual([], normalized)
 
+    def test_normalized_merged_pr_still_requires_rest_merged_at_for_done(self):
+        item = controlled_item("MERGED")
+        planned, _ = safe.planner_snapshot(snapshot(item))
+        with patch.object(core, "gh_json", return_value={"merged_at": "2026-09-10T07:49:58Z"}) as rest:
+            outcomes = core.collect_closed_outcomes(planned)
+        self.assertEqual("DONE", outcomes[item["content"]["url"]])
+        rest.assert_called_once()
+        self.assertIn("pulls/97", rest.call_args.args[0][-1])
+
+    def test_closed_unmerged_pr_is_blocked_by_rest_outcome(self):
+        item = controlled_item("CLOSED", number=196)
+        planned, _ = safe.planner_snapshot(snapshot(item))
+        with patch.object(core, "gh_json", return_value={"merged_at": None}) as rest:
+            outcomes = core.collect_closed_outcomes(planned)
+        self.assertEqual("BLOCKED", outcomes[item["content"]["url"]])
+        rest.assert_called_once()
+        self.assertIn("pulls/196", rest.call_args.args[0][-1])
+
     def test_safe_pipeline_passes_normalized_terminal_snapshot_to_core_planner(self):
         item = controlled_item("MERGED")
         raw = snapshot(item)
