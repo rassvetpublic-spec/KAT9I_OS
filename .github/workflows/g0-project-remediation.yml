@@ -27,6 +27,15 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 1
 
+      - name: Проверить точный управляющий marker
+        shell: bash
+        env:
+          CONTROL_COMMENT: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          first_line="$(printf '%s' "$CONTROL_COMMENT" | head -n 1)"
+          test "$first_line" = 'KAT9I-CONTROL/1 | G0-REMEDIATE'
+
       - name: Выполнить bounded Project remediation и read-back audit
         id: repair
         continue-on-error: true
