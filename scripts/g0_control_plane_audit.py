@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,9 @@ EXPECTED_MILESTONES = {"Architecture Baseline", "v0.1 — Deterministic Vertical
 RULESET_ID = 22520270
 QUALITY_CONTEXT = "Базовые проверки качества и целостности"
 PRIORITY_RE = re.compile(r"\[(P[01])\]", re.IGNORECASE)
+CONTROLLED_EXECUTION_STATES = {"Активно", "На проверке", "В очереди"}
+CONTROLLED_STATUS_STATES = {"В работе", "Проверка QA"}
+
 
 @dataclass
 class Finding:
@@ -47,7 +51,8 @@ class Finding:
 def run_json(cmd: list[str], *, input_text: str | None = None) -> Any:
     proc = subprocess.run(cmd, input=input_text, text=True, encoding="utf-8", capture_output=True, check=False)
     if proc.returncode != 0:
-        raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd)}: {proc.stderr.strip()}")
+        # Не переносим stderr внешнего CLI в Evidence: он может содержать чувствительный runtime-контекст.
+        raise RuntimeError(f"command failed ({proc.returncode}): {' '.join(cmd)}")
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
@@ -55,6 +60,8 @@ def run_json(cmd: list[str], *, input_text: str | None = None) -> Any:
 
 
 def gh_graphql(query: str, variables: dict[str, Any]) -> Any:
+    if re.search(r"\bmutation\b", query, re.IGNORECASE):
+        raise RuntimeError("live audit refuses GraphQL mutation")
     args = ["gh", "api", "graphql", "-f", f"query={query}"]
     for key, value in variables.items():
         if value is None:
@@ -79,13 +86,16 @@ query($login:String!,$number:Int!,$repo:String!){
       views(first:100){nodes{id name layout filter} pageInfo{hasNextPage}}
     }
   }
-  repository(owner:$login,name:$repo){nameWithOwner}
+  repository(owner:$login,name:$repo){nameWithOwner defaultBranchRef{name}}
 }
 """
     data = gh_graphql(base_query, {"login": owner, "number": number, "repo": repository})["data"]
     project = data.get("user", {}).get("projectV2")
+    repository_node = data.get("repository") or {}
     if not project:
         raise RuntimeError(f"Project #{number} not found")
+    if not repository_node.get("nameWithOwner") or not (repository_node.get("defaultBranchRef") or {}).get("name"):
+        raise RuntimeError("repository/default branch not available for audit")
     for section in ("repositories", "fields", "views"):
         if project[section]["pageInfo"]["hasNextPage"]:
             raise RuntimeError(f"Project {section} exceeds 100 entries; audit refuses partial snapshot")
@@ -118,7 +128,8 @@ query($login:String!,$number:Int!,$after:String){
             break
         after = page["pageInfo"]["endCursor"]
     project["items"] = items
-    project["repository"] = data["repository"]["nameWithOwner"]
+    project["repository"] = repository_node["nameWithOwner"]
+    project["default_branch"] = repository_node["defaultBranchRef"]["name"]
     return project
 
 
@@ -154,14 +165,8 @@ def item_fields(item: dict[str, Any]) -> dict[str, str]:
     return result
 
 
-def normalize_status_field(fields: list[dict[str, Any]]) -> dict[str, Any] | None:
-    exact = [f for f in fields if f.get("name") == "Статус"]
-    if exact:
-        return exact[0]
-    system = [f for f in fields if f.get("name") == "Status"]
-    if system:
-        return system[0]
-    return None
+def status_candidates(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [f for f in fields if f.get("name") in {"Статус", "Status"}]
 
 
 def validate(snapshot: dict[str, Any]) -> list[Finding]:
@@ -179,22 +184,29 @@ def validate(snapshot: dict[str, Any]) -> list[Finding]:
         findings.append(Finding("PROJECT_LINK", f"Project is not linked to {expected_repo}"))
 
     fields = p.get("fields", {}).get("nodes", [])
-    status_field = normalize_status_field(fields)
-    if not status_field:
+    status_matches = status_candidates(fields)
+    status_field = status_matches[0] if status_matches else None
+    if not status_matches:
         findings.append(Finding("FIELD_STATUS", "Missing Status/Статус field"))
-    else:
+    elif len(status_matches) != 1:
+        findings.append(Finding("FIELD_STATUS_AMBIGUOUS", f"Expected exactly one Status/Статус field, found {len(status_matches)}"))
+    if status_field:
+        if status_field.get("__typename") != "ProjectV2SingleSelectField":
+            findings.append(Finding("FIELD_STATUS_TYPE", "Status/Статус is not single-select"))
         actual = [o.get("name") for o in status_field.get("options", [])]
         if sorted(actual) != sorted(EXPECTED_SELECTS["Статус"]):
             findings.append(Finding("FIELD_STATUS_OPTIONS", f"Статус options mismatch: {actual}"))
 
-    by_name = {f.get("name"): f for f in fields if f.get("name")}
     for name, expected_options in EXPECTED_SELECTS.items():
         if name == "Статус":
             continue
-        f = by_name.get(name)
-        if not f:
+        matches = [f for f in fields if f.get("name") == name]
+        if not matches:
             findings.append(Finding("FIELD_MISSING", f"Missing field: {name}"))
             continue
+        if len(matches) != 1:
+            findings.append(Finding("FIELD_AMBIGUOUS", f"Expected exactly one field {name}, found {len(matches)}"))
+        f = matches[0]
         if f.get("__typename") != "ProjectV2SingleSelectField":
             findings.append(Finding("FIELD_TYPE", f"Field {name} is not single-select"))
             continue
@@ -202,18 +214,24 @@ def validate(snapshot: dict[str, Any]) -> list[Finding]:
         if sorted(actual) != sorted(expected_options):
             findings.append(Finding("FIELD_OPTIONS", f"Field {name} options mismatch: {actual}"))
 
-    iteration = by_name.get("Итерация")
-    if not iteration:
+    iteration_matches = [f for f in fields if f.get("name") == "Итерация"]
+    if not iteration_matches:
         findings.append(Finding("ITERATION_MISSING", "Missing Итерация field"))
-    elif iteration.get("__typename") != "ProjectV2IterationField":
-        findings.append(Finding("ITERATION_TYPE", "Итерация is not an iteration field"))
-    elif int((iteration.get("configuration") or {}).get("duration") or 0) != 3:
-        findings.append(Finding("ITERATION_DURATION", f"Итерация duration={(iteration.get('configuration') or {}).get('duration')}"))
+    else:
+        if len(iteration_matches) != 1:
+            findings.append(Finding("ITERATION_AMBIGUOUS", f"Expected exactly one Итерация field, found {len(iteration_matches)}"))
+        iteration = iteration_matches[0]
+        if iteration.get("__typename") != "ProjectV2IterationField":
+            findings.append(Finding("ITERATION_TYPE", "Итерация is not an iteration field"))
+        elif int((iteration.get("configuration") or {}).get("duration") or 0) != 3:
+            findings.append(Finding("ITERATION_DURATION", f"Итерация duration={(iteration.get('configuration') or {}).get('duration')}"))
 
     views = p.get("views", {}).get("nodes", [])
     if len(views) != 5:
         findings.append(Finding("VIEW_COUNT", f"Project has {len(views)} views, expected 5"))
-    view_by_name = {v.get("name"): v for v in views}
+    view_by_name: dict[str, list[dict[str, Any]]] = {}
+    for view in views:
+        view_by_name.setdefault(str(view.get("name")), []).append(view)
     status_name = status_field.get("name") if status_field else "Status"
     expected_filters = {
         "00 — Все задачи": "is:open",
@@ -223,36 +241,47 @@ def validate(snapshot: dict[str, Any]) -> list[Finding]:
         "04 — Заблокировано": f'is:open {status_name}:"Заблокировано"',
     }
     for name, (layout, _) in EXPECTED_VIEWS.items():
-        v = view_by_name.get(name)
-        if not v:
+        matches = view_by_name.get(name, [])
+        if not matches:
             findings.append(Finding("VIEW_MISSING", f"Missing view: {name}"))
             continue
+        if len(matches) != 1:
+            findings.append(Finding("VIEW_AMBIGUOUS", f"Expected exactly one view {name}, found {len(matches)}"))
+        v = matches[0]
         if v.get("layout") != layout:
             findings.append(Finding("VIEW_LAYOUT", f"View {name} layout={v.get('layout')}, expected {layout}"))
         if str(v.get("filter") or "") != expected_filters[name]:
             findings.append(Finding("VIEW_FILTER", f"View {name} filter mismatch"))
 
     item_by_url: dict[str, dict[str, Any]] = {}
+    duplicate_item_urls: set[str] = set()
     for item in p.get("items", []):
         content = item.get("content") or {}
-        if content.get("url"):
-            item_by_url[content["url"]] = item
+        url = content.get("url")
+        if not url:
+            continue
+        if url in item_by_url:
+            duplicate_item_urls.add(url)
+        item_by_url[url] = item
+    for url in sorted(duplicate_item_urls):
+        findings.append(Finding("PROJECT_ITEM_DUPLICATE", f"Duplicate Project item for {url}"))
+
     repo_name = p.get("repository") or ""
     gate_url = f"https://github.com/{repo_name}/issues/62" if repo_name else ""
     if gate_url not in item_by_url:
         findings.append(Finding("GATE_62", "Issue #62 is not present in Project"))
 
     for work in open_work:
+        url = work.get("url")
+        item = item_by_url.get(url)
+        if not item:
+            findings.append(Finding("OPEN_WORK_MISSING", f"Open work missing from Project: {url}"))
+            continue
         title = work.get("title") or ""
         m = PRIORITY_RE.search(title)
         if not m:
             continue
         priority = m.group(1).upper()
-        url = work.get("url")
-        item = item_by_url.get(url)
-        if not item:
-            findings.append(Finding("OPEN_P01_MISSING", f"Open {priority} work missing from Project: {url}"))
-            continue
         values = item_fields(item)
         if values.get("Приоритет") != priority:
             findings.append(Finding("OPEN_P01_PRIORITY", f"{url} priority={values.get('Приоритет')!r}, expected {priority}"))
@@ -261,15 +290,21 @@ def validate(snapshot: dict[str, Any]) -> list[Finding]:
 
     for item in p.get("items", []):
         values = item_fields(item)
-        is_active = values.get("Исполнение") == "Активно" or values.get("Статус") == "В работе" or values.get("Status") == "В работе"
-        if not is_active:
+        status_value = values.get("Статус") or values.get("Status")
+        execution = values.get("Исполнение")
+        controlled = execution in CONTROLLED_EXECUTION_STATES or status_value in CONTROLLED_STATUS_STATES
+        if not controlled:
             continue
         content = item.get("content") or {}
         ref = content.get("url") or item.get("id")
-        if not values.get("Исполнитель"):
-            findings.append(Finding("ACTIVE_WORKER", f"Active item {ref} has no Исполнитель"))
-        if not values.get("Проверяющий"):
-            findings.append(Finding("ACTIVE_QA", f"Active item {ref} has no Проверяющий"))
+        worker = values.get("Исполнитель")
+        qa = values.get("Проверяющий")
+        if not worker:
+            findings.append(Finding("CONTROLLED_WORKER", f"Controlled item {ref} has no Исполнитель"))
+        if not qa:
+            findings.append(Finding("CONTROLLED_QA", f"Controlled item {ref} has no Проверяющий"))
+        if worker and qa and worker.strip().casefold() == qa.strip().casefold():
+            findings.append(Finding("CONTROLLED_SELF_QA", f"Controlled item {ref} has identical Исполнитель and Проверяющий"))
 
     titles = {m.get("title") for m in milestones}
     for required in sorted(EXPECTED_MILESTONES):
@@ -280,9 +315,24 @@ def validate(snapshot: dict[str, Any]) -> list[Finding]:
         findings.append(Finding("RULESET_IDENTITY", "main-protection ruleset identity/enforcement mismatch"))
     if ruleset.get("bypass_actors") or ruleset.get("current_user_can_bypass") not in (None, "never"):
         findings.append(Finding("RULESET_BYPASS", "Ruleset has bypass actors or current user can bypass"))
-    includes = ((ruleset.get("conditions") or {}).get("ref_name") or {}).get("include") or []
+
+    ref_condition = ((ruleset.get("conditions") or {}).get("ref_name") or {})
+    includes = ref_condition.get("include") or []
+    excludes = ref_condition.get("exclude") or []
     if "~DEFAULT_BRANCH" not in includes:
         findings.append(Finding("RULESET_TARGET", "Ruleset does not target the default branch"))
+    default_branch = str(p.get("default_branch") or "")
+    default_ref = f"refs/heads/{default_branch}" if default_branch else ""
+    excluded_default = "~DEFAULT_BRANCH" in excludes
+    if default_ref:
+        for pattern in excludes:
+            pattern_text = str(pattern)
+            if pattern_text in {default_branch, default_ref} or fnmatch.fnmatchcase(default_ref, pattern_text):
+                excluded_default = True
+                break
+    if excluded_default:
+        findings.append(Finding("RULESET_DEFAULT_EXCLUDED", f"Ruleset excludes default branch {default_branch!r}"))
+
     rule_by_type = {r.get("type"): r for r in ruleset.get("rules", [])}
     for required_type in ("deletion", "non_fast_forward", "pull_request", "required_status_checks"):
         if required_type not in rule_by_type:
