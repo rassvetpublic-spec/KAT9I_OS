@@ -1,0 +1,56 @@
+name: Issue 112 — временный live Project smoke
+
+on:
+  push:
+    branches:
+      - feat/issue-112-project-queue
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.actor == 'rassvetpublic-spec'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
+      ITEM_URL: https://github.com/rassvetpublic-spec/KAT9I_OS/issues/112
+    steps:
+      - name: Получить ветку
+        uses: actions/checkout@v4
+      - name: Проверить credential Project
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh auth status
+          gh project view 2 --owner rassvetpublic-spec --format json >/dev/null
+      - name: Проверить схему и состав Project
+        shell: pwsh
+        run: ./scripts/configure_project.ps1
+      - name: Перевести #112 на QA
+        shell: pwsh
+        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State QA -Worker 'ChatGPT' -QaWorker 'Antigravity'
+      - name: Прочитать карточку обратно
+        run: |
+          set -euo pipefail
+          gh project item-list 2 --owner rassvetpublic-spec --limit 1000 --format json --field Status --field Исполнение --field Исполнитель --field Проверяющий --field Доказательство > project-items.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          url='https://github.com/rassvetpublic-spec/KAT9I_OS/issues/112'
+          data=json.loads(Path('project-items.json').read_text(encoding='utf-8'))
+          items=data.get('items', data if isinstance(data,list) else [])
+          matches=[]
+          for item in items:
+              content=item.get('content') or {}
+              if content.get('url') == url:
+                  matches.append(item)
+          if len(matches) != 1:
+              raise SystemExit(f'Ожидалась ровно одна карточка #112, найдено {len(matches)}')
+          item=matches[0]
+          expected={'Status':'Проверка QA','Исполнение':'На проверке','Исполнитель':'ChatGPT','Проверяющий':'AGY','Доказательство':'Частично'}
+          for field,value in expected.items():
+              if item.get(field) != value:
+                  raise SystemExit(f'{field}: ожидалось {value!r}, фактически {item.get(field)!r}')
+          print('LIVE PROJECT PASS:', expected)
+          PY
