@@ -34,8 +34,8 @@ class ProjectQueueSyncTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("KAT9I_PROJECT_TOKEN", text)
         self.assertIn("project_queue_event.py", text)
-        self.assertIn("configure_project.ps1", text)
         self.assertIn("project_queue_sync.ps1", text)
+        self.assertNotIn("configure_project.ps1", text)
         self.assertIn("types: [closed, synchronize]", text)
         self.assertIn("ITEM_WORKER", text)
         self.assertIn("ITEM_QA", text)
@@ -44,7 +44,6 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertNotIn("gh pr merge", text)
         self.assertNotIn("merge_pull_request", text)
         self.assertNotIn("pull_request_target", text)
-        self.assertLess(text.index("configure_project.ps1"), text.index("project_queue_sync.ps1"))
 
     def _run_pwsh(self, path: Path, expected: str):
         pwsh = shutil.which("pwsh")
