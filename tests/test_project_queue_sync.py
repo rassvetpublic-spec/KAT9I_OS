@@ -17,7 +17,14 @@ class ProjectQueueSyncTests(unittest.TestCase):
         sync = SYNC.read_text(encoding="utf-8")
         self.assertIn("(Opt 'AGY'", config)
         self.assertNotIn("(Opt 'Антигравити'", config)
-        for alias in ("AGY", "Agy", "Antigravity", "Антигравити"):
+        for alias in (
+            "AGY",
+            "Agy",
+            "Antigravity",
+            "Антигравити",
+            "Antigravity (AGY)",
+            "Антигравити (AGY)",
+        ):
             self.assertIn(alias, sync)
         self.assertIn("'INBOX'", sync)
         self.assertIn("'QUEUED'", sync)
@@ -61,7 +68,7 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertIn(expected, result.stdout)
 
     def test_queue_behavior_suite(self):
-        self._run_pwsh(QUEUE_BEHAVIOR, "PASS: Project queue lifecycle")
+        self._run_pwsh(QUEUE_BEHAVIOR, "PASS: Project queue identity metadata")
 
 
 if __name__ == "__main__":

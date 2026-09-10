@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
 $scriptPath=Join-Path $PSScriptRoot '..' 'scripts' 'project_queue_sync.ps1'
-. $scriptPath -LibraryMode -Url 'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/112' -State ACTIVE
+. $scriptPath -LibraryMode -Url 'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/117' -State ACTIVE
 
 function Assert-Equal($Expected,$Actual,[string]$Message){
   if($Expected -cne $Actual){throw "$Message Ожидалось='$Expected', фактически='$Actual'."}
@@ -42,18 +42,20 @@ Assert-Equal 'Готово' $done['Статус'] 'Неверный Статус
 Assert-Equal 'Освобождено' $done['Исполнение'] 'Неверное Исполнение для DONE.'
 Assert-NoKey $done 'Доказательство' 'DONE не должен выдумывать QA Evidence.'
 
-foreach($alias in @('AGY','Agy','Antigravity','Антигравити')){
+foreach($alias in @('AGY','Agy','Antigravity','Антигравити','Antigravity (AGY)','Антигравити (AGY)')){
   Assert-Equal 'AGY' (Normalize-QaWorker $alias) "QA alias '$alias' должен нормализоваться в одну Project identity."
 }
 Assert-Equal '' (Normalize-QaWorker '') 'Пустой QA Worker должен означать preserve existing assignment.'
 
 foreach($stateName in @('ACTIVE','QA','QUEUED')){
-  $p=QueueProfile $stateName 'Codex' 'Антигравити'
+  $p=QueueProfile $stateName 'Codex' 'Antigravity (AGY)'
   Assert-HasKey $p 'Исполнитель' "$stateName должен фиксировать явно переданного Исполнителя."
   Assert-HasKey $p 'Проверяющий' "$stateName должен фиксировать явно переданного Проверяющего."
   Assert-Equal 'Codex' $p['Исполнитель'] "Неверный Исполнитель для $stateName."
   Assert-Equal 'AGY' $p['Проверяющий'] "Проверяющий должен храниться как стабильная Project identity AGY."
 }
+$customQa=QueueProfile 'QA' 'ChatGPT' 'Codex'
+Assert-Equal 'Codex' $customQa['Проверяющий'] 'Поддерживаемый custom QA Worker должен передаваться без подмены.'
 foreach($stateName in @('ACTIVE','QA','QUEUED')){
   $p=QueueProfile $stateName '' ''
   Assert-NoKey $p 'Исполнитель' "$stateName без metadata должен сохранить существующего Исполнителя."
@@ -165,7 +167,7 @@ function gh {
 
 $State='QUEUED'
 $Worker='Codex'
-$QaWorker='Антигравити'
+$QaWorker='Antigravity (AGY)'
 $script:Calls=@()
 Sync-ProjectQueueState
 
@@ -186,8 +188,20 @@ foreach($call in $edits){
   Assert-NoArg $call '--value' 'Машинный item-edit не должен зависеть от value-name режима.'
 }
 $qaCall=@($edits|Where-Object{$_[[Array]::IndexOf($_,'--field-id')+1] -ceq 'F_QA'})[0]
-Assert-Equal 'O_QA_AGY' $qaCall[[Array]::IndexOf($qaCall,'--single-select-option-id')+1] 'Антигравити должен записываться через стабильный option ID AGY.'
+Assert-Equal 'O_QA_AGY' $qaCall[[Array]::IndexOf($qaCall,'--single-select-option-id')+1] 'Compound Antigravity alias должен записываться через стабильный option ID AGY.'
 
+$State='QA'
+$Worker='ChatGPT'
+$QaWorker='Codex'
+$script:Calls=@()
+Sync-ProjectQueueState
+$customQaEdits=@($script:Calls|Where-Object{$_.Count -ge 2 -and $_[0] -eq 'project' -and $_[1] -eq 'item-edit'})
+$customQaCall=@($customQaEdits|Where-Object{$_[[Array]::IndexOf($_,'--field-id')+1] -ceq 'F_QA'})[0]
+Assert-Equal 'O_QA_CODEX' $customQaCall[[Array]::IndexOf($customQaCall,'--single-select-option-id')+1] 'Custom QA Codex должен использовать собственный Project option ID.'
+
+$State='QUEUED'
+$Worker='Codex'
+$QaWorker='AGY'
 $script:Calls=@()
 $script:FailAccess=$true
 $failed=$false
@@ -231,4 +245,4 @@ if(-not $failed){throw 'Чужой URL должен блокироваться f
 if($script:Calls.Count -ne 0){throw 'Чужой URL должен блокироваться до любого обращения к Project.'}
 $Url=$oldUrl
 
-Write-Host 'PASS: Project queue lifecycle, ID-based edits, assignment preservation и commit-marker работают fail-closed.'
+Write-Host 'PASS: Project queue identity metadata, ID-based edits и commit-marker работают fail-closed.'
