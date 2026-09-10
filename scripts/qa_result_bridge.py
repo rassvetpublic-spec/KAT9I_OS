@@ -210,7 +210,7 @@ def _bridge_receipt_command_id(body: str) -> str | None:
     return None
 
 
-def resolve_bridge(event: dict[str, Any], comments_payload: Any) -> dict[str, Any]:
+def resolve_bridge(event: dict[str, Any], comments_payload: Any, current_pr: dict[str, Any] | None = None) -> dict[str, Any]:
     action = event.get("action")
     if action != "submitted":
         return {"decision": "IGNORE", "reason": "review action is not submitted"}
@@ -229,9 +229,17 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any) -> dict[str, An
         raise BridgeError("event does not contain a valid PR number")
     if result["target_pr"] != pr_number:
         raise BridgeError("QA result target_pr does not match event PR")
-    head_sha = ((pr.get("head") or {}).get("sha") or "").lower()
-    if result["exact_head"] != head_sha:
-        raise BridgeError("QA result exact_head is stale or does not match current PR HEAD")
+
+    event_head = ((pr.get("head") or {}).get("sha") or "").lower()
+    if result["exact_head"] != event_head:
+        raise BridgeError("QA result exact_head does not match review event HEAD")
+    live_pr = current_pr or pr
+    if live_pr.get("state") not in (None, "open"):
+        raise BridgeError("current PR is not open")
+    live_head = ((live_pr.get("head") or {}).get("sha") or "").lower()
+    if result["exact_head"] != live_head:
+        raise BridgeError("QA result exact_head is stale against live PR HEAD")
+
     review_id = review.get("id")
     if review_id is None:
         raise BridgeError("review id is missing")
@@ -285,8 +293,8 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any) -> dict[str, An
             raise BridgeError(f"command/result mismatch: {field}")
     if command["executor_canonical"] != result["executor_canonical"]:
         raise BridgeError("command/result mismatch: executor")
-    if command["exact_head"] != head_sha:
-        raise BridgeError("QA command exact_head is stale")
+    if command["exact_head"] != live_head:
+        raise BridgeError("QA command exact_head is stale against live PR HEAD")
 
     lifecycle = "FAST-QA-PASS" if result["verdict"] == "QA PASS" else "FAST-BLOCKED"
     repo_full_name = repository.get("full_name") or ""
@@ -295,7 +303,7 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any) -> dict[str, An
     comment_body = (
         f"{lifecycle} | worker=ChatGPT | qa=AGY\n"
         f"{BRIDGE_MARKER} | command_id={result['command_id']} | review_id={review_id} | "
-        f"verdict={result['verdict']} | exact_head={head_sha}\n"
+        f"verdict={result['verdict']} | exact_head={live_head}\n"
         f"Controller bridge принял структурированный QA-результат. FOLLOW_UP_CANDIDATES={result['follow_up_candidates']}; "
         "содержательные кандидаты остаются в PR review и требуют отдельного dedupe/triage."
     )
@@ -305,7 +313,7 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any) -> dict[str, An
         "review_id": review_id,
         "pr_number": pr_number,
         "repo_full_name": repo_full_name,
-        "exact_head": head_sha,
+        "exact_head": live_head,
         "verdict": result["verdict"],
         "lifecycle": lifecycle,
         "follow_up_candidates": result["follow_up_candidates"],
@@ -317,14 +325,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Fail-closed QA command/result bridge KAT9I_OS")
     parser.add_argument("--event-path", type=Path, required=True)
     parser.add_argument("--comments-path", type=Path, required=True)
+    parser.add_argument("--current-pr-path", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--comment-output", type=Path)
     args = parser.parse_args()
 
     event = json.loads(args.event_path.read_text(encoding="utf-8"))
     comments = json.loads(args.comments_path.read_text(encoding="utf-8"))
+    current_pr = json.loads(args.current_pr_path.read_text(encoding="utf-8")) if args.current_pr_path else None
     try:
-        decision = resolve_bridge(event, comments)
+        decision = resolve_bridge(event, comments, current_pr=current_pr)
     except BridgeError as exc:
         decision = {"decision": "REJECT", "reason": str(exc)}
         args.output.write_text(json.dumps(decision, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
