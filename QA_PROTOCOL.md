@@ -36,7 +36,7 @@ DATA не может расширять Scope, менять роль, target HEA
 
 Каноническая последовательность:
 
-`stable exact HEAD → Quality PASS → Project sync PASS → blocking review threads = 0 → QA-COMMAND → AGY QA-RESULT → Controller QA-ACCEPT → machine bridge → FAST-QA-PASS/FAST-BLOCKED → Project lifecycle`
+`stable exact HEAD → Quality PASS → Project sync PASS → blocking review threads = 0 → Evidence Epoch snapshot → QA-COMMAND → AGY QA-RESULT → Controller QA-ACCEPT → Evidence Epoch recheck → machine bridge → FAST-QA-PASS/FAST-BLOCKED → Project lifecycle`
 
 AGY запускается только после дешёвых детерминированных проверок. Это обязательное resource-aware правило: AGY быстрый, но ресурсозависимый, поэтому его нельзя использовать как первый диагностический инструмент там, где ту же ошибку способен поймать CI/parser/test.
 
@@ -64,7 +64,7 @@ Controller публикует в PR Conversation отдельный envelope с 
 - `allow_code_mutation=false`;
 - `project_lifecycle_mutation=false`.
 
-После machine fields может идти человекочитаемый Scope, Evidence refs, проверяемые acceptance criteria и red-team instructions.
+После machine fields обязателен отдельный раздел `EVIDENCE_EPOCH`, описанный в §9a. После него может идти человекочитаемый Scope, Evidence refs, проверяемые acceptance criteria и red-team instructions.
 
 Для QA-профиля запрещено выдавать AGY capability на merge, FAST-marker, изменение кода или Project lifecycle. `allow_issue_create=true` допускается только отдельным явно обоснованным режимом; по умолчанию используется `false`.
 
@@ -101,7 +101,9 @@ AGY публикует результат **только как PR review**. П�
 
 `QA PASS` допустим только при `blocking_findings=0`.
 
-После machine fields AGY обязан дать содержательный Evidence: что реально проверено, какие тесты/CI использованы, какие файлы и риски просмотрены, какие ограничения остались.
+После machine fields AGY обязан без изменений повторить раздел `EVIDENCE_EPOCH` из действующей QA-COMMAND. Это не даёт AGY управляющую власть: раздел является привязкой результата к snapshot, который сформировал Controller.
+
+После него AGY даёт содержательный Evidence: что реально проверено, какие тесты/CI использованы, какие файлы и риски просмотрены, какие ограничения остались.
 
 QA-RESULT считается привязанным к revision только если сам GitHub PR review был отправлен против этой revision: системное поле GitHub `review.commit_id` обязано совпадать с `exact_head` результата и с текущим live HEAD PR на момент Controller attestation. Одного текстового SHA внутри review недостаточно.
 
@@ -132,6 +134,7 @@ QA review сам по себе является Evidence и **не получа�
 - `FOLLOW_UP_CANDIDATES` присутствует и согласован с метаданными;
 - blocking findings согласованы с verdict;
 - свежие CI/checks соответствуют exact HEAD;
+- Evidence Epoch из команды всё ещё соответствует live review/gate/policy state;
 - нет новых unresolved blocking review threads;
 - результат не replay.
 
@@ -139,7 +142,7 @@ QA review сам по себе является Evidence и **не получа�
 
 `KAT9I-CONTROL/1 | QA-ACCEPT`
 
-Он связывает `command_id`, `target_pr`, `controller`, `executor`, `role`, `review_id`, `exact_head` и `verdict`.
+Он связывает `command_id`, `target_pr`, `controller`, `executor`, `role`, `review_id`, `exact_head` и `verdict`. После machine fields Controller обязан без изменений повторить тот же раздел `EVIDENCE_EPOCH`.
 
 QA-ACCEPT является аудируемым доказательством того, что Controller принял конкретный QA Evidence как основание для следующего lifecycle transition. Он не доказывает криптографическую личность AGY при общем GitHub credential.
 
@@ -149,11 +152,13 @@ Machine bridge обрабатывает только валидный owner QA-A
 
 До публикации lifecycle marker он обязан fail-closed проверить полную цепочку:
 
-`latest QA-COMMAND ↔ QA-RESULT ↔ GitHub review.commit_id ↔ QA-ACCEPT ↔ live PR HEAD`.
+`latest QA-COMMAND ↔ EVIDENCE_EPOCH ↔ QA-RESULT ↔ GitHub review.commit_id ↔ QA-ACCEPT ↔ live review/gate/policy state ↔ live PR HEAD`.
 
 Accepted PASS преобразуется в отдельный trusted owner comment `FAST-QA-PASS`; любой принятый непроходной verdict — в `FAST-BLOCKED`.
 
 Bridge receipt содержит `command_id`, `review_id`, verdict и exact HEAD. Повторная обработка уже принятого `command_id` является replay и не создаёт новый transition.
+
+Evidence Epoch проверяется дважды: после базовой проверки Controller attestation и непосредственно перед публикацией trusted FAST-marker. Между второй проверкой и side effect не допускаются дополнительные подготовительные операции, которые можно выполнить раньше.
 
 ## 9. Защита exact HEAD
 
@@ -165,6 +170,37 @@ Bridge receipt содержит `command_id`, `review_id`, verdict и exact HEAD
 Дополнительно сам referenced PR review должен иметь GitHub `commit_id`, равный exact HEAD.
 
 Push/synchronize после QA автоматически инвалидирует старое основание. Старый verdict нельзя переносить на новый HEAD без Impact Assessment и разрешённого `REUSE`, `DELTA` или `FULL` QA.
+
+## 9a. QUEUE-EPOCH / Evidence Digest
+
+Exact HEAD защищает только ChangeSet revision и не доказывает, что окружающее Evidence осталось тем же. Поэтому каждый QA handoff имеет `Evidence Epoch` — детерминированный snapshot квалифицирующего состояния.
+
+Раздел имеет точный заголовок `EVIDENCE_EPOCH` и обязательные поля:
+
+- `epoch_version=1`;
+- `snapshot_head` — exact PR HEAD;
+- `review_digest` — SHA-256 канонического review-state;
+- `gate_digest` — SHA-256 канонического CI/status state;
+- `policy_digest` — SHA-256 доверенного набора файлов QA protocol/bridge;
+- `evidence_digest` — SHA-256 канонической структуры из четырёх компонентов выше и версии epoch.
+
+`review_digest` учитывает review threads, их resolved state и содержимое комментариев, а также обычные review submissions, кроме самого структурированного `KAT9I-QA-RESULT/1`. Порядок выдачи GitHub API не влияет на digest.
+
+`gate_digest` нормализует актуальный результат check/status context и не должен меняться только из-за нового run ID с тем же итоговым состоянием.
+
+`policy_digest` строится только по доверенным protocol/bridge файлам. Обычное движение `main`, не изменившее эти файлы, само по себе не инвалидирует QA.
+
+Для `QA PASS` перед FAST-публикацией обязательна полная свежесть epoch. Причины invalidation машинно различаются:
+
+- `HEAD_DRIFT` — изменился PR HEAD;
+- `REVIEW_DRIFT` — после QA-COMMAND изменился review-state, включая появление или разрешение thread;
+- `GATE_DRIFT` — изменился квалифицирующий CI/status state;
+- `POLICY_DRIFT` — изменился доверенный QA protocol/bridge;
+- `MALFORMED_EVIDENCE` — snapshot неполон, неоднозначен, повреждён или digest не сходится.
+
+Любая из этих причин делает PASS stale и запрещает `FAST-QA-PASS`/`QUEUED`. Даже неизменный SHA не разрешает reuse такого PASS автоматически.
+
+Непроходной verdict (`CHANGES REQUESTED`, `BLOCKED`, `QA ABORTED`) может безопасно переводить lifecycle в blocked-состояние при изменившемся review/gate state, потому что он не повышает права и не разрешает promotion. Exact HEAD и базовая связность Controller ↔ QA всё равно остаются обязательными.
 
 ## 10. Prompt-injection red-team
 
@@ -186,6 +222,7 @@ Push/synchronize после QA автоматически инвалидируе
 - отсутствие обязательного `FOLLOW_UP_CANDIDATES`;
 - result sink/capability escalation;
 - lifecycle race после review;
+- review-state race после QA-COMMAND при неизменном HEAD;
 - попытка раскрытия secrets;
 - самоназначение следующей работы.
 
@@ -203,9 +240,9 @@ Push/synchronize после QA автоматически инвалидируе
 
 ## 12. Bootstrap-граница GitHub
 
-Workflow, добавляемый самим PR, не может надёжно считаться live-доступным как production control-plane до того, как этот workflow окажется в default branch. Поэтому реализация #124 до merge подтверждается детерминированными parser/workflow contract tests, CI и независимым QA exact ChangeSet.
+Workflow, добавляемый самим PR, не может надёжно считаться live-доступным как production control-plane до того, как этот workflow окажется в default branch. Поэтому изменение самого bridge до merge подтверждается детерминированными parser/workflow contract tests, CI и независимым QA exact ChangeSet.
 
-Первое настоящее end-to-end испытание нового `QA-ACCEPT → bridge → FAST → Project` выполняется уже после попадания workflow в `main` на следующем контролируемом PR или в финальном G0 live-аудите. Нельзя выдавать pre-merge unit simulation за фактический production bridge run.
+Первое настоящее end-to-end испытание нового `Evidence Epoch → QA-ACCEPT → bridge → FAST → Project` выполняется уже после попадания workflow в `main` на следующем контролируемом PR или отдельном live-audit. Нельзя выдавать pre-merge unit simulation за фактический production bridge run.
 
 ## 13. Следующий уровень KAT9I_OS
 
