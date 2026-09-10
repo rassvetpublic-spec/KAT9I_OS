@@ -44,14 +44,18 @@ jobs:
           test -f docs/guides/FIRST_TIME_GUIDE.md
           test -f docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md
           test -f docs/architecture/MODULE_RESPONSIBILITY_MAP.md
+          test -f docs/architecture/35_ARCHITECTURE_CONVERGENCE_LOOP.md
           test -f docs/GLOSSARY.md
+          test -f config/architecture_convergence_policy.json
           test -f scripts/generate_html_docs.py
+          test -f scripts/architecture_convergence.py
           test -f scripts/check_graveyard.py
           test -f scripts/graveyard_context.py
           test -f scripts/graveyard_excavate.py
           test -f scripts/graveyard_trusted_handoff.py
           test -f scripts/graveyard_pr_salvage.py
           test -f tests/test_docs_ssot.py
+          test -f tests/test_architecture_convergence.py
           test -f tests/test_project_configuration.py
           test -f tests/test_graveyard.py
           test -f tests/test_graveyard_context.py
@@ -89,6 +93,7 @@ jobs:
               Path('docs/guides/FIRST_TIME_GUIDE.md'),
               Path('docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md'),
               Path('docs/architecture/MODULE_RESPONSIBILITY_MAP.md'),
+              Path('docs/architecture/35_ARCHITECTURE_CONVERGENCE_LOOP.md'),
               Path('docs/GLOSSARY.md'),
               Path('.github/PULL_REQUEST_TEMPLATE.md'),
               Path('.github/ISSUE_TEMPLATE/feedback.yml'),
@@ -150,6 +155,13 @@ jobs:
           python scripts/verify_module_registry.py
           python scripts/graveyard_excavate.py --help >/dev/null
           python scripts/graveyard_pr_salvage.py --help >/dev/null
+
+      - name: Проверить Architecture Convergence Loop
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/architecture_convergence.py --check
+          python -m unittest tests/test_architecture_convergence.py
 
       - name: Проверить Graveyard как DATA-only append-only слой
         shell: bash
