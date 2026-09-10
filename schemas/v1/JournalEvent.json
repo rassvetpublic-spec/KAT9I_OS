@@ -4,7 +4,7 @@
   "title": "JournalEvent",
   "description": "Машинный контракт элемента append-only Event Journal для аудита, стриминга и детерминированного Replay Recovery.",
   "type": "object",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "additionalProperties": false,
   "required": [
     "event_id",
@@ -43,7 +43,21 @@
         "CAPABILITY_GRANTED",
         "CAPABILITY_REVOKED",
         "APPROVAL_RECORDED",
-        "CHECKPOINT_COMMITTED"
+        "CHECKPOINT_COMMITTED",
+        "PROMOTION_ENQUEUED",
+        "PROMOTION_CLASSIFIED",
+        "CHANGE_EVIDENCE_ACCEPTED",
+        "PROMOTION_HEAD_ACQUIRED",
+        "CANDIDATE_CREATED",
+        "INTEGRATION_PASSED",
+        "PROMOTION_TICKET_SEALED",
+        "PROMOTION_APPROVED",
+        "PROMOTION_COMMITTED",
+        "PROMOTION_BLOCKED",
+        "QA_REUSED",
+        "QA_INVALIDATED",
+        "DELTA_QA_REQUIRED",
+        "CANDIDATE_STALE"
       ],
       "description": "Тип критического системного события, обязательного для Replay Recovery."
     },

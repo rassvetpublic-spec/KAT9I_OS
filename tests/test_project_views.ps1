@@ -13,6 +13,7 @@ $script:RestWrites=0
 $script:ItemAddCalls=0
 $script:IterationMode=$false
 $script:IterationDuration=3
+$script:CustomFields=$null
 
 function New-View([string]$Name,[string]$Id,[string]$Layout,[string]$Filter){
   [pscustomobject]@{id=$Id;name=$Name;layout=$Layout;filter=$Filter}
@@ -91,6 +92,20 @@ if(@($productionApplyCalls|Where-Object{$_ -ceq 'EnsureSelect'}).Count -ne 12){
 }
 
 function Snapshot {
+  if($null -ne $script:CustomFields){
+    return [pscustomobject]@{
+      user=[pscustomobject]@{
+        projectV2=[pscustomobject]@{
+          id='PROJECT'
+          title='KAT9I_OS — разработка'
+          repositories=[pscustomobject]@{nodes=@([pscustomobject]@{id='REPO';nameWithOwner='rassvetpublic-spec/KAT9I_OS'})}
+          fields=[pscustomobject]@{nodes=@($script:CustomFields)}
+          views=[pscustomobject]@{nodes=@()}
+        }
+      }
+      repository=[pscustomobject]@{id='REPO';nameWithOwner='rassvetpublic-spec/KAT9I_OS'}
+    }
+  }
   if($script:IterationMode){
     $iteration=[pscustomobject]@{
       id='ITER'
@@ -240,5 +255,48 @@ try {
 }
 if(-not $thrown){throw 'Ожидалась fail-closed ошибка для существующей 7-дневной итерации.'}
 if($script:GqlCalls -ne 0){throw "Итерация была изменена через GraphQL: calls = $($script:GqlCalls)"}
+
+$script:IterationMode=$false
+$script:CustomFields=@(
+  [pscustomobject]@{id='F1';name='Статус';__typename='ProjectV2SingleSelectField';options=@()},
+  [pscustomobject]@{id='F2';name='Status';__typename='ProjectV2SingleSelectField';options=@()}
+)
+$script:GqlCalls=0
+$thrown=$false
+try {
+  EnsureSelect 'Статус' @('Статус','Status') @((Opt 'Входящие' 'GRAY' 'Новая задача' @('Входящие','Todo')))
+} catch {
+  $thrown=$true
+  if($_.Exception.Message -notmatch 'неоднозначные поля Project'){
+    throw "Получена другая ошибка дублирующихся полей: $($_.Exception.Message)"
+  }
+}
+if(-not $thrown){throw 'Ожидалась fail-closed ошибка для канонического поля и его alias.'}
+if($script:GqlCalls -ne 0){throw "Дублирующиеся поля вызвали GraphQL mutation: calls = $($script:GqlCalls)"}
+
+$script:CustomFields=@(
+  [pscustomobject]@{
+    id='F1'
+    name='Статус'
+    __typename='ProjectV2SingleSelectField'
+    options=@(
+      [pscustomobject]@{id='O1';name='Входящие'},
+      [pscustomobject]@{id='O2';name='Todo'}
+    )
+  }
+)
+$script:GqlCalls=0
+$thrown=$false
+try {
+  EnsureSelect 'Статус' @('Статус','Status') @((Opt 'Входящие' 'GRAY' 'Новая задача' @('Входящие','Todo')))
+} catch {
+  $thrown=$true
+  if($_.Exception.Message -notmatch 'неоднозначные значения'){
+    throw "Получена другая ошибка дублирующихся значений: $($_.Exception.Message)"
+  }
+}
+if(-not $thrown){throw 'Ожидалась fail-closed ошибка для канонического значения и его alias.'}
+if($script:GqlCalls -ne 0){throw "Дублирующиеся значения вызвали GraphQL mutation: calls = $($script:GqlCalls)"}
+$script:CustomFields=$null
 
 Write-Host 'PASS: Project policy запускает фактическое production-тело entrypoint под read-only preflight; mutation-вызовы вне защищённого Apply запрещены, а case-variant, старый QA filter и дубль дают 0 REST writes / 0 GraphQL mutations / 0 item-add.'

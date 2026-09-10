@@ -156,7 +156,11 @@ Discussion используется для вопроса, обучения ил
 
 > Implementation Worker (исполнитель изменения) != QA Worker (независимый проверяющий).
 
-QA относится к точной revision. После изменения head прежний QA не считается действующим для новой revision.
+QA обязательно фиксирует точную source revision, которую реально проверял, и проверенный ChangeSet. Изменение PR head требует сравнить прежний и новый ChangeSet, но само по себе не означает автоматический повтор FULL QA.
+
+Если изменился только base/main, а проверенный ChangeSet не изменился, пересчитывается Integration Evidence для нового base и выполняется Impact Assessment. Прежний Change Evidence может быть переиспользован только при доказанной применимости; неопределённость означает DELTA QA, FULL QA или BLOCKED согласно §23.
+
+До появления автоматического Promotion Bridge решение `QA REUSE` / `DELTA QA` / `FULL QA` и причина повторного FULL QA должны оставлять явный аудируемый Evidence в PR. Этот раздел не даёт права на auto-merge и не изменяет действующий финальный Gate владельца.
 
 ## 24.13. Actions — автоматические проверки
 
@@ -220,3 +224,11 @@ Release создаётся только для реально выпущенно
 ## 24.19. Главный принцип
 
 > GitHub должен делать совместную работу KAT9I_OS понятной даже новичку, но не создавать параллельные источники истины: архитектура живёт в канонических документах, работа — в Issues, проверки — в Actions и Evidence, выпуск — в Releases, а Projects, HTML и другие интерфейсы лишь показывают эти данные удобным способом.
+
+## Portable Promotion для GitHub (§36)
+
+Команда `мерж` означает постановку/продолжение PromotionRequest, а не немедленный merge. GitHub PR является ChangeRef первой вертикали, `main` — target_ref, а final CI выполняется на synthetic candidate current target + checked ChangeSet.
+
+GitHub Project остаётся control plane и представлением. Runtime FIFO/Promotion state хранится только в authoritative PromotionStore. Native GitHub Merge Queue и Actions concurrency не являются обязательным SSoT.
+
+SAFE auto-promotion возможен только по детерминированной policy §36; архитектурные, workflow, schema, Security, QA/Gate и неопределённые изменения всегда STRICT.

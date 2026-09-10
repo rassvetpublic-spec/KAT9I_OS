@@ -50,6 +50,8 @@ class ProjectConfigurationTests(unittest.TestCase):
             [pwsh, "-NoProfile", "-File", str(BEHAVIOR_TEST)],
             cwd=ROOT,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             check=False,
         )

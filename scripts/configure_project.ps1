@@ -117,9 +117,11 @@ function Opt([string]$Name,[string]$Color,[string]$Description,[string[]]$Aliase
 }
 
 function Find-Field($Fields,[string[]]$Aliases){
-  foreach($f in @($Fields)){
-    if(Is-Alias $f.name $Aliases){return $f}
+  $matches=@(@($Fields)|Where-Object{Is-Alias $_.name $Aliases})
+  if($matches.Count -gt 1){
+    throw "Найдены неоднозначные поля Project для '$($Aliases[0])': $(($matches.name)-join ', '). Скрипт остановлен без изменений."
   }
+  if($matches.Count -eq 1){return $matches[0]}
   return $null
 }
 
@@ -163,10 +165,14 @@ mutation($input:CreateProjectV2FieldInput!){
   $missing=@()
   $legacy=@()
   foreach($d in $Defs){
-    $existing=@($f.options)|Where-Object{Is-Alias $_.name @($d.aliases + $d.name)}|Select-Object -First 1
-    if(-not $existing){
+    $matches=@(@($f.options)|Where-Object{Is-Alias $_.name @($d.aliases + $d.name)})
+    if($matches.Count -gt 1){
+      throw "Поле '$($f.name)' содержит неоднозначные значения для '$($d.name)': $(($matches.name)-join ', '). Скрипт остановлен без изменений."
+    }
+    if($matches.Count -eq 0){
       $missing+=$d.name
-    } elseif($existing.name -cne $d.name){
+    } elseif($matches[0].name -cne $d.name){
+      $existing=$matches[0]
       $legacy+="$($existing.name) -> $($d.name)"
     }
   }

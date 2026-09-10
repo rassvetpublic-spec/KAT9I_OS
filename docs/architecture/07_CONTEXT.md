@@ -290,3 +290,9 @@ Context не должен самостоятельно определять пр
 ## 7.33. Главный принцип
 
 > **Лучший контекст — не самый большой и не самый маленький. Лучший контекст — минимальный набор проверяемых источников, достаточный конкретному исполнителю для качественного выполнения конкретного этапа задачи.**
+
+## QA Delta Context для Promotion (§36)
+
+При повторной проверке Context применяет Reference-first пакет: `PreviousChangeEvidence + PreviousFindings + ChangedDelta + ImpactAssessment + AffectedContracts + QuestionToRevalidate`.
+
+Полный PR/repository/старый чат не пересылаются без необходимости. Это уменьшает Context Drift, токены и стоимость повторного QA без ослабления Evidence provenance.

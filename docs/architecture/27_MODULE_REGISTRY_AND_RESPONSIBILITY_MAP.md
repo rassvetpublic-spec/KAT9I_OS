@@ -162,11 +162,15 @@ Integrations отвечают за технический способ обра�
 
 ## 27.17. QA — независимая проверка
 
-QA доказывает, что конкретная revision соответствует требованиям, используя Validators, tests, Evidence, OutputContract и точную revision.
+QA доказывает, что проверенный ChangeSet соответствует требованиям, используя Validators, tests, Evidence, OutputContract, точную source revision, Scope и применимые Rules/Policy.
 
-Исполнитель не может исправить результат и одновременно считать своё же исправление независимым QA.
+Точная revision остаётся обязательным Provenance, но QA также фиксирует область применимости verdict. При последующих изменениях QA отвечает за содержательное решение о применимости прежнего Change Evidence и, согласно policy и Impact Assessment, за `QA REUSE`, `DELTA QA` или `FULL QA`.
 
-Каноническое владение: QA Result.
+Execution остаётся владельцем фактических технических Evidence выполнения и Integration Evidence; Integrations остаются транспортом и не становятся владельцем QA-семантики.
+
+Исполнитель не может исправить результат и одновременно считать своё же исправление независимым FULL или требуемым DELTA QA.
+
+Каноническое владение: QA Result / Change Evidence и содержательная применимость QA verdict.
 
 ## 27.18. Recovery — восстановление
 
@@ -355,7 +359,7 @@ Domain знает, что нужен PR; Resources знает репозитор
 | Integration Request | Integrations | Execution |
 | EvidenceRef | Execution | QA, Core, Learning |
 | ResultRef | Execution | Core, QA, следующий Worker |
-| QA Result | QA | Core, Learning |
+| QA Result / Change Evidence | QA | Core, Execution, Learning |
 | Telemetry Event | Telemetry | Metrics, Visualization |
 | MetricsSnapshot | Metrics | Learning, Planning, Visualization |
 | Learning Proposal | Learning | владелец изменяемой функции |
@@ -379,7 +383,7 @@ Domain знает, что нужен PR; Resources знает репозитор
 | Lease | Coworker |
 | Безопасность действия | Security Decision |
 | Фактическое выполнение | Evidence |
-| QA | QA Result точной revision |
+| QA | QA Result / Change Evidence с source revision, ChangeSet и областью применимости |
 | Сырые события | Telemetry |
 | Числовые показатели | Metrics |
 | Прогноз | TaskEstimate |
@@ -533,3 +537,9 @@ Quality Gate должен со временем обнаруживать:
 ## 27.47. Главный принцип
 
 > **KAT9I_OS должна иметь настолько чёткие границы ответственности, чтобы для любой функции можно было однозначно ответить: какой модуль ею владеет, кто её использует, через какой контракт она доступна и какой другой модуль не имеет права незаметно присвоить её себе; человек взаимодействует с системой через штатное Electron-приложение, но Electron не получает права обходить эти границы.**
+
+## Portable Promotion: распределение ответственности (§36)
+
+Promotion не создаёт новый верхнеуровневый модуль. Core владеет orchestration; Rule Manager — classification/policy; Security — authorization; QA — Change Evidence; Execution — candidate и side effect; Integrations — transport; Storage — PromotionStore; Recovery — Lease/fencing; Context — QA Delta Context; Metrics — измерения; Planning — QA budget.
+
+Новые ключевые контракты: `PromotionRequest`, `ChangeEvidence`, `ImpactAssessment`, `PromotionTicket`. Они не меняют правило одного канонического владельца ответственности.

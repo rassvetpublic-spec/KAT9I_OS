@@ -208,11 +208,25 @@ Security и обязательное качество имеют больший 
 
 ## 32.17. ADR-009 — независимый QA
 
+**Статус:** SUPERSEDED by ADR-045.
+
+Сохраняется исторически принятое требование независимости: Worker, реализовавший изменение, не выполняет квалифицирующий независимый QA собственного изменения.
+
+Старая универсальная формулировка «изменение revision делает старый QA неактуальным» заменена ADR-045, потому что она смешивала Provenance проверки с решением о необходимости повторного содержательного QA.
+
+## 32.17a. ADR-045 — применимость QA Evidence после изменения revision
+
 **Статус:** ACCEPTED.
 
-Worker, реализовавший изменение, не выполняет квалифицирующий независимый QA той же revision.
+QA Evidence всегда хранит точную `source revision` как Provenance и проверенный ChangeSet. Изменение SHA/rebase/target само по себе не является достаточным основанием для повторного FULL QA.
 
-Изменение revision делает старый QA неактуальным.
+После изменения система проверяет ChangeSet, значимые Rules/Policy, Scope, новый Evidence и Impact Assessment и выбирает `QA REUSE`, `DELTA QA`, `FULL QA` или `BLOCKED` согласно каноническому §23 и §20.34. Если изменился только target/base, пересчитывается Integration Evidence; Change Evidence не инвалидируется автоматически.
+
+`INDETERMINATE` не разрешает QA REUSE. Независимость квалифицирующего DELTA/FULL QA сохраняется: Implementation Worker != QA Worker там, где policy требует независимую проверку.
+
+**Причина пересмотра:** уменьшить повторный дорогой QA без ослабления Fail-Closed и без слепого переноса PASS на новую revision.
+
+**Затронутые каноны:** §23, §20.34, §11.25, `docs/spec/13_CACHE_POLICY.md`, `docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md`, §27.17.
 
 ## 32.18. ADR-010 — GitHub Issue является SSoT работы проекта
 
@@ -628,6 +642,19 @@ Obsidian может быть:
 3. **Регрессионный контроль (Regression Report)**:
    - Изменение модели, системных промптов или навыков принимается только при отсутствии деградации на базовом наборе сценариев.
    - Любое ухудшение ранее работавшего сценария порождает статус `REGRESSION_DETECTED` и блокирует признание обновления успешным.
+
+## 32.40k. ADR-046 — Portable Promotion Protocol
+
+**Статус:** ACCEPTED (канонический источник: `docs/architecture/36_CHANGE_PROMOTION_PROTOCOL.md`, `schemas/v1/PromotionRequest.json`, `schemas/v1/ChangeEvidence.json`, `schemas/v1/ImpactAssessment.json`, `schemas/v1/PromotionTicket.json`, Issue #90).
+
+1. Каноническая абстракция — Promotion, а не platform-specific Merge Queue.
+2. Change Evidence, Integration Evidence и Authorization Evidence имеют независимые области жизни и инвалидируются по разным причинам.
+3. Финальный side effect разрешён только по sealed PromotionTicket; Human Approval связывается с hash этого ticket через существующий ApprovalRecord.
+4. Один target имеет не более одного активного Promotion Lease; stale executor блокируется fencing generation.
+5. Native platform queue является optional acceleration adapter; personal GitHub repository должен поддерживаться portable backend.
+6. Missing capability приводит к safe degradation, а не к обходу Gate.
+7. AI не может единолично понижать risk class до SAFE.
+8. PromotionStore имеет ровно один authoritative SSoT.
 
 ## 32.41. Технологические решения, которые пока не должны становиться архитектурными догмами
 
