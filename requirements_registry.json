@@ -1,23 +1,79 @@
 {
   "schema_version": "1.0.0",
   "registry_version": "1.0.0",
-  "baseline_revision": "6e7eefc0dfac90a9b0bd37ec16b4670a84e1e231",
+  "baseline_revision": "c2b15c87b7310c1b26e79d2088a2be3137ba13d5",
   "generated_from": "docs/spec/25_TZ_REQUIREMENTS_PRIORITIZATION_PIPELINE.md#25.5",
   "source_inventory": [
-    {"path": "docs/tz/*.md", "role": "CANONICAL_SSoT", "notes": "Канонические разделы ТЗ, включая восстановленный и принятый §2."},
-    {"path": "docs/architecture/[0-9][0-9]_*.md", "role": "CANONICAL_SSoT", "notes": "Профильные архитектурные SSoT."},
-    {"path": "docs/spec/*.md", "role": "CANONICAL_SSoT", "notes": "Канонические спецификации исполнения, безопасности, QA, интеграций и engineering process."},
-    {"path": "schemas/v1/*.json", "role": "MACHINE_CONTRACT", "notes": "Физический SSoT материализованных машинных контрактов v1."},
-    {"path": "schemas/README.md", "role": "CONTROL_PROCESS", "notes": "Формат, версия и правила каталога схем."},
-    {"path": "modules_registry.json", "role": "RESPONSIBILITY_MAP", "notes": "Машинное представление материализованных модулей; не заменяет логическую карту §27."},
-    {"path": "docs/architecture/KAT9I_OS_ARCHITECTURE_CONTEXT.md", "role": "TRACEABILITY", "notes": "Исторический архитектурный snapshot; не конкурирующий SSoT."},
-    {"path": "docs/architecture/MODULE_RESPONSIBILITY_MAP.md", "role": "TRACEABILITY", "notes": "Предшествующая карта; текущая ownership-карта — §27."},
-    {"path": "AGENTS.md", "role": "CONTROL_PROCESS", "notes": "Правила разработки и Owner Gate."},
-    {"path": "docs/GITHUB_WORKFLOW.md", "role": "CONTROL_PROCESS", "notes": "Рабочий GitHub-процесс проекта."},
-    {"path": "config/architecture_convergence_policy.json", "role": "GATE_ROADMAP", "notes": "Machine policy Architecture Convergence."},
-    {"path": ".github/workflows/quality.yml", "role": "GATE_ROADMAP", "notes": "Детерминированный Quality Gate."},
-    {"path": ".github/workflows/project-queue-sync.yml", "role": "CONTROL_PROCESS", "notes": "Производная синхронизация Project lifecycle."},
-    {"path": "index.html", "role": "DERIVED", "notes": "Производное HTML-представление Markdown, не SSoT."}
+    {
+      "path": "docs/tz/*.md",
+      "role": "CANONICAL_SSoT",
+      "notes": "Канонические разделы ТЗ, включая восстановленный и принятый §2."
+    },
+    {
+      "path": "docs/architecture/[0-9][0-9]_*.md",
+      "role": "CANONICAL_SSoT",
+      "notes": "Профильные архитектурные SSoT."
+    },
+    {
+      "path": "docs/spec/*.md",
+      "role": "CANONICAL_SSoT",
+      "notes": "Канонические спецификации исполнения, безопасности, QA, интеграций и engineering process."
+    },
+    {
+      "path": "schemas/v1/*.json",
+      "role": "MACHINE_CONTRACT",
+      "notes": "Физический SSoT материализованных машинных контрактов v1."
+    },
+    {
+      "path": "schemas/README.md",
+      "role": "CONTROL_PROCESS",
+      "notes": "Формат, версия и правила каталога схем."
+    },
+    {
+      "path": "modules_registry.json",
+      "role": "RESPONSIBILITY_MAP",
+      "notes": "Машинное представление материализованных модулей; не заменяет логическую карту §27."
+    },
+    {
+      "path": "docs/architecture/KAT9I_OS_ARCHITECTURE_CONTEXT.md",
+      "role": "TRACEABILITY",
+      "notes": "Исторический архитектурный snapshot; не конкурирующий SSoT."
+    },
+    {
+      "path": "docs/architecture/MODULE_RESPONSIBILITY_MAP.md",
+      "role": "TRACEABILITY",
+      "notes": "Предшествующая карта; текущая ownership-карта — §27."
+    },
+    {
+      "path": "AGENTS.md",
+      "role": "CONTROL_PROCESS",
+      "notes": "Правила разработки и Owner Gate."
+    },
+    {
+      "path": "docs/GITHUB_WORKFLOW.md",
+      "role": "CONTROL_PROCESS",
+      "notes": "Рабочий GitHub-процесс проекта."
+    },
+    {
+      "path": "config/architecture_convergence_policy.json",
+      "role": "GATE_ROADMAP",
+      "notes": "Machine policy Architecture Convergence."
+    },
+    {
+      "path": ".github/workflows/quality.yml",
+      "role": "GATE_ROADMAP",
+      "notes": "Детерминированный Quality Gate."
+    },
+    {
+      "path": ".github/workflows/project-queue-sync.yml",
+      "role": "CONTROL_PROCESS",
+      "notes": "Производная синхронизация Project lifecycle."
+    },
+    {
+      "path": "index.html",
+      "role": "DERIVED",
+      "notes": "Производное HTML-представление Markdown, не SSoT."
+    }
   ],
   "requirements": [
     {
@@ -26,14 +82,16 @@
       "area": "System",
       "type": "ARCHITECTURE",
       "canonical_ssot": "docs/tz/01-naznachenie-i-bazovaya-arhitektura.md",
-      "canonical_owner": "Architecture / Owner",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G1",
       "target_version": "Architecture Baseline",
       "status": "ACCEPTED",
       "dependencies": [],
       "machine_contract_refs": [],
       "evidence_refs": [],
-      "issue_refs": ["#62"],
+      "issue_refs": [
+        "#62"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
@@ -44,171 +102,282 @@
       "title": "Core как управляющее ядро и координатор жизненного цикла",
       "area": "Core",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/tz/02-core-arhitekturnaya-karta-i-operacionnaya-model.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.4",
+      "canonical_ssot": "docs/tz/02-core-arhitekturnaya-karta-i-operacionnaya-model.md",
       "canonical_owner": "Core",
       "target_gate": "G1/G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-TASK-001", "REQ-RULES-001", "REQ-SEC-001"],
-      "machine_contract_refs": ["schemas/v1/TaskContract.json", "schemas/v1/TaskRuntimeState.json"],
-      "evidence_refs": ["modules_registry.json#Core"],
+      "dependencies": [
+        "REQ-TASK-001",
+        "REQ-RULES-001",
+        "REQ-SEC-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/TaskContract.json",
+        "schemas/v1/TaskRuntimeState.json"
+      ],
+      "evidence_refs": [
+        "modules_registry.json#Core"
+      ],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#Core"
+      "runtime_module_ref": "modules_registry.json#Core",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.4"
+      ]
     },
     {
       "requirement_id": "REQ-TASK-001",
       "title": "TaskContract и TaskRuntimeState разделены и типизированы",
       "area": "Core / Task",
       "type": "CONTRACT",
-      "canonical_ssot": "docs/architecture/03_TASK_CONTRACT.md; docs/architecture/26_INTERNAL_CONTRACTS.md#26.10",
+      "canonical_ssot": "docs/architecture/03_TASK_CONTRACT.md",
       "canonical_owner": "Core",
       "target_gate": "G2",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-CONTRACTS-001"],
-      "machine_contract_refs": ["schemas/v1/TaskContract.json", "schemas/v1/TaskRuntimeState.json", "schemas/v1/TaskResult.json"],
+      "dependencies": [
+        "REQ-CONTRACTS-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/TaskContract.json",
+        "schemas/v1/TaskRuntimeState.json",
+        "schemas/v1/TaskResult.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#40"],
+      "issue_refs": [
+        "#40"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#Core"
+      "runtime_module_ref": "modules_registry.json#Core",
+      "supporting_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.10"
+      ]
+    },
+    {
+      "requirement_id": "REQ-LIFECYCLE-001",
+      "title": "Task проходит явный управляемый lifecycle от intake до проверенного результата",
+      "area": "Core / Lifecycle",
+      "type": "PROCESS",
+      "canonical_ssot": "docs/architecture/20_TASK_LIFECYCLE_AND_ORCHESTRATION.md",
+      "canonical_owner": "Core",
+      "target_gate": "G3",
+      "target_version": "v0.1",
+      "status": "ACCEPTED",
+      "dependencies": [
+        "REQ-TASK-001",
+        "REQ-RULES-001",
+        "REQ-SEC-001",
+        "REQ-QA-001",
+        "REQ-EVIDENCE-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/TaskContract.json",
+        "schemas/v1/TaskRuntimeState.json",
+        "schemas/v1/SecurityDecision.json",
+        "schemas/v1/Evidence.json"
+      ],
+      "evidence_refs": [],
+      "issue_refs": [],
+      "coverage_status": "COVERED",
+      "abc": "UNASSESSED",
+      "xyz": "UNASSESSED",
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/03_TASK_CONTRACT.md",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md"
+      ]
     },
     {
       "requirement_id": "REQ-RULES-001",
       "title": "Единый Rule Manager и Effective Ruleset с deny wins",
       "area": "Rules",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/04_RULES_AND_EXECUTION_PRIORITIES.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.5",
+      "canonical_ssot": "docs/architecture/04_RULES_AND_EXECUTION_PRIORITIES.md",
       "canonical_owner": "Rule Manager",
       "target_gate": "G1/G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-CONTRACTS-001"],
+      "dependencies": [
+        "REQ-CONTRACTS-001"
+      ],
       "machine_contract_refs": [],
-      "evidence_refs": ["modules_registry.json#RuleManager"],
+      "evidence_refs": [
+        "modules_registry.json#RuleManager"
+      ],
       "issue_refs": [],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "§26 объявляет Effective Ruleset/RulesRef устойчивыми контрактами, но отдельной физической схемы v1 для них нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#RuleManager"
+      "runtime_module_ref": "modules_registry.json#RuleManager",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.5"
+      ]
     },
     {
       "requirement_id": "REQ-SEC-001",
       "title": "Security является единственным владельцем Permission и Capability Grant",
       "area": "Security",
       "type": "SECURITY",
-      "canonical_ssot": "docs/spec/14_SECURITY.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.6",
+      "canonical_ssot": "docs/spec/14_SECURITY.md",
       "canonical_owner": "Security",
       "target_gate": "G2/G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-RULES-001", "REQ-IDENTITY-001"],
-      "machine_contract_refs": ["schemas/v1/SecurityDecision.json", "schemas/v1/CapabilityGrant.json", "schemas/v1/ApprovalRecord.json", "schemas/v1/SecretRef.json"],
-      "evidence_refs": ["modules_registry.json#Security"],
-      "issue_refs": ["#44", "#45"],
+      "dependencies": [
+        "REQ-RULES-001",
+        "REQ-IDENTITY-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/SecurityDecision.json",
+        "schemas/v1/CapabilityGrant.json",
+        "schemas/v1/ApprovalRecord.json",
+        "schemas/v1/SecretRef.json"
+      ],
+      "evidence_refs": [
+        "modules_registry.json#Security"
+      ],
+      "issue_refs": [
+        "#44",
+        "#45"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#Security"
+      "runtime_module_ref": "modules_registry.json#Security",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.6"
+      ]
     },
     {
       "requirement_id": "REQ-IDENTITY-001",
       "title": "Identity и Human Approval имеют машинную fail-closed модель",
       "area": "Security / Identity",
       "type": "CONTRACT",
-      "canonical_ssot": "docs/spec/14_SECURITY.md#14.13; docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md",
+      "canonical_ssot": "docs/spec/14_SECURITY.md#14.13",
       "canonical_owner": "Security",
       "target_gate": "G2",
       "target_version": "v0.1",
       "status": "ACCEPTED",
       "dependencies": [],
-      "machine_contract_refs": ["schemas/v1/Identity.json", "schemas/v1/ApprovalRecord.json"],
+      "machine_contract_refs": [
+        "schemas/v1/Identity.json",
+        "schemas/v1/ApprovalRecord.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#44"],
+      "issue_refs": [
+        "#44"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "MATERIALIZED"
+      "materialization": "MATERIALIZED",
+      "supporting_refs": [
+        "docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md"
+      ]
     },
     {
       "requirement_id": "REQ-DOMAIN-001",
       "title": "Domain владеет предметной семантикой Skills, Workflows и Validators",
       "area": "Domain",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/spec/16_DOMAINS.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.7",
+      "canonical_ssot": "docs/spec/16_DOMAINS.md",
       "canonical_owner": "Domain",
       "target_gate": "G1",
       "target_version": "v0.3+",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-CORE-001"],
+      "dependencies": [
+        "REQ-CORE-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.7"
+      ]
     },
     {
       "requirement_id": "REQ-SKILL-001",
       "title": "Core владеет системным Skill Registry и generic Skill Routing без владения семантикой Skills",
       "area": "Core / Skills",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/tz/02-core-arhitekturnaya-karta-i-operacionnaya-model.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.4",
+      "canonical_ssot": "docs/tz/02-core-arhitekturnaya-karta-i-operacionnaya-model.md",
       "canonical_owner": "Core",
       "target_gate": "G1/G3",
       "target_version": "v0.2+",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-DOMAIN-001"],
+      "dependencies": [
+        "REQ-DOMAIN-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.4"
+      ]
     },
     {
       "requirement_id": "REQ-CONTEXT-001",
       "title": "Context формирует минимально достаточный Reference-first контекст",
       "area": "Context",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/07_CONTEXT.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.8",
+      "canonical_ssot": "docs/architecture/07_CONTEXT.md",
       "canonical_owner": "Context",
       "target_gate": "G3",
       "target_version": "v0.2",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-RESOURCES-001", "REQ-KNOWLEDGE-001"],
-      "machine_contract_refs": ["schemas/v1/ContextRef.json", "schemas/v1/SemanticSnapshot.json"],
-      "evidence_refs": ["modules_registry.json#Context"],
+      "dependencies": [
+        "REQ-RESOURCES-001",
+        "REQ-KNOWLEDGE-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/ContextRef.json",
+        "schemas/v1/SemanticSnapshot.json"
+      ],
+      "evidence_refs": [
+        "modules_registry.json#Context"
+      ],
       "issue_refs": [],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "Context Manifest и Context Pack объявлены §26/§27, но отдельные физические схемы v1 отсутствуют.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#Context"
+      "runtime_module_ref": "modules_registry.json#Context",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.8"
+      ]
     },
     {
       "requirement_id": "REQ-KNOWLEDGE-001",
       "title": "Knowledge хранит проверенное знание и provenance, не Rules/State/Cache",
       "area": "Knowledge",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/08_KNOWLEDGE_BASE.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.9",
+      "canonical_ssot": "docs/architecture/08_KNOWLEDGE_BASE.md",
       "canonical_owner": "Knowledge",
       "target_gate": "G5",
       "target_version": "v0.7",
       "status": "DEFERRED",
-      "dependencies": ["REQ-CONTEXT-001"],
+      "dependencies": [
+        "REQ-CONTEXT-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -216,19 +385,24 @@
       "coverage_notes": "KnowledgeRef/KnowledgeRecord определены логически, но физической схемы v1 в текущем каталоге нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.9"
+      ]
     },
     {
       "requirement_id": "REQ-RESOURCES-001",
       "title": "Resources владеет ResourceRef и логической моделью ресурсов, но не Permission",
       "area": "Resources",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/09_RESOURCES.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.10",
+      "canonical_ssot": "docs/architecture/09_RESOURCES.md",
       "canonical_owner": "Resources",
       "target_gate": "G3",
       "target_version": "v0.2",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-SEC-001"],
+      "dependencies": [
+        "REQ-SEC-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -236,40 +410,51 @@
       "coverage_notes": "ResourceRef является устойчивым контрактом §26, но отдельной физической схемы v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.10"
+      ]
     },
     {
       "requirement_id": "REQ-CACHE-001",
       "title": "CacheEngine является единственным владельцем Cache Policy и runtime cache",
       "area": "CacheEngine",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/34_CACHE_ENGINE.md; docs/spec/13_CACHE_POLICY.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.11",
+      "canonical_ssot": "docs/architecture/34_CACHE_ENGINE.md",
       "canonical_owner": "CacheEngine",
       "target_gate": "G3",
       "target_version": "v0.2",
       "status": "ACCEPTED",
       "dependencies": [],
       "machine_contract_refs": [],
-      "evidence_refs": ["modules_registry.json#CacheEngine"],
+      "evidence_refs": [
+        "modules_registry.json#CacheEngine"
+      ],
       "issue_refs": [],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "Module Registry объявляет CacheKey/CacheEntry/PayloadRef/CacheCapabilities, но соответствующих схем v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#CacheEngine"
+      "runtime_module_ref": "modules_registry.json#CacheEngine",
+      "supporting_refs": [
+        "docs/spec/13_CACHE_POLICY.md",
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.11"
+      ]
     },
     {
       "requirement_id": "REQ-PLANNING-001",
       "title": "Planning & Forecasting владеет TaskEstimate и forecast error",
       "area": "Planning",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/19_RESOURCE_PLANNING_AND_FORECASTING.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.12",
+      "canonical_ssot": "docs/architecture/19_RESOURCE_PLANNING_AND_FORECASTING.md",
       "canonical_owner": "Planning & Forecasting",
       "target_gate": "G5",
       "target_version": "v0.5",
       "status": "DEFERRED",
-      "dependencies": ["REQ-METRICS-001"],
+      "dependencies": [
+        "REQ-METRICS-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -277,19 +462,25 @@
       "coverage_notes": "TaskEstimate объявлен устойчивым контрактом §26, но физической схемы v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.12"
+      ]
     },
     {
       "requirement_id": "REQ-INFERENCE-001",
       "title": "Inference выбирает вычислительный маршрут, но не Worker или Skill",
       "area": "Inference",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/10_INFERENCE_AND_DECISION_ROUTING_RU.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.13",
+      "canonical_ssot": "docs/architecture/10_INFERENCE_AND_DECISION_ROUTING_RU.md",
       "canonical_owner": "Inference",
       "target_gate": "G3",
       "target_version": "v0.2",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-SKILL-001", "REQ-SEC-001"],
+      "dependencies": [
+        "REQ-SKILL-001",
+        "REQ-SEC-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -297,19 +488,25 @@
       "coverage_notes": "Inference Requirement и Provider Route определены §26, но отдельные схемы v1 отсутствуют.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.13"
+      ]
     },
     {
       "requirement_id": "REQ-COWORKER-001",
       "title": "Coworker владеет Worker Registry, Claim, Lease и выбором Worker",
       "area": "Coworker",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/11_COWORKER.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.14",
+      "canonical_ssot": "docs/architecture/11_COWORKER.md",
       "canonical_owner": "Coworker",
       "target_gate": "G3",
       "target_version": "v0.3-v0.4",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-SEC-001", "REQ-TASK-001"],
+      "dependencies": [
+        "REQ-SEC-001",
+        "REQ-TASK-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -317,40 +514,57 @@
       "coverage_notes": "Claim, Lease и Worker Profile объявлены системными контрактами §26, но физических схем v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.14"
+      ]
     },
     {
       "requirement_id": "REQ-EXECUTION-001",
       "title": "Execution владеет физическим выполнением и Evidence выполнения",
       "area": "Execution",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/spec/12_EXECUTION.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.15",
+      "canonical_ssot": "docs/spec/12_EXECUTION.md",
       "canonical_owner": "Execution",
       "target_gate": "G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-SEC-001", "REQ-COWORKER-001"],
-      "machine_contract_refs": ["schemas/v1/TaskResult.json", "schemas/v1/Evidence.json"],
-      "evidence_refs": ["modules_registry.json#Execution"],
+      "dependencies": [
+        "REQ-SEC-001",
+        "REQ-COWORKER-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/TaskResult.json",
+        "schemas/v1/Evidence.json"
+      ],
+      "evidence_refs": [
+        "modules_registry.json#Execution"
+      ],
       "issue_refs": [],
       "coverage_status": "TRACEABILITY_GAP",
       "coverage_notes": "modules_registry.json указывает canonical_owner_ref §27.14, тогда как текущий Execution SSoT находится в §27.15.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#Execution"
+      "runtime_module_ref": "modules_registry.json#Execution",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.15"
+      ]
     },
     {
       "requirement_id": "REQ-INTEGRATIONS-001",
       "title": "Integrations владеет транспортом и адаптерами внешних возможностей",
       "area": "Integrations",
       "type": "INTEGRATION",
-      "canonical_ssot": "docs/spec/15_INTEGRATIONS_AND_MCP.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.16",
+      "canonical_ssot": "docs/spec/15_INTEGRATIONS_AND_MCP.md",
       "canonical_owner": "Integrations",
       "target_gate": "G3+",
       "target_version": "v0.3",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-SEC-001", "REQ-RESOURCES-001"],
+      "dependencies": [
+        "REQ-SEC-001",
+        "REQ-RESOURCES-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -358,117 +572,166 @@
       "coverage_notes": "Integration Request и Adapter Result определены §26, но физических схем v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.16"
+      ]
     },
     {
       "requirement_id": "REQ-TELEGRAM-001",
       "title": "Telegram является внешним DATA-каналом до Identity/Rules/Security",
       "area": "Integrations / Telegram",
       "type": "INTEGRATION",
-      "canonical_ssot": "docs/spec/15A_TELEGRAM_INTEGRATION.md; docs/architecture/26_INTERNAL_CONTRACTS.md#26.53",
+      "canonical_ssot": "docs/spec/15A_TELEGRAM_INTEGRATION.md",
       "canonical_owner": "Integrations",
       "target_gate": "G5",
       "target_version": "post-v0.1",
       "status": "DEFERRED",
-      "dependencies": ["REQ-INTEGRATIONS-001", "REQ-SEC-001"],
+      "dependencies": [
+        "REQ-INTEGRATIONS-001",
+        "REQ-SEC-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.53"
+      ]
     },
     {
       "requirement_id": "REQ-QA-001",
       "title": "Независимый QA отделён от Implementation Worker и привязан к проверяемому ChangeSet",
       "area": "QA",
       "type": "QUALITY",
-      "canonical_ssot": "docs/spec/23_TESTING_QA_AND_READINESS.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.17",
+      "canonical_ssot": "docs/spec/23_TESTING_QA_AND_READINESS.md",
       "canonical_owner": "QA",
       "target_gate": "G0/G4",
       "target_version": "v0.4",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-EVIDENCE-001"],
-      "machine_contract_refs": ["schemas/v1/ChangeEvidence.json", "schemas/v1/ImpactAssessment.json", "schemas/v1/EvalSuite.json", "schemas/v1/TraceContext.json"],
+      "dependencies": [
+        "REQ-EVIDENCE-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/ChangeEvidence.json",
+        "schemas/v1/ImpactAssessment.json",
+        "schemas/v1/EvalSuite.json",
+        "schemas/v1/TraceContext.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#124"],
+      "issue_refs": [
+        "#124"
+      ],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "QA Result и EvidenceRef определены §26, но отдельной QAResult/EvidenceRef схемы v1 нет; ChangeEvidence покрывает только часть семантики.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.17"
+      ]
     },
     {
       "requirement_id": "REQ-EVIDENCE-001",
       "title": "Result не равен Evidence; фактическое выполнение должно быть доказано",
       "area": "Evidence",
       "type": "INVARIANT",
-      "canonical_ssot": "docs/architecture/26_INTERNAL_CONTRACTS.md#26.30; docs/spec/23_TESTING_QA_AND_READINESS.md",
-      "canonical_owner": "Execution / QA by evidence type",
+      "canonical_ssot": "docs/architecture/26_INTERNAL_CONTRACTS.md#26.30",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G2/G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
       "dependencies": [],
-      "machine_contract_refs": ["schemas/v1/Evidence.json", "schemas/v1/TaskResult.json"],
+      "machine_contract_refs": [
+        "schemas/v1/Evidence.json",
+        "schemas/v1/TaskResult.json"
+      ],
       "evidence_refs": [],
       "issue_refs": [],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "ResultRef, EvidenceRef и OutputContract перечислены как устойчивые контракты, но самостоятельных физических схем v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "MATERIALIZED"
+      "materialization": "MATERIALIZED",
+      "supporting_refs": [
+        "docs/spec/23_TESTING_QA_AND_READINESS.md"
+      ]
     },
     {
       "requirement_id": "REQ-RECOVERY-001",
       "title": "Recovery восстанавливает подтверждённое состояние до новой изменяющей работы",
       "area": "Recovery",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/21_RELIABILITY_AND_RECOVERY.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.18",
+      "canonical_ssot": "docs/architecture/21_RELIABILITY_AND_RECOVERY.md",
       "canonical_owner": "Recovery",
       "target_gate": "G3/G4",
       "target_version": "v0.4",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-STORAGE-001", "REQ-COWORKER-001", "REQ-EVIDENCE-001"],
-      "machine_contract_refs": ["schemas/v1/JournalEvent.json", "schemas/v1/Checkpoint.json", "schemas/v1/StateMigration.json", "schemas/v1/SemanticSnapshot.json"],
+      "dependencies": [
+        "REQ-STORAGE-001",
+        "REQ-COWORKER-001",
+        "REQ-EVIDENCE-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/JournalEvent.json",
+        "schemas/v1/Checkpoint.json",
+        "schemas/v1/StateMigration.json",
+        "schemas/v1/SemanticSnapshot.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#46", "#52"],
+      "issue_refs": [
+        "#46",
+        "#52"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.18"
+      ]
     },
     {
       "requirement_id": "REQ-TELEMETRY-001",
       "title": "Telemetry фиксирует сырые структурированные события без принятия решений",
       "area": "Telemetry",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/spec/05_METRICS_AND_TELEMETRY.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.19",
+      "canonical_ssot": "docs/spec/05_METRICS_AND_TELEMETRY.md",
       "canonical_owner": "Telemetry",
       "target_gate": "G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
       "dependencies": [],
-      "machine_contract_refs": ["schemas/v1/SystemEvent.json"],
+      "machine_contract_refs": [
+        "schemas/v1/SystemEvent.json"
+      ],
       "evidence_refs": [],
       "issue_refs": [],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "§26 отдельно называет Telemetry Event; текущий SystemEvent может быть транспортным конвертом, но эквивалентность не зафиксирована как SSoT.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.19"
+      ]
     },
     {
       "requirement_id": "REQ-METRICS-001",
       "title": "Metrics преобразует Telemetry в числовые показатели, не меняя систему напрямую",
       "area": "Metrics",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/spec/05_METRICS_AND_TELEMETRY.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.20",
+      "canonical_ssot": "docs/spec/05_METRICS_AND_TELEMETRY.md",
       "canonical_owner": "Metrics",
       "target_gate": "G3+",
       "target_version": "v0.2+",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-TELEMETRY-001"],
+      "dependencies": [
+        "REQ-TELEMETRY-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -476,19 +739,24 @@
       "coverage_notes": "MetricsSnapshot определён §26, но физической схемы v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.20"
+      ]
     },
     {
       "requirement_id": "REQ-LEARNING-001",
       "title": "Learning создаёт предложения и Safe Adaptation, но не меняет Rules/Security напрямую",
       "area": "Learning",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/06_LEARNING_SELF_IMPROVEMENT.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.21",
+      "canonical_ssot": "docs/architecture/06_LEARNING_SELF_IMPROVEMENT.md",
       "canonical_owner": "Learning",
       "target_gate": "G5",
       "target_version": "v0.6",
       "status": "DEFERRED",
-      "dependencies": ["REQ-METRICS-001"],
+      "dependencies": [
+        "REQ-METRICS-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -496,38 +764,49 @@
       "coverage_notes": "Learning Proposal и Safe Adaptation определены §26, но физических схем v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.21"
+      ]
     },
     {
       "requirement_id": "REQ-PERSONAL-001",
       "title": "Personal Layer хранит структурированную персонализацию без второго Rule Manager/Knowledge Base",
       "area": "Personal Layer",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/18_PERSONAL_LAYER.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.22",
+      "canonical_ssot": "docs/architecture/18_PERSONAL_LAYER.md",
       "canonical_owner": "Personal Layer",
       "target_gate": "G5",
       "target_version": "post-v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-RULES-001", "REQ-KNOWLEDGE-001"],
+      "dependencies": [
+        "REQ-RULES-001",
+        "REQ-KNOWLEDGE-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.22"
+      ]
     },
     {
       "requirement_id": "REQ-VISUALIZATION-001",
       "title": "Visualization является производным представлением Telemetry/State и не меняет Task State",
       "area": "Visualization",
       "type": "UX",
-      "canonical_ssot": "docs/architecture/17_PROCESS_VISUALIZATION.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.23",
+      "canonical_ssot": "docs/architecture/17_PROCESS_VISUALIZATION.md",
       "canonical_owner": "Visualization",
       "target_gate": "G3+",
       "target_version": "v0.1+",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-TELEMETRY-001"],
+      "dependencies": [
+        "REQ-TELEMETRY-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -535,118 +814,170 @@
       "coverage_notes": "Visualization Snapshot определён §26, но физической схемы v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.23"
+      ]
     },
     {
       "requirement_id": "REQ-DESKTOP-001",
       "title": "Electron Desktop Shell является UI, а не владельцем Core state",
       "area": "Desktop Shell",
       "type": "UX",
-      "canonical_ssot": "docs/architecture/29_ELECTRON_UI.md; docs/architecture/23_TECHNOLOGY_STACK_AND_RUNTIME.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.24",
+      "canonical_ssot": "docs/architecture/29_ELECTRON_UI.md",
       "canonical_owner": "Desktop Shell",
       "target_gate": "G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-CORE-001", "REQ-SEC-001"],
-      "machine_contract_refs": ["schemas/v1/CoreIpcMessage.json"],
-      "evidence_refs": ["modules_registry.json#DesktopShell"],
-      "issue_refs": ["#41"],
+      "dependencies": [
+        "REQ-CORE-001",
+        "REQ-SEC-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/CoreIpcMessage.json"
+      ],
+      "evidence_refs": [
+        "modules_registry.json#DesktopShell"
+      ],
+      "issue_refs": [
+        "#41"
+      ],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "Module Registry объявляет UIEvent как provides_contract, но физической схемы UIEvent.json в schemas/v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#DesktopShell"
+      "runtime_module_ref": "modules_registry.json#DesktopShell",
+      "supporting_refs": [
+        "docs/architecture/23_TECHNOLOGY_STACK_AND_RUNTIME.md",
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.24"
+      ]
     },
     {
       "requirement_id": "REQ-CONFIG-001",
       "title": "Configuration имеет схему и не может отменять Rules/Security",
       "area": "Configuration",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/22_CONFIGURATION_STARTUP_AND_UPDATES.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.28",
+      "canonical_ssot": "docs/architecture/22_CONFIGURATION_STARTUP_AND_UPDATES.md",
       "canonical_owner": "Configuration",
       "target_gate": "G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-RULES-001", "REQ-SEC-001"],
+      "dependencies": [
+        "REQ-RULES-001",
+        "REQ-SEC-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.28"
+      ]
     },
     {
       "requirement_id": "REQ-STORAGE-001",
       "title": "Storage владеет физическим долговечным хранением и Event Journal persistence",
       "area": "Storage",
       "type": "RESPONSIBILITY",
-      "canonical_ssot": "docs/architecture/25_DATA_STORAGE.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.29",
+      "canonical_ssot": "docs/architecture/25_DATA_STORAGE.md",
       "canonical_owner": "Storage",
       "target_gate": "G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
       "dependencies": [],
-      "machine_contract_refs": ["schemas/v1/SystemEvent.json", "schemas/v1/JournalEvent.json", "schemas/v1/Checkpoint.json"],
-      "evidence_refs": ["modules_registry.json#Storage"],
-      "issue_refs": ["#46"],
+      "machine_contract_refs": [
+        "schemas/v1/SystemEvent.json",
+        "schemas/v1/JournalEvent.json",
+        "schemas/v1/Checkpoint.json"
+      ],
+      "evidence_refs": [
+        "modules_registry.json#Storage"
+      ],
+      "issue_refs": [
+        "#46"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
-      "runtime_module_ref": "modules_registry.json#Storage"
+      "runtime_module_ref": "modules_registry.json#Storage",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.29"
+      ]
     },
     {
       "requirement_id": "REQ-SECRET-001",
       "title": "Secret Store хранит секреты отдельно и выдаёт только SecretRef",
       "area": "Security / Storage",
       "type": "SECURITY",
-      "canonical_ssot": "docs/spec/14_SECURITY.md; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.30",
-      "canonical_owner": "Security / Secret Store",
+      "canonical_ssot": "docs/spec/14_SECURITY.md",
+      "canonical_owner": "Security",
       "target_gate": "G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-SEC-001", "REQ-STORAGE-001"],
-      "machine_contract_refs": ["schemas/v1/SecretRef.json"],
+      "dependencies": [
+        "REQ-SEC-001",
+        "REQ-STORAGE-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/SecretRef.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#45"],
+      "issue_refs": [
+        "#45"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.30"
+      ]
     },
     {
       "requirement_id": "REQ-CONTRACTS-001",
       "title": "Модули взаимодействуют через версионированные типизированные контракты",
       "area": "Contracts",
       "type": "INVARIANT",
-      "canonical_ssot": "docs/architecture/26_INTERNAL_CONTRACTS.md; schemas/README.md",
-      "canonical_owner": "Architecture / contract owner per entity",
+      "canonical_ssot": "docs/architecture/26_INTERNAL_CONTRACTS.md",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G2",
       "target_version": "v0.1+",
       "status": "ACCEPTED",
       "dependencies": [],
-      "machine_contract_refs": ["schemas/v1/*.json"],
+      "machine_contract_refs": [
+        "schemas/v1/*.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#40"],
+      "issue_refs": [
+        "#40"
+      ],
       "coverage_status": "CONTRACT_GAP",
       "coverage_notes": "Каталог v1 материализует часть, но не все устойчивые контракты, перечисленные §26/§27.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "MATERIALIZED"
+      "materialization": "MATERIALIZED",
+      "supporting_refs": [
+        "schemas/README.md"
+      ]
     },
     {
       "requirement_id": "REQ-TASKGRAPH-001",
       "title": "TaskGraph является структурированной моделью зависимостей, а не скрытым планом модели",
       "area": "Core / TaskGraph",
       "type": "CONTRACT",
-      "canonical_ssot": "docs/architecture/26_INTERNAL_CONTRACTS.md#26.12; docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.4",
+      "canonical_ssot": "docs/architecture/26_INTERNAL_CONTRACTS.md#26.12",
       "canonical_owner": "Core",
       "target_gate": "G2/G3",
       "target_version": "v0.1",
-      "status": "GAP",
-      "dependencies": ["REQ-CONTRACTS-001"],
+      "status": "ACCEPTED",
+      "dependencies": [
+        "REQ-CONTRACTS-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -654,7 +985,10 @@
       "coverage_notes": "TaskGraph является каноническим контрактом Core, но физической схемы v1 нет.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.4"
+      ]
     },
     {
       "requirement_id": "REQ-RUNTIME-001",
@@ -662,14 +996,20 @@
       "area": "Runtime",
       "type": "ARCHITECTURE",
       "canonical_ssot": "docs/architecture/23_TECHNOLOGY_STACK_AND_RUNTIME.md",
-      "canonical_owner": "Architecture / Runtime",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G1/G3",
       "target_version": "v0.1",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-CONTRACTS-001"],
-      "machine_contract_refs": ["schemas/v1/CoreIpcMessage.json"],
+      "dependencies": [
+        "REQ-CONTRACTS-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/CoreIpcMessage.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#41"],
+      "issue_refs": [
+        "#41"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
@@ -681,11 +1021,15 @@
       "area": "Distributed Deployment",
       "type": "ARCHITECTURE",
       "canonical_ssot": "docs/architecture/28_DISTRIBUTED_DEPLOYMENT.md",
-      "canonical_owner": "Architecture / Coworker / Security",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G5",
       "target_version": "v0.8+",
       "status": "DEFERRED",
-      "dependencies": ["REQ-COWORKER-001", "REQ-SEC-001", "REQ-RECOVERY-001"],
+      "dependencies": [
+        "REQ-COWORKER-001",
+        "REQ-SEC-001",
+        "REQ-RECOVERY-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -700,14 +1044,21 @@
       "area": "Versioning",
       "type": "PROCESS",
       "canonical_ssot": "docs/architecture/30_VERSIONING_RELEASES_AND_LIFECYCLE.md",
-      "canonical_owner": "Architecture / Release",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G4/G5",
       "target_version": "v0.1-v1.0",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-RECOVERY-001"],
-      "machine_contract_refs": ["schemas/v1/StateMigration.json", "schemas/v1/SemanticSnapshot.json"],
+      "dependencies": [
+        "REQ-RECOVERY-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/StateMigration.json",
+        "schemas/v1/SemanticSnapshot.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#52"],
+      "issue_refs": [
+        "#52"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
@@ -718,7 +1069,7 @@
       "title": "Roadmap задаёт Gates и версии, но Issue остаётся SSoT состояния работы",
       "area": "Roadmap",
       "type": "PROCESS",
-      "canonical_ssot": "docs/architecture/31_ROADMAP_AND_FIRST_WORKING_VERSION.md; Issue #62",
+      "canonical_ssot": "docs/architecture/31_ROADMAP_AND_FIRST_WORKING_VERSION.md",
       "canonical_owner": "Project governance",
       "target_gate": "G0-G5",
       "target_version": "v0.1-v1.0",
@@ -726,7 +1077,10 @@
       "dependencies": [],
       "machine_contract_refs": [],
       "evidence_refs": [],
-      "issue_refs": ["#62"],
+      "issue_refs": [
+        "#62",
+        "Issue #62"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
@@ -758,11 +1112,13 @@
       "area": "Research",
       "type": "PROCESS",
       "canonical_ssot": "docs/architecture/33_EXTERNAL_SYSTEMS_BENCHMARK.md",
-      "canonical_owner": "Architecture / Research",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G1-G5",
       "target_version": "continuous",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-ADR-001"],
+      "dependencies": [
+        "REQ-ADR-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -776,57 +1132,96 @@
       "title": "Architecture Convergence устраняет ownership/contract/SSoT противоречия до Baseline",
       "area": "Architecture governance",
       "type": "QUALITY",
-      "canonical_ssot": "docs/architecture/35_ARCHITECTURE_CONVERGENCE_LOOP.md; config/architecture_convergence_policy.json",
+      "canonical_ssot": "docs/architecture/35_ARCHITECTURE_CONVERGENCE_LOOP.md",
       "canonical_owner": "Architecture governance",
       "target_gate": "G1",
       "target_version": "Architecture Baseline",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-ADR-001"],
+      "dependencies": [
+        "REQ-ADR-001"
+      ],
       "machine_contract_refs": [],
-      "evidence_refs": [".github/workflows/quality.yml"],
+      "evidence_refs": [
+        ".github/workflows/quality.yml"
+      ],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "MATERIALIZED"
+      "materialization": "MATERIALIZED",
+      "supporting_refs": [
+        "config/architecture_convergence_policy.json"
+      ]
     },
     {
       "requirement_id": "REQ-PROMOTION-001",
       "title": "Promotion использует один PromotionStore, sealed ticket, Evidence и exact authorization",
       "area": "Promotion",
       "type": "PROCESS",
-      "canonical_ssot": "docs/architecture/36_CHANGE_PROMOTION_PROTOCOL.md; docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md#ADR-046",
+      "canonical_ssot": "docs/architecture/36_CHANGE_PROMOTION_PROTOCOL.md",
       "canonical_owner": "Promotion Controller",
       "target_gate": "G0/G3+",
       "target_version": "post-Architecture Gates",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-QA-001", "REQ-SEC-001", "REQ-COWORKER-001"],
-      "machine_contract_refs": ["schemas/v1/PromotionRequest.json", "schemas/v1/ChangeEvidence.json", "schemas/v1/ImpactAssessment.json", "schemas/v1/PromotionTicket.json", "schemas/v1/ApprovalRecord.json"],
+      "dependencies": [
+        "REQ-QA-001",
+        "REQ-SEC-001",
+        "REQ-COWORKER-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/PromotionRequest.json",
+        "schemas/v1/ChangeEvidence.json",
+        "schemas/v1/ImpactAssessment.json",
+        "schemas/v1/PromotionTicket.json",
+        "schemas/v1/ApprovalRecord.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#90", "#98"],
+      "issue_refs": [
+        "#90",
+        "#98"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "LOGICAL_ONLY"
+      "materialization": "LOGICAL_ONLY",
+      "supporting_refs": [
+        "docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md#ADR-046"
+      ]
     },
     {
       "requirement_id": "REQ-GRAVEYARD-001",
       "title": "Graveyard остаётся DATA-only и требует контролируемой reactivation цепочки",
       "area": "Context / Graveyard",
       "type": "SECURITY",
-      "canonical_ssot": "graveyard/README.md; schemas/README.md#5",
-      "canonical_owner": "Context / Security / Core by transition stage",
+      "canonical_ssot": "graveyard/README.md",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G1/G2",
       "target_version": "current",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-CONTEXT-001", "REQ-SEC-001"],
-      "machine_contract_refs": ["schemas/v1/GraveyardCandidate.json", "schemas/v1/GraveyardExcavateRequest.json", "schemas/v1/GraveyardActivationTicket.json", "schemas/v1/GraveyardKnowledgeCapture.json", "schemas/v1/GraveyardPrSalvageAudit.json"],
+      "dependencies": [
+        "REQ-CONTEXT-001",
+        "REQ-SEC-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/GraveyardCandidate.json",
+        "schemas/v1/GraveyardExcavateRequest.json",
+        "schemas/v1/GraveyardActivationTicket.json",
+        "schemas/v1/GraveyardKnowledgeCapture.json",
+        "schemas/v1/GraveyardPrSalvageAudit.json"
+      ],
       "evidence_refs": [],
-      "issue_refs": ["#95", "#97", "#102"],
+      "issue_refs": [
+        "#95",
+        "#97",
+        "#102"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "MATERIALIZED"
+      "materialization": "MATERIALIZED",
+      "supporting_refs": [
+        "schemas/README.md#5"
+      ]
     },
     {
       "requirement_id": "REQ-LANGUAGE-001",
@@ -840,7 +1235,9 @@
       "status": "ACCEPTED",
       "dependencies": [],
       "machine_contract_refs": [],
-      "evidence_refs": [".github/workflows/quality.yml"],
+      "evidence_refs": [
+        ".github/workflows/quality.yml"
+      ],
       "issue_refs": [],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
@@ -852,19 +1249,30 @@
       "title": "GitHub Issue является SSoT работы, Project — производным представлением",
       "area": "Project governance",
       "type": "PROCESS",
-      "canonical_ssot": "docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md; docs/GITHUB_WORKFLOW.md; AGENTS.md",
+      "canonical_ssot": "docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md",
       "canonical_owner": "Project governance",
       "target_gate": "G0",
       "target_version": "continuous",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-QA-001"],
+      "dependencies": [
+        "REQ-QA-001"
+      ],
       "machine_contract_refs": [],
-      "evidence_refs": [".github/workflows/project-queue-sync.yml"],
-      "issue_refs": ["#1", "#124"],
+      "evidence_refs": [
+        ".github/workflows/project-queue-sync.yml"
+      ],
+      "issue_refs": [
+        "#1",
+        "#124"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
-      "materialization": "MATERIALIZED"
+      "materialization": "MATERIALIZED",
+      "supporting_refs": [
+        "docs/GITHUB_WORKFLOW.md",
+        "AGENTS.md"
+      ]
     },
     {
       "requirement_id": "REQ-T0PIPELINE-001",
@@ -876,10 +1284,19 @@
       "target_gate": "G1",
       "target_version": "Architecture Baseline",
       "status": "ACCEPTED",
-      "dependencies": ["REQ-CONVERGENCE-001"],
-      "machine_contract_refs": ["schemas/v1/RequirementsRegistry.json"],
-      "evidence_refs": ["requirements_registry.json"],
-      "issue_refs": ["#126", "#129"],
+      "dependencies": [
+        "REQ-CONVERGENCE-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/RequirementsRegistry.json"
+      ],
+      "evidence_refs": [
+        "requirements_registry.json"
+      ],
+      "issue_refs": [
+        "#126",
+        "#129"
+      ],
       "coverage_status": "COVERED",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
@@ -891,16 +1308,28 @@
       "area": "Runtime / Lifecycle",
       "type": "OPEN_QUESTION",
       "canonical_ssot": "docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md#OQ-010",
-      "canonical_owner": "Architecture / Runtime",
+      "canonical_owner": "Architecture governance",
       "target_gate": "G3 before Electron P0",
       "target_version": "v0.1",
-      "status": "OPEN",
-      "dependencies": ["REQ-DESKTOP-001", "REQ-RECOVERY-001"],
-      "machine_contract_refs": ["schemas/v1/CoreIpcMessage.json", "schemas/v1/Checkpoint.json", "schemas/v1/JournalEvent.json"],
-      "evidence_refs": ["PR #123 candidate 89782343be82ee40e66d4214b91be108712924a0"],
-      "issue_refs": ["#122", "PR #123"],
+      "status": "ACCEPTED",
+      "dependencies": [
+        "REQ-DESKTOP-001",
+        "REQ-RECOVERY-001"
+      ],
+      "machine_contract_refs": [
+        "schemas/v1/CoreIpcMessage.json",
+        "schemas/v1/Checkpoint.json",
+        "schemas/v1/JournalEvent.json"
+      ],
+      "evidence_refs": [
+        "PR #123 merged as c2b15c87b7310c1b26e79d2088a2be3137ba13d5"
+      ],
+      "issue_refs": [
+        "#122",
+        "PR #123"
+      ],
       "coverage_status": "COVERED",
-      "coverage_notes": "В current main вопрос ещё OPEN. PR #123 подготовлен и проходит отдельный QA; T0 не повышает pending PR в канон.",
+      "coverage_notes": "OQ-010 закрыт и принят как ADR-047 после merge PR #123; T0 фиксирует уже канонический статус current main.",
       "abc": "UNASSESSED",
       "xyz": "UNASSESSED",
       "materialization": "NOT_APPLICABLE"
@@ -972,7 +1401,10 @@
       "target_gate": "G3-G5",
       "target_version": "v0.1-v1.0",
       "status": "OPEN",
-      "dependencies": ["REQ-BENCHMARK-001", "REQ-METRICS-001"],
+      "dependencies": [
+        "REQ-BENCHMARK-001",
+        "REQ-METRICS-001"
+      ],
       "machine_contract_refs": [],
       "evidence_refs": [],
       "issue_refs": [],
@@ -987,8 +1419,14 @@
       "gap_id": "GAP-T0-001",
       "kind": "TRACEABILITY_GAP",
       "title": "Execution в Module Registry ссылается на секцию Coworker",
-      "requirement_refs": ["REQ-EXECUTION-001"],
-      "source_refs": ["modules_registry.json#Execution", "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.14", "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.15"],
+      "requirement_refs": [
+        "REQ-EXECUTION-001"
+      ],
+      "source_refs": [
+        "modules_registry.json#Execution",
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.14",
+        "docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md#27.15"
+      ],
       "status": "OPEN",
       "notes": "Исправлять отдельным convergence/change Issue; T0 только регистрирует."
     },
@@ -996,8 +1434,15 @@
       "gap_id": "GAP-T0-002",
       "kind": "CONTRADICTION",
       "title": "§32 одновременно считает формат machine schemas OPEN и ACCEPTED",
-      "requirement_refs": ["REQ-ADR-001", "REQ-CONTRACTS-001"],
-      "source_refs": ["docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md#32.45", "docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md#32.51", "schemas/README.md#2"],
+      "requirement_refs": [
+        "REQ-ADR-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md#32.45",
+        "docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md#32.51",
+        "schemas/README.md#2"
+      ],
       "status": "OPEN",
       "notes": "ADR-034/OQ-003/OQ-006 уже фиксируют JSON Schema Draft 2020-12; старый OPEN-текст требует синхронизации."
     },
@@ -1005,96 +1450,178 @@
       "gap_id": "GAP-T0-003",
       "kind": "CONTRACT_GAP",
       "title": "Нет физической схемы TaskGraph v1",
-      "requirement_refs": ["REQ-TASKGRAPH-001", "REQ-CORE-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.12", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-TASKGRAPH-001",
+        "REQ-CORE-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.12",
+        "schemas/v1/"
+      ],
       "status": "OPEN"
     },
     {
       "gap_id": "GAP-T0-004",
       "kind": "CONTRACT_GAP",
       "title": "Нет физических схем Effective Ruleset и RulesRef v1",
-      "requirement_refs": ["REQ-RULES-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.13", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.14", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-RULES-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.13",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.14",
+        "schemas/v1/"
+      ],
       "status": "OPEN"
     },
     {
       "gap_id": "GAP-T0-005",
       "kind": "CONTRACT_GAP",
       "title": "Context Manifest и Context Pack не материализованы отдельными схемами v1",
-      "requirement_refs": ["REQ-CONTEXT-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.26", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.27", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-CONTEXT-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.26",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.27",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-006",
       "kind": "CONTRACT_GAP",
       "title": "ResourceRef не материализован схемой v1",
-      "requirement_refs": ["REQ-RESOURCES-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.28", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-RESOURCES-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.28",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-007",
       "kind": "CONTRACT_GAP",
       "title": "Claim, Lease и Worker Profile не материализованы схемами v1",
-      "requirement_refs": ["REQ-COWORKER-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.18", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.20", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-COWORKER-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.18",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.20",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-008",
       "kind": "CONTRACT_GAP",
       "title": "Inference Requirement и Provider Route не материализованы схемами v1",
-      "requirement_refs": ["REQ-INFERENCE-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.21", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.22", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-INFERENCE-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.21",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.22",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-009",
       "kind": "CONTRACT_GAP",
       "title": "TaskEstimate не материализован схемой v1",
-      "requirement_refs": ["REQ-PLANNING-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.23", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-PLANNING-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.23",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-010",
       "kind": "CONTRACT_GAP",
       "title": "KnowledgeRef/KnowledgeRecord не материализованы схемами v1",
-      "requirement_refs": ["REQ-KNOWLEDGE-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.29", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-KNOWLEDGE-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.29",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-011",
       "kind": "CONTRACT_GAP",
       "title": "ResultRef, EvidenceRef и OutputContract не имеют отдельных схем v1",
-      "requirement_refs": ["REQ-EVIDENCE-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.30", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.31", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.32", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-EVIDENCE-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.30",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.31",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.32",
+        "schemas/v1/"
+      ],
       "status": "OPEN"
     },
     {
       "gap_id": "GAP-T0-012",
       "kind": "CONTRACT_GAP",
       "title": "QA Result не материализован отдельной схемой v1",
-      "requirement_refs": ["REQ-QA-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.33", "schemas/v1/ChangeEvidence.json"],
+      "requirement_refs": [
+        "REQ-QA-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.33",
+        "schemas/v1/ChangeEvidence.json"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-013",
       "kind": "CONTRACT_GAP",
       "title": "Integration Request и Adapter Result не материализованы схемами v1",
-      "requirement_refs": ["REQ-INTEGRATIONS-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.37", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.38", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-INTEGRATIONS-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.37",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.38",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-014",
       "kind": "CONTRACT_GAP",
       "title": "Telemetry Event и MetricsSnapshot не имеют однозначных физических схем v1",
-      "requirement_refs": ["REQ-TELEMETRY-001", "REQ-METRICS-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.57", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.58", "schemas/v1/SystemEvent.json"],
+      "requirement_refs": [
+        "REQ-TELEMETRY-001",
+        "REQ-METRICS-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.57",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.58",
+        "schemas/v1/SystemEvent.json"
+      ],
       "status": "OPEN",
       "notes": "SystemEvent существует, но канон не фиксирует его как полную замену Telemetry Event/MetricsSnapshot."
     },
@@ -1102,32 +1629,57 @@
       "gap_id": "GAP-T0-015",
       "kind": "CONTRACT_GAP",
       "title": "Learning Proposal и Safe Adaptation не материализованы схемами v1",
-      "requirement_refs": ["REQ-LEARNING-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.55", "docs/architecture/26_INTERNAL_CONTRACTS.md#26.56", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-LEARNING-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.55",
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.56",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-016",
       "kind": "CONTRACT_GAP",
       "title": "Visualization Snapshot не материализован схемой v1",
-      "requirement_refs": ["REQ-VISUALIZATION-001"],
-      "source_refs": ["docs/architecture/26_INTERNAL_CONTRACTS.md#26.59", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-VISUALIZATION-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "docs/architecture/26_INTERNAL_CONTRACTS.md#26.59",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     },
     {
       "gap_id": "GAP-T0-017",
       "kind": "CONTRACT_GAP",
       "title": "UIEvent объявлен Module Registry, но отсутствует в schemas/v1",
-      "requirement_refs": ["REQ-DESKTOP-001"],
-      "source_refs": ["modules_registry.json#DesktopShell", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-DESKTOP-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "modules_registry.json#DesktopShell",
+        "schemas/v1/"
+      ],
       "status": "OPEN"
     },
     {
       "gap_id": "GAP-T0-018",
       "kind": "CONTRACT_GAP",
       "title": "Cache contracts объявлены Module Registry, но отсутствуют в schemas/v1",
-      "requirement_refs": ["REQ-CACHE-001"],
-      "source_refs": ["modules_registry.json#CacheEngine", "schemas/v1/"],
+      "requirement_refs": [
+        "REQ-CACHE-001",
+        "REQ-CONTRACTS-001"
+      ],
+      "source_refs": [
+        "modules_registry.json#CacheEngine",
+        "schemas/v1/"
+      ],
       "status": "DEFERRED"
     }
   ]

@@ -112,5 +112,56 @@ class TestRequirementsRegistry(unittest.TestCase):
         )
 
 
+class TestRequirementsRegistryCorrectiveInvariants(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with REGISTRY_PATH.open("r", encoding="utf-8") as stream:
+            cls.registry = json.load(stream)
+
+    @staticmethod
+    def _repo_path(ref):
+        return ref.split("#", 1)[0].strip()
+
+    def test_canonical_ssot_is_single_resolvable_repo_ref(self):
+        for item in self.registry["requirements"]:
+            ref = item["canonical_ssot"]
+            self.assertNotIn(";", ref, f"{item['requirement_id']}: canonical_ssot содержит список")
+            path = REPO_ROOT / self._repo_path(ref)
+            self.assertTrue(path.is_file(), f"{item['requirement_id']}: canonical_ssot не разрешается: {ref}")
+            for supporting in item.get("supporting_refs", []):
+                support_path = REPO_ROOT / self._repo_path(supporting)
+                self.assertTrue(support_path.exists(), f"{item['requirement_id']}: supporting_ref не разрешается: {supporting}")
+
+    def test_each_requirement_has_one_canonical_owner(self):
+        for item in self.registry["requirements"]:
+            owner = item["canonical_owner"]
+            self.assertNotIn("/", owner, f"{item['requirement_id']}: составной canonical_owner: {owner}")
+
+    def test_noncovered_requirement_has_gap_of_same_kind(self):
+        by_kind = {}
+        for gap in self.registry["gaps"]:
+            by_kind.setdefault(gap["kind"], set()).update(gap["requirement_refs"])
+        for item in self.registry["requirements"]:
+            kind = item["coverage_status"]
+            if kind != "COVERED":
+                self.assertIn(item["requirement_id"], by_kind.get(kind, set()), f"{item['requirement_id']}: {kind} без gap того же вида")
+
+    def test_each_canonical_inventory_document_is_linked_to_requirement(self):
+        linked = set()
+        for item in self.registry["requirements"]:
+            linked.add(self._repo_path(item["canonical_ssot"]))
+            linked.update(self._repo_path(ref) for ref in item.get("supporting_refs", []))
+        missing = []
+        for source in self.registry["source_inventory"]:
+            if source["role"] != "CANONICAL_SSoT":
+                continue
+            for path in REPO_ROOT.glob(source["path"]):
+                if path.is_file():
+                    rel = path.relative_to(REPO_ROOT).as_posix()
+                    if rel not in linked:
+                        missing.append(rel)
+        self.assertFalse(missing, f"CANONICAL_SSoT без Requirement linkage: {sorted(missing)}")
+
+
 if __name__ == "__main__":
     unittest.main()
