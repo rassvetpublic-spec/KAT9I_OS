@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 from dataclasses import asdict
@@ -61,6 +62,38 @@ def proven_legacy_views(snapshot: dict[str, Any]) -> set[str]:
     return set()
 
 
+def planner_snapshot(snapshot: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Normalize GraphQL terminal PR state only inside the remediation planner copy."""
+    planned = copy.deepcopy(snapshot)
+    normalized: list[str] = []
+    for item in (planned.get("project") or {}).get("items") or []:
+        values = core.item_fields(item)
+        if not core.is_controlled(values):
+            continue
+        content = item.get("content") or {}
+        kind = str(content.get("__typename") or "")
+        state = str(content.get("state") or "").upper()
+        ref = str(content.get("url") or item.get("id") or "unknown")
+        if kind == "PullRequest":
+            if state == "MERGED":
+                content["state"] = "CLOSED"
+                normalized.append(ref)
+                continue
+            if state not in {"OPEN", "CLOSED"}:
+                raise core.RemediationError(
+                    f"Controlled PullRequest has unsupported state {state!r}: {ref}"
+                )
+            continue
+        if kind == "Issue":
+            if state not in {"OPEN", "CLOSED"}:
+                raise core.RemediationError(
+                    f"Controlled Issue has unsupported state {state!r}: {ref}"
+                )
+            continue
+        raise core.RemediationError(f"Unsupported controlled content type for {ref}: {kind!r}")
+    return planned, sorted(normalized)
+
+
 def _readback_into_report(
     report: dict[str, Any], owner: str, repository: str, project_number: int
 ) -> list[Any] | None:
@@ -80,30 +113,31 @@ def safe_remediation(owner: str, repository: str, project_number: int, *, apply:
         raise core.RemediationError("This bounded remediation is pinned to KAT9I_OS Project #2")
 
     before = core.collect_live(owner, repository, project_number)
+    planned_before, terminal_normalizations = planner_snapshot(before)
 
     # `Доска` была доказана post-merge Evidence как единственный шестой view при наличии
     # всех пяти канонических. Разрешение действует только для этого snapshot/preflight.
-    ephemeral_legacy = proven_legacy_views(before)
+    ephemeral_legacy = proven_legacy_views(planned_before)
     original_legacy = set(core.LEGACY_VIEWS)
     core.LEGACY_VIEWS.update(ephemeral_legacy)
     try:
         # Полный fail-closed preflight обязан завершиться до первой mutation.
-        core.worker_option_plan(before)
-        core.view_delete_plan(before)
-        core.find_select_field(before, "Приоритет")
-        core.find_select_field(before, "Этап")
-        core.find_select_field(before, "Исполнение")
-        core.find_select_field(before, "Статус")
-        assert_no_canonical_self_qa(before)
+        core.worker_option_plan(planned_before)
+        core.view_delete_plan(planned_before)
+        core.find_select_field(planned_before, "Приоритет")
+        core.find_select_field(planned_before, "Этап")
+        core.find_select_field(planned_before, "Исполнение")
+        core.find_select_field(planned_before, "Статус")
+        assert_no_canonical_self_qa(planned_before)
 
-        missing = core.missing_open_items(before)
+        missing = core.missing_open_items(planned_before)
         if missing:
             raise core.RemediationError(
                 "Open Project inventory is incomplete; remediation refuses mutation: " + ", ".join(missing)
             )
 
-        outcomes = core.collect_closed_outcomes(before)
-        plan = core.build_plan(before, outcomes)
+        outcomes = core.collect_closed_outcomes(planned_before)
+        plan = core.build_plan(planned_before, outcomes)
         if plan.missing_open_items:
             raise core.RemediationError(
                 "Preflight produced incomplete Project inventory: " + ", ".join(plan.missing_open_items)
@@ -118,6 +152,7 @@ def safe_remediation(owner: str, repository: str, project_number: int, *, apply:
         "before_audit": [asdict(f) for f in core.audit_validate(before)],
         "plan": plan.jsonable(),
         "ephemeral_legacy_views": sorted(ephemeral_legacy),
+        "terminal_state_normalizations": terminal_normalizations,
     }
     if not apply:
         return report
