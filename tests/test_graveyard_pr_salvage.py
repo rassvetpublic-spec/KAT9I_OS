@@ -146,6 +146,29 @@ class GraveyardPrSalvageTests(unittest.TestCase):
             self.assertNotIn("github_pat_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", serialized)
             self.assertIn("УДАЛЁН_СЕКРЕТ", serialized)
 
+    def test_evidence_strings_are_redacted(self):
+        temp, root = self._root()
+        with temp:
+            payload = self._payload(review_comments=[{
+                "body": "**P1 Badge — invalid locator**",
+                "path": "tmp/github_pat_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890.txt",
+                "line": 5,
+                "url": "https://example.invalid/review",
+            }])
+            report = build_audit(payload, root=root)
+            serialized = json.dumps(report, ensure_ascii=False)
+            self.assertNotIn("github_pat_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", serialized)
+            self.assertIn("УДАЛЁН_СЕКРЕТ", serialized)
+
+    def test_mentions_are_neutralized_in_rendered_report(self):
+        temp, root = self._root()
+        with temp:
+            payload = self._payload(pr={"title": "Проверка @octocat mention", "body": "- Уникальная идея для @octocat не должна создавать уведомление"})
+            report = build_audit(payload, root=root)
+            text = render_markdown(report)
+            self.assertNotIn("@octocat", text)
+            self.assertIn("@\u200boctocat", text)
+
     def test_report_validates_against_canonical_schema(self):
         temp, root = self._root()
         with temp:
