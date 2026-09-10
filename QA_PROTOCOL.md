@@ -68,7 +68,9 @@ Controller публикует в PR Conversation отдельный envelope с 
 
 Для QA-профиля запрещено выдавать AGY capability на merge, FAST-marker, изменение кода или Project lifecycle. `allow_issue_create=true` допускается только отдельным явно обоснованным режимом; по умолчанию используется `false`.
 
-Новая QA-COMMAND для того же PR supersede (заменяет) старую. Повреждённая новая owner-команда не должна приводить к молчаливому откату на предыдущую валидную команду: обработка обязана завершиться fail-closed.
+Для одного PR authoritative (действующей) считается **последняя owner QA-COMMAND**, созданная до Controller attestation. Она supersede (заменяет) все более старые команды. Если последняя команда повреждена, имеет неверный target или выдаёт запрещённую capability, обработка завершается fail-closed и не откатывается к предыдущей валидной команде. При этом повреждённая историческая команда, за которой уже существует более новая валидная QA-COMMAND, не должна навсегда блокировать текущую работу: старые superseded envelopes остаются Evidence истории, а не вечным denial-of-service (отказом в обслуживании).
+
+Повторное использование одного `command_id` в нескольких валидных QA-COMMAND запрещено.
 
 ## 5. QA-RESULT
 
@@ -101,11 +103,13 @@ AGY публикует результат **только как PR review**. П�
 
 После machine fields AGY обязан дать содержательный Evidence: что реально проверено, какие тесты/CI использованы, какие файлы и риски просмотрены, какие ограничения остались.
 
+QA-RESULT считается привязанным к revision только если сам GitHub PR review был отправлен против этой revision: системное поле GitHub `review.commit_id` обязано совпадать с `exact_head` результата и с текущим live HEAD PR на момент Controller attestation. Одного текстового SHA внутри review недостаточно.
+
 ## 6. Замечания не теряются при PASS
 
 `QA PASS` означает «нет блокирующих findings для данного acceptance», а не «идей больше нет».
 
-AGY всегда сохраняет раздел `FOLLOW_UP_CANDIDATES`:
+AGY всегда сохраняет отдельный раздел `FOLLOW_UP_CANDIDATES`, даже если кандидатов ноль. Значение `follow_up_candidates > 0` требует непустого содержимого этого раздела.
 
 - P0/P1, которые нарушают acceptance или безопасность текущего ChangeSet, делают PASS недопустимым;
 - неблокирующие P2/P3, архитектурные идеи, наблюдения и улучшения остаются в review;
@@ -118,12 +122,14 @@ QA review сам по себе является Evidence и **не получа�
 
 После получения результата Controller проверяет:
 
-- `command_id` существует и является последней действующей командой;
+- `command_id` существует и принадлежит последней действующей owner QA-COMMAND;
 - PR совпадает;
 - exact HEAD совпадает с live HEAD;
-- referenced review существует;
+- referenced review существует и находится в допустимом submitted state;
+- GitHub `review.commit_id` совпадает с exact/live HEAD;
 - role/executor/verdict согласованы;
 - QA-COMMAND была создана раньше review;
+- `FOLLOW_UP_CANDIDATES` присутствует и согласован с метаданными;
 - blocking findings согласованы с verdict;
 - свежие CI/checks соответствуют exact HEAD;
 - нет новых unresolved blocking review threads;
@@ -143,7 +149,7 @@ Machine bridge обрабатывает только валидный owner QA-A
 
 До публикации lifecycle marker он обязан fail-closed проверить полную цепочку:
 
-`QA-COMMAND ↔ QA-RESULT ↔ QA-ACCEPT ↔ live PR HEAD`.
+`latest QA-COMMAND ↔ QA-RESULT ↔ GitHub review.commit_id ↔ QA-ACCEPT ↔ live PR HEAD`.
 
 Accepted PASS преобразуется в отдельный trusted owner comment `FAST-QA-PASS`; любой принятый непроходной verdict — в `FAST-BLOCKED`.
 
@@ -155,6 +161,8 @@ Bridge receipt содержит `command_id`, `review_id`, verdict и exact HEAD
 
 1. bridge повторно читает live PR HEAD непосредственно перед публикацией trusted FAST marker;
 2. Project queue consumer принимает `FAST-QA-PASS` только с `head=<exact 40-char SHA>` и ещё раз сравнивает его с live PR HEAD перед `QUEUED`.
+
+Дополнительно сам referenced PR review должен иметь GitHub `commit_id`, равный exact HEAD.
 
 Push/synchronize после QA автоматически инвалидирует старое основание. Старый verdict нельзя переносить на новый HEAD без Impact Assessment и разрешённого `REUSE`, `DELTA` или `FULL` QA.
 
@@ -170,10 +178,12 @@ Push/synchronize после QA автоматически инвалидируе
 - nested quote/Markdown instruction;
 - zero-width и Unicode key spoofing;
 - duplicate/unknown fields;
-- command supersession;
+- command supersession и malformed-latest fail-closed;
 - stale/wrong HEAD laundering;
+- review `commit_id` mismatch;
 - replay и fake receipt;
 - PASS с blocking findings;
+- отсутствие обязательного `FOLLOW_UP_CANDIDATES`;
 - result sink/capability escalation;
 - lifecycle race после review;
 - попытка раскрытия secrets;
@@ -191,7 +201,13 @@ Push/synchronize после QA автоматически инвалидируе
 
 Перед merge Controller заново проверяет current main, exact PR HEAD, CI, QA Evidence, unresolved review threads и drift. Любая материальная revision после QA делает старое основание stale согласно правилам Evidence.
 
-## 12. Следующий уровень KAT9I_OS
+## 12. Bootstrap-граница GitHub
+
+Workflow, добавляемый самим PR, не может надёжно считаться live-доступным как production control-plane до того, как этот workflow окажется в default branch. Поэтому реализация #124 до merge подтверждается детерминированными parser/workflow contract tests, CI и независимым QA exact ChangeSet.
+
+Первое настоящее end-to-end испытание нового `QA-ACCEPT → bridge → FAST → Project` выполняется уже после попадания workflow в `main` на следующем контролируемом PR или в финальном G0 live-аудите. Нельзя выдавать pre-merge unit simulation за фактический production bridge run.
+
+## 13. Следующий уровень KAT9I_OS
 
 Этот GitHub-протокол является временной практической проекцией будущих системных контрактов KAT9I_OS.
 
