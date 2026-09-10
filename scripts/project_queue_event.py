@@ -13,12 +13,29 @@ CONTROL_MARKERS = {
 }
 
 
-def marker_from_body(body: str) -> str | None:
+def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
     first_line = (body or "").splitlines()[0].strip()
     if not first_line:
-        return None
-    token = first_line.split("|", 1)[0].strip()
-    return CONTROL_MARKERS.get(token)
+        return None, {}
+    parts = [part.strip() for part in first_line.split("|")]
+    state = CONTROL_MARKERS.get(parts[0])
+    if not state:
+        return None, {}
+    meta: dict[str, str] = {}
+    for part in parts[1:]:
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        key = key.strip().lower()
+        value = value.strip()
+        if key in {"worker", "qa"} and value:
+            meta[key] = value
+    return state, meta
+
+
+def marker_from_body(body: str) -> str | None:
+    state, _ = _control_parts(body)
+    return state
 
 
 def resolve(event_name: str, action: str, event: dict) -> dict | None:
@@ -26,14 +43,16 @@ def resolve(event_name: str, action: str, event: dict) -> dict | None:
         comment = event.get("comment") or {}
         if comment.get("author_association") != "OWNER":
             return None
-        state = marker_from_body(comment.get("body") or "")
+        state, meta = _control_parts(comment.get("body") or "")
         if not state:
             return None
         issue = event.get("issue") or {}
         url = issue.get("html_url")
         if not url:
             raise ValueError("trusted FAST marker не содержит issue/pr html_url")
-        return {"url": url, "state": state}
+        result = {"url": url, "state": state}
+        result.update(meta)
+        return result
 
     if event_name == "issues":
         issue = event.get("issue") or {}
@@ -46,12 +65,16 @@ def resolve(event_name: str, action: str, event: dict) -> dict | None:
             return {"url": url, "state": "DONE"}
         return None
 
-    if event_name == "pull_request" and action == "closed":
+    if event_name == "pull_request":
         pr = event.get("pull_request") or {}
         url = pr.get("html_url")
         if not url:
             raise ValueError("pull_request event не содержит html_url")
-        return {"url": url, "state": "DONE" if pr.get("merged") is True else "BLOCKED"}
+        if action == "synchronize":
+            return {"url": url, "state": "ACTIVE"}
+        if action == "closed":
+            return {"url": url, "state": "DONE" if pr.get("merged") is True else "BLOCKED"}
+        return None
 
     return None
 
