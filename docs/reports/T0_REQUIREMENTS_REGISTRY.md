@@ -4,10 +4,11 @@
 
 T0 материализует inventory/traceability для следующей ABC/XYZ-классификации. Реестр не заменяет канонические SSoT и не принимает архитектурные решения.
 
-- Baseline current main: `d28547da5286eb7f275a74449d88d398018de8e4`.
+- Inventory `baseline_revision`: `d28547da5286eb7f275a74449d88d398018de8e4` — revision, на которой сформирован и проверен Requirement inventory; последующее движение integration base само по себе не меняет ChangeSet.
+- Current accepted integration main: `3388713fa0b5b7c47acbeebee53a1b889d0aed62` — post-G0 remediation/read-back PASS после PR #144; новых нормативных Requirement относительно inventory baseline не добавлено.
 - Corrective implementation provenance: `2e7795fe3dbb47ad54ba6d4325be22d1131557b7`.
 - Graveyard SSoT corrective provenance: `0252f888f8a0a32ddf1644fde284bda4a10aa9cc`.
-- Integrated G0 control-plane baseline: `d28547da5286eb7f275a74449d88d398018de8e4` (PR #133); новых нормативных Requirement не добавлено.
+- Integrated G0 control-plane baseline: `d28547da5286eb7f275a74449d88d398018de8e4` (PR #133); последующие G0 repair-коммиты относятся к control-plane и не расширяют нормативный Requirement inventory T0.
 - Requirements: **50**.
 - Findings/gaps: **18**.
 - ABC: `UNASSESSED` для всех Requirement.
@@ -42,7 +43,7 @@ T0 материализует inventory/traceability для следующей A
 
 ## OQ-010
 
-OQ-010 уже закрыт в current main как **ACCEPTED / ADR-047** после merge PR #123 (`c2b15c87b7310c1b26e79d2088a2be3137ba13d5`). Реестр фиксирует этот канонический статус; pending-кандидатом он больше не считается.
+OQ-010 уже закрыт в inventory baseline как **ACCEPTED / ADR-047** после merge PR #123 (`c2b15c87b7310c1b26e79d2088a2be3137ba13d5`). Реестр фиксирует этот канонический статус; pending-кандидатом он больше не считается.
 
 ## Исправления после review
 

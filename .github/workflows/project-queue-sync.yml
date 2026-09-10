@@ -24,8 +24,10 @@ permissions:
   issues: read
   pull-requests: read
 
+# Сериализуем переходы только одной и той же карточки. Глобальная группа
+# заменяла pending run другой карточки при burst-событиях и теряла lifecycle updates.
 concurrency:
-  group: kat9i-project-queue
+  group: kat9i-project-queue-${{ github.event.issue.number || github.event.pull_request.number || inputs.url || github.run_id }}
   cancel-in-progress: false
 
 jobs:
