@@ -167,7 +167,20 @@ try {
   Assert-Throws { Invoke-ProjectConfiguration $script:ProductionApply } 'Не удалось получить полный список открытых PR' 'pr list failure'
   Assert-NoWrites 'pr list failure'
 
-  # 1c. Пустые Issues + валидный PR: это нормальное состояние, PR и #62 добавляются.
+  # 1c. Существующий Issue-элемент без url должен fail-closed до item-add.
+  Reset-State
+  $script:IssueListJson='[{"title":"broken"}]'
+  Assert-Throws { Invoke-ProjectConfiguration $script:ProductionApply } 'Список открытых Issues содержит элемент без непустого url' 'issue item missing url'
+  Assert-NoWrites 'issue item missing url'
+
+  # 1d. Пустой/whitespace url в PR должен fail-closed до любых item-add, даже после валидного Issue-списка.
+  Reset-State
+  $script:IssueListJson='[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/issues/106"}]'
+  $script:PrListJson='[{"url":"   "}]'
+  Assert-Throws { Invoke-ProjectConfiguration $script:ProductionApply } 'Список открытых PR содержит элемент без непустого url' 'pr item blank url'
+  Assert-NoWrites 'pr item blank url'
+
+  # 1e. Пустые Issues + валидный PR: это нормальное состояние, PR и #62 добавляются.
   Reset-State
   $script:IssueListJson='[]'
   $script:PrListJson='[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/pull/103"}]'
@@ -177,7 +190,7 @@ try {
     'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/62'
   )
 
-  # 1d. Валидная Issue + пустые PR: Issue и #62 добавляются.
+  # 1f. Валидная Issue + пустые PR: Issue и #62 добавляются.
   Reset-State
   $script:IssueListJson='[{"url":"https://github.com/rassvetpublic-spec/KAT9I_OS/issues/104"}]'
   $script:PrListJson='[]'
@@ -187,7 +200,7 @@ try {
     'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/62'
   )
 
-  # 1e. Оба списка пустые: обязательная управляющая #62 всё равно добавляется ровно один раз.
+  # 1g. Оба списка пустые: обязательная управляющая #62 всё равно добавляется ровно один раз.
   Reset-State
   $script:IssueListJson='[]'
   $script:PrListJson='[]'
