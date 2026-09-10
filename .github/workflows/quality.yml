@@ -49,12 +49,14 @@ jobs:
           test -f scripts/check_graveyard.py
           test -f scripts/graveyard_context.py
           test -f scripts/graveyard_excavate.py
+          test -f scripts/graveyard_trusted_handoff.py
           test -f scripts/graveyard_pr_salvage.py
           test -f tests/test_docs_ssot.py
           test -f tests/test_project_configuration.py
           test -f tests/test_graveyard.py
           test -f tests/test_graveyard_context.py
           test -f tests/test_graveyard_codex_regressions.py
+          test -f tests/test_graveyard_issue99.py
           test -f tests/test_graveyard_pr_salvage.py
           test -f graveyard/README.md
           test -f graveyard/MANIFEST.json
