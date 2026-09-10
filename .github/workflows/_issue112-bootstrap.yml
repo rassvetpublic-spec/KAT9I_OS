@@ -1,0 +1,110 @@
+name: Issue 112 bootstrap
+
+on:
+  push:
+    branches:
+      - feat/issue-112-project-queue
+    paths:
+      - .github/workflows/_issue112-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/issue-112-project-queue
+      - name: Применить bounded patch
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('scripts/configure_project.ps1')
+          text = path.read_text(encoding='utf-8')
+          pattern = re.compile(r"  if\(\$missing\.Count -gt 0 -or \$legacy\.Count -gt 0\)\{.*?\n  \}\n\n  if\(\$f\.name -cne \$Name -and \$Name -eq 'Статус'", re.S)
+          replacement = r'''  if($legacy.Count -gt 0){
+            throw "Поле '$($f.name)' требует небезопасной миграции существующих option ID: $(($legacy)-join ', '). Скрипт остановлен без изменения значений."
+          }
+
+          if($missing.Count -gt 0){
+            foreach($existing in @($f.options)){
+              if([string]::IsNullOrWhiteSpace([string]$existing.id)){
+                throw "Поле '$($f.name)' содержит существующее значение '$($existing.name)' без option ID. Безопасное добавление новых значений невозможно."
+              }
+            }
+            if(-not $script:ProjectPreflightOnly){
+              $opts=@()
+              foreach($existing in @($f.options)){
+                $opts+=[ordered]@{id=[string]$existing.id;name=[string]$existing.name;color=[string]$existing.color;description=[string]$existing.description}
+              }
+              foreach($d in $Defs){
+                if($missing -ccontains $d.name){$opts+=[ordered]@{name=$d.name;color=$d.color;description=$d.description}}
+              }
+          $q=@'
+          mutation($input:UpdateProjectV2FieldInput!){
+           updateProjectV2Field(input:$input){
+             projectV2Field{... on ProjectV2SingleSelectField{id name options{id name}}}
+           }
+          }
+          '@
+              $null=Gql $q @{input=@{fieldId=$f.id;singleSelectOptions=$opts}}
+              $after=Find-Field (Snapshot).user.projectV2.fields.nodes $aliases
+              foreach($existing in @($f.options)){
+                $preserved=@($after.options|Where-Object{$_.id -ceq $existing.id})
+                if($preserved.Count -ne 1 -or $preserved[0].name -cne $existing.name){
+                  throw "После добавления значений поле '$($f.name)' не сохранило option ID '$($existing.id)' для '$($existing.name)'."
+                }
+              }
+              foreach($nameToAdd in $missing){
+                if(@($after.options|Where-Object{$_.name -ceq $nameToAdd}).Count -ne 1){
+                  throw "После обновления поле '$($f.name)' не содержит новое каноническое значение '$nameToAdd'."
+                }
+              }
+              Write-Host "Безопасно добавлены значения поля '$($f.name)': $(($missing)-join ', ')"
+            }
+          }
+
+          if($f.name -cne $Name -and $Name -eq 'Статус' '''
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'configure_project EnsureSelect patch count={count}')
+          needle = " (Opt 'Codex' 'PURPLE' 'Codex.'),\n"
+          if updated.count(needle) != 1:
+              raise SystemExit('Codex worker anchor is not unique')
+          updated = updated.replace(needle, needle + " (Opt 'Антигравити' 'PINK' 'Независимый QA Worker Антигравити.' @('Антигравити','Antigravity')),\n", 1)
+          updated = updated.replace("(Opt 'В очереди' 'BLUE' 'Работа зарезервирована.' @('В очереди','QUEUED'))", "(Opt 'В очереди' 'BLUE' 'Работа ждёт следующего разрешённого этапа; после QA PASS — отдельного mtd.' @('В очереди','QUEUED'))", 1)
+          path.write_text(updated, encoding='utf-8', newline='\n')
+
+          agents = Path('AGENTS.md')
+          a = agents.read_text(encoding='utf-8')
+          anchor = "Одна итерация длится 3 дня.\n"
+          addition = "\nДля работ, которые ведёт ChatGPT, канонический независимый проверяющий по умолчанию — `Антигравити`, если конкретная Issue не задаёт другого QA Worker. При взятии работы фиксируется `FAST-CLAIM`; после передачи на QA карточка переходит в `Проверка QA / На проверке`; после подтверждённого QA PASS — в `Проверка QA / В очереди` и ждёт отдельный `mtd`. Project остаётся производным представлением Issue/PR/Evidence.\n"
+          if addition.strip() not in a:
+              if a.count(anchor) != 1:
+                  raise SystemExit('AGENTS project anchor is not unique')
+              a = a.replace(anchor, anchor + addition, 1)
+          agents.write_text(a, encoding='utf-8', newline='\n')
+
+          spec = Path('docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md')
+          s = spec.read_text(encoding='utf-8')
+          anchor = "`Входящие → Нужно разобрать → Готово к работе → В работе → Проверка QA → Заблокировано → Готово`\n"
+          addition = "\nДля автоматизированных работ ChatGPT по умолчанию используется `Исполнитель = ChatGPT`, `Проверяющий = Антигравити`. Поле `Исполнение` уточняет runtime-состояние карточки: `Свободно → Активно → На проверке → В очереди → Освобождено`. После независимого QA PASS состояние `В очереди` означает ожидание отдельного Owner Gate `mtd`; оно никогда не разрешает merge автоматически. `FAST-CLAIM`, QA Evidence и `FAST-RELEASE` остаются аудируемыми событиями в Issue/PR, а Project только воспроизводит их.\n"
+          if addition.strip() not in s:
+              if s.count(anchor) != 1:
+                  raise SystemExit('spec project anchor is not unique')
+              s = s.replace(anchor, anchor + addition, 1)
+          spec.write_text(s, encoding='utf-8', newline='\n')
+
+          Path('.github/workflows/_issue112-bootstrap.yml').unlink()
+      - name: Зафиксировать patch и удалить bootstrap workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/configure_project.ps1 AGENTS.md docs/spec/24_GITHUB_PROJECT_MANAGEMENT.md .github/workflows/_issue112-bootstrap.yml
+          git diff --cached --quiet && exit 1
+          git commit -m "feat(project): preserve option ids and add Antigravity QA"
+          git push origin HEAD:feat/issue-112-project-queue
