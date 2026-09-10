@@ -930,18 +930,26 @@ Discovery не должен автоматически выдавать Trust.
    - Защита от дублирующих побочных действий (`SKIP_ALREADY_EXECUTED`);
    - Retention: минимум 30 суток для аудита.
 
-## 32.62. OQ-010 — правила завершения Core при закрытии Electron
+## 32.62. OQ-010 / ADR-046 — жизненный цикл Electron UI и Core
 
-Нужно определить пользовательский UX:
+> **Статус:** `ACCEPTED` (ADR-046; канонические источники: [§22](22_CONFIGURATION_STARTUP_AND_UPDATES.md), [§23](23_TECHNOLOGY_STACK_AND_RUNTIME.md), Issue #122).
 
-- закрытие окна → Tray;
-- отдельная команда «Завершить KAT9I_OS»;
-- поведение активных задач;
-- Windows shutdown.
+Принят основной инвариант:
 
-Статус:
+> **UI lifecycle ≠ Core lifecycle.**
 
-`OPEN BEFORE Electron P0`.
+Решение:
+
+1. Закрытие главного окна (`X`) скрывает окно / переводит UI в Tray; Core и активные задачи продолжают работу.
+2. Отдельный выход из Electron UI может завершить UI, но Core остаётся в headless/background режиме.
+3. Повторный Electron подключается к существующему Core и перечитывает каноническое состояние через `core.get_system_state`, затем возобновляет события через `core.subscribe_events`.
+4. `Завершить KAT9I_OS` является отдельной CONTROL-операцией: `DRAINING → безопасный Checkpoint/пауза → Journal/State → Lease/fencing cleanup → shutdown`.
+5. Неизвестный результат активного side effect не считается успехом; используется WAIT, разрешённый policy `FORCE STOP` либо BLOCKED/Recovery.
+6. Windows shutdown/reboot допускает только best-effort фиксацию подтверждённого состояния в доступное ОС время; система не рассчитывает на полное завершение всех Task.
+7. При следующем запуске Recovery выполняется до приёма новых изменяющих задач.
+8. Отдельный Shutdown Manager не создаётся: используются существующие Core lifecycle, Recovery, Event Journal, Checkpoint и Lease/fencing.
+
+Конкретная реализация Tray, Windows service/daemon, таймаутов OS shutdown и UI-команд относится к Electron/Runtime реализации и не изменяет принятую архитектурную границу.
 
 ## 32.63. OQ-011 — система обновления Electron/Runtime
 
