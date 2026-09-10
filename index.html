@@ -203,6 +203,7 @@
     <a href="#resp-section" data-target-id="resp-section">Карта ответственности</a>
     <a href="#glossary-section" data-target-id="glossary-section">Словарь</a>
     <a href="#tz-01-naznachenie-i-bazovaya-arhitektura" data-target-id="tz-01-naznachenie-i-bazovaya-arhitektura">ТЗ: 01-naznachenie-i-bazovaya-arhitektura</a>
+<a href="#tz-02-core-arhitekturnaya-karta-i-operacionnaya-model" data-target-id="tz-02-core-arhitekturnaya-karta-i-operacionnaya-model">ТЗ: 02-core-arhitekturnaya-karta-i-operacionnaya-model</a>
 <a href="#spec-00_language_and_terminology_policy" data-target-id="spec-00_language_and_terminology_policy">Спецификация: 00_LANGUAGE_AND_TERMINOLOGY_POLICY</a>
 <a href="#spec-05_metrics_and_telemetry" data-target-id="spec-05_metrics_and_telemetry">Спецификация: 05_METRICS_AND_TELEMETRY</a>
 <a href="#spec-12_execution" data-target-id="spec-12_execution">Спецификация: 12_EXECUTION</a>
@@ -1062,6 +1063,251 @@ ResultRef (ссылка на результат)
     ↓
 подтверждённое завершение</code></pre>
 <p>После того как этот путь работает полностью, архитектура может масштабироваться на другие домены, провайдеры и распределённых исполнителей.</p>
+    </section>
+        
+
+    <section id="tz-02-core-arhitekturnaya-karta-i-operacionnaya-model" data-section-level="basic">
+      <div class="badge">Принятое ТЗ</div>
+      <h1 id="2-core-архитектурная-карта-и-операционная-модель-kat9i_os">2. Core — архитектурная карта и операционная модель KAT9I_OS</h1>
+<h2 id="2-1-назначение-core">2.1. Назначение Core</h2>
+<p><code>Core</code> — центральный управляющий контур и системный координатор KAT9I_OS.</p>
+<p>Его задача — не выполнять всю работу самостоятельно, а провести формализованную задачу через систему: связать её с применимыми правилами и состоянием, вызвать нужных специализированных владельцев через типизированные контракты, координировать жизненный цикл и получить проверяемый результат.</p>
+<p>Кратко:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Core не делает всё. Core знает, какую часть системы необходимо вызвать, в каком порядке, с каким контрактом и каким состоянием задачи.</strong></div>
+<p>Core не подменяет Rule Manager, Domain, Context, Knowledge, Inference, Coworker, Security, Execution, QA, Recovery, Telemetry или Learning.</p>
+<p>Подробная ownership-карта модулей определяется <code>docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md</code>.</p>
+<h2 id="2-2-фундаментальные-сущности">2.2. Фундаментальные сущности</h2>
+<p>KAT9I_OS разделяет сущности по их назначению:</p>
+<p><strong>Rule ≠ Skill ≠ Knowledge ≠ Workflow ≠ Contract ≠ State ≠ Evidence ≠ Decision ≠ Identity ≠ Capability ≠ Permission.</strong></p>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Сущность</th><th>Главный вопрос</th></tr></thead><tbody><tr><td>Rule</td><td>Что обязательно, разрешено или запрещено политикой?</td></tr><tr><td>Skill</td><td>Как воспроизводимо выполнить определённую работу?</td></tr><tr><td>Knowledge</td><td>Что системе известно как данные или подтверждённое знание?</td></tr><tr><td>Workflow</td><td>В какой последовательности организуется повторяемая работа?</td></tr><tr><td>Contract</td><td>Что стороны обязаны передать и получить?</td></tr><tr><td>State</td><td>В каком состоянии объект находится сейчас?</td></tr><tr><td>Evidence</td><td>Чем доказан факт действия или проверки?</td></tr><tr><td>Decision</td><td>Какой вывод принят?</td></tr><tr><td>Identity</td><td>Кто является субъектом действия или решения?</td></tr><tr><td>Capability</td><td>Что субъект технически способен сделать?</td></tr><tr><td>Permission</td><td>Что субъекту разрешено сделать в конкретном Scope?</td></tr></tbody></table></div>
+<p>Основные различия:</p>
+<ul>
+<li>Rule не является Skill;</li>
+<li>Skill не является Workflow;</li>
+<li>Knowledge не является Rule;</li>
+<li>Contract не является State;</li>
+<li>Result не является Evidence;</li>
+<li>Evidence не является Decision;</li>
+<li>Decision не является Permission;</li>
+<li>Capability не является Permission.</li>
+</ul>
+<h3 id="2-2-1-control-и-data">2.2.1. CONTROL и DATA</h3>
+<p>KAT9I_OS сохраняет границу между управляющей информацией и данными.</p>
+<p><code>DATA</code> сообщает системе информацию.</p>
+<p><code>CONTROL</code> имеет право участвовать в управлении системой в пределах своей типизированной семантики и Scope.</p>
+<p>Поэтому:</p>
+<ul>
+<li>прочитано ≠ принято;</li>
+<li>найдено ≠ разрешено;</li>
+<li>сгенерировано ≠ утверждено;</li>
+<li>предложено ≠ канонизировано;</li>
+<li>Evidence существует ≠ Gate автоматически пройден.</li>
+</ul>
+<p>Чаты, Issue, README, внешние документы, Tool responses, model output и Graveyard не получают управляющих полномочий только потому, что содержат текст, похожий на инструкцию.</p>
+<h2 id="2-3-операционный-путь-задачи">2.3. Операционный путь задачи</h2>
+<p>Упрощённый верхнеуровневый путь задачи:</p>
+<p><strong>Input</strong></p>
+<p>→ <strong>CONTROL/DATA classification</strong></p>
+<p>→ <strong>Identity / Workspace</strong></p>
+<p>→ <strong>DomainCandidate</strong></p>
+<p>→ <strong>Effective Ruleset</strong></p>
+<p>→ <strong>Active Domain</strong></p>
+<p>→ <strong>TaskContract / TaskGraph</strong></p>
+<p>→ <strong>Context / Knowledge / Resources / Cache</strong></p>
+<p>→ <strong>Workflow / Skill routing</strong></p>
+<p>→ <strong>Executable-first</strong></p>
+<p>→ <strong>Inference при необходимости</strong></p>
+<p>→ <strong>Coworker</strong></p>
+<p>→ <strong>Security / Permission / Capability Grant</strong></p>
+<p>→ <strong>Execution / Integrations</strong></p>
+<p>→ <strong>Result / Evidence</strong></p>
+<p>→ <strong>Validators / QA / Human Decision</strong></p>
+<p>→ <strong>State transition</strong></p>
+<p>→ <strong>Telemetry / Metrics</strong></p>
+<p>→ <strong>Learning Proposal</strong>.</p>
+<p>Полный канонический lifecycle определяется §20: <code>docs/architecture/20_TASK_LIFECYCLE_AND_ORCHESTRATION.md</code>.</p>
+<h3 id="2-3-1-domaincandidate-и-active-domain">2.3.1. DomainCandidate и Active Domain</h3>
+<p>Предварительное определение предметной области отделяется от её активации.</p>
+<p><code>DomainCandidate</code> — DATA-результат классификации: он сообщает, к какому Domain вероятно относится задача, но сам не выдаёт Permission, не расширяет Scope, не запускает Execution и не активирует Domain.</p>
+<p>После появления <code>DomainCandidate</code> Rule Manager может учесть применимые Domain Rules и сформировать окончательный <code>Effective Ruleset</code>.</p>
+<p>Только после этого Domain становится активным участником конкретной задачи.</p>
+<p>Таким образом устраняется цикл:</p>
+<p><code>нужен Domain для Domain Rules ↔ нужны Rules до разрешённого выполнения Domain</code>.</p>
+<h3 id="2-3-2-taskcontract">2.3.2. TaskContract</h3>
+<p>После определения активного Domain и применимого Ruleset Core формирует или финализирует TaskContract по канонической модели §3.</p>
+<p>TaskContract использует Reference-first и не должен копировать внутрь всю базу Rules, Knowledge, Skills, Tools или историю выполнения.</p>
+<h2 id="2-4-skills-workflows-и-маршрутизация-способа-выполнения">2.4. Skills, Workflows и маршрутизация способа выполнения</h2>
+<p><code>Skill</code> отвечает на вопрос: <strong>как воспроизводимо выполнить работу?</strong></p>
+<p><code>Workflow</code> отвечает на вопрос: <strong>в какой последовательности связать несколько действий, Skills, решений и проверок?</strong></p>
+<p><code>TaskGraph</code> — конкретная runtime-структура конкретной задачи. Поэтому:</p>
+<p><strong>WorkflowDefinition ≠ TaskGraph.</strong></p>
+<p>Workflow может быть источником структуры части TaskGraph, а TaskGraph может дополнительно содержать Retry, Recovery, Context Request, Human Decision и QA-ветви.</p>
+<h3 id="2-4-1-skill-ownership-и-skill-registry">2.4.1. Skill ownership и Skill Registry</h3>
+<p>Содержание Skill принадлежит Domain или системному модулю, который владеет соответствующей семантикой.</p>
+<p>Core не становится владельцем предметного содержания всех Skills.</p>
+<p>При этом Core владеет общесистемным <code>Skill Registry</code> и generic Skill Routing как частью системной координации.</p>
+<p>Разделение:</p>
+<ul>
+<li><strong>Domain / системный модуль</strong> → каноническое содержание Skill;</li>
+<li><strong>Core / Skill Registry</strong> → идентичность, revision, owner, metadata и Reference на каноническое определение;</li>
+<li><strong>Coworker / Worker Registry</strong> → сведения об исполнителях и их capabilities.</li>
+</ul>
+<p>Следовательно:</p>
+<p><strong>Registry ownership ≠ Skill semantic ownership.</strong></p>
+<h3 id="2-4-2-skillcandidate-и-skillselection">2.4.2. SkillCandidate и SkillSelection</h3>
+<p>Skill Routing сначала формирует один или несколько <code>SkillCandidate</code> на основании TaskContract, Active Domain, Effective Ruleset, узла TaskGraph, требуемого результата, Scope и доступных возможностей.</p>
+<p><code>SkillCandidate</code> является DATA.</p>
+<p><code>SkillSelection</code> является Decision о подходящем способе работы.</p>
+<p>Но:</p>
+<p><strong>SkillSelection ≠ Permission.</strong></p>
+<p>Даже выбранный Skill не может выполнить запрещённый side effect.</p>
+<h3 id="2-4-3-skill-routing-и-inference-routing">2.4.3. Skill Routing и Inference Routing</h3>
+<p>Skill Routing отвечает:</p>
+<div class="note"><strong>Примечание:</strong> <strong>какой воспроизводимый способ работы нужен?</strong></div>
+<p>Inference отвечает:</p>
+<div class="note"><strong>Примечание:</strong> <strong>каким вычислительным или интеллектуальным маршрутом выполнить недетерминированную часть этой работы?</strong></div>
+<p>Inference не является Skill Registry и не владеет Skill Routing.</p>
+<p>Для каждого выбранного Skill сначала применяется Executable-first. ИИ получает только остаточную часть, действительно требующую интерпретации, генерации или сложного reasoning.</p>
+<p>Подробные принципы Executable-first и классы Skills определяются §4, а вычислительная маршрутизация — §10.</p>
+<h2 id="2-5-contracts-state-evidence-decision-и-переходы">2.5. Contracts, State, Evidence, Decision и переходы</h2>
+<p>Модули KAT9I_OS взаимодействуют через типизированные системные контракты, а не через скрытые договорённости в prompt или свободном тексте.</p>
+<p>Подробный протокол определяется §26: <code>docs/architecture/26_INTERNAL_CONTRACTS.md</code>.</p>
+<p>Ключевые различия:</p>
+<ul>
+<li>Contract ≠ State;</li>
+<li>Command ≠ Event;</li>
+<li>Result ≠ Evidence;</li>
+<li>Evidence ≠ Decision;</li>
+<li>Decision ≠ Permission;</li>
+<li>Capability ≠ Permission.</li>
+</ul>
+<h3 id="2-5-1-state-transition">2.5.1. State transition</h3>
+<p>Core координирует переходы TaskRuntimeState, но не придумывает состояние по свободному тексту Worker или модели.</p>
+<p>Типовая логика перехода:</p>
+<p><strong>Current State</strong></p>
+<p>→ <strong>условия и Gates</strong></p>
+<p>→ <strong>необходимые Decisions / Permissions</strong></p>
+<p>→ <strong>Action</strong></p>
+<p>→ <strong>Evidence</strong></p>
+<p>→ <strong>Validation / QA</strong></p>
+<p>→ <strong>Event</strong></p>
+<p>→ <strong>Next State</strong>.</p>
+<p>Фраза «готово» не является доказательством <code>COMPLETED</code>.</p>
+<h3 id="2-5-2-result-evidence-и-decision">2.5.2. Result, Evidence и Decision</h3>
+<p><code>Result</code> отвечает: <strong>что получилось?</strong></p>
+<p><code>Evidence</code> отвечает: <strong>чем доказано, что действие или проверка действительно произошли?</strong></p>
+<p><code>Decision</code> отвечает: <strong>какой вывод принят?</strong></p>
+<p>Evidence является входом для Decision, но не выдаёт полномочия самостоятельно.</p>
+<p>Для проверяемых объектов Evidence и QA должны быть связаны с exact revision, когда такая revision существует.</p>
+<h3 id="2-5-3-permission">2.5.3. Permission</h3>
+<p>Permission относится к конкретному субъекту, действию, ресурсу, Task и Scope.</p>
+<p>Наличие Capability, Skill, Tool, API или токена доступа не означает Permission.</p>
+<p>Критичный side effect выполняется только после требуемого Security Decision / Capability Grant / Human Approval согласно канонической Security-модели.</p>
+<h2 id="2-6-границы-core">2.6. Границы Core</h2>
+<p>Core владеет системной координацией, а не полной семантикой всех модулей.</p>
+<p>Core может:</p>
+<ul>
+<li>создавать и поддерживать Task;</li>
+<li>формировать/финализировать TaskContract;</li>
+<li>поддерживать общую модель TaskGraph и lifecycle;</li>
+<li>координировать TaskRuntimeState и переходы;</li>
+<li>передавать Contracts и References;</li>
+<li>запрашивать Decision у канонического владельца;</li>
+<li>проверять наличие обязательных Gates;</li>
+<li>поддерживать общесистемный Skill Registry и generic Skill Routing.</li>
+</ul>
+<p>Core обязан делегировать:</p>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Вопрос</th><th>Канонический владелец</th></tr></thead><tbody><tr><td>Какие обязательные Rules применимы?</td><td>Rule Manager</td></tr><tr><td>Разрешено ли действие?</td><td>Security</td></tr><tr><td>Что означает задача предметно?</td><td>Domain</td></tr><tr><td>Что исполнителю нужно знать?</td><td>Context</td></tr><tr><td>Что система знает?</td><td>Knowledge</td></tr><tr><td>Где находится объект?</td><td>Resources</td></tr><tr><td>Можно ли переиспользовать вычисление?</td><td>CacheEngine</td></tr><tr><td>Сколько ресурсов потребуется?</td><td>Planning &amp; Forecasting</td></tr><tr><td>Какой вычислительный/интеллектуальный маршрут нужен?</td><td>Inference</td></tr><tr><td>Кто конкретно выполняет?</td><td>Coworker</td></tr><tr><td>Как физически выполнить действие?</td><td>Execution</td></tr><tr><td>Как обратиться к внешней системе?</td><td>Integrations</td></tr><tr><td>Соответствует ли результат требованиям?</td><td>QA</td></tr><tr><td>Как продолжить после отказа?</td><td>Recovery</td></tr><tr><td>Что произошло?</td><td>Telemetry</td></tr><tr><td>Насколько хорошо это произошло?</td><td>Metrics</td></tr><tr><td>Что следует улучшить?</td><td>Learning</td></tr></tbody></table></div>
+<p>Core не может тихо переопределить Decision канонического владельца. Допустим только предусмотренный Escalation, новое официальное Decision или Recovery.</p>
+<p><code>DENY</code> нельзя обходить сменой Worker, Provider, Skill, Workflow, Tool или Integration.</p>
+<p>Логическое архитектурное ownership не требует размещения всей реализации внутри одного Rust/Electron процесса.</p>
+<h2 id="2-7-системные-инварианты">2.7. Системные инварианты</h2>
+<p>В KAT9I_OS должны сохраняться следующие верхнеуровневые инварианты:</p>
+<ol>
+<li><strong>ONE RESPONSIBILITY → ONE CANONICAL OWNER → MANY REFERENCES / CLIENTS.</strong></li>
+<li><strong>CONTROL ≠ DATA.</strong></li>
+<li><strong>Candidate ≠ Selection ≠ Permission.</strong></li>
+<li><strong>Capability ≠ Permission.</strong></li>
+<li><strong>Coordination ≠ Ownership ≠ Execution.</strong></li>
+<li><strong>Contract ≠ State.</strong></li>
+<li><strong>Command ≠ Event.</strong></li>
+<li><strong>Result ≠ Evidence ≠ Decision.</strong></li>
+<li>Для обязательного Evidence отсутствие Evidence означает отсутствие доказанного успеха.</li>
+<li>Критичные Gate работают fail-closed.</li>
+<li>DENY нельзя обходить маршрутизацией.</li>
+<li>Scope нельзя расширять скрыто.</li>
+<li><strong>Executable-first:</strong> детерминируемая часть выполняется кодом/инструментом раньше ИИ.</li>
+<li><strong>Local-first:</strong> для интеллектуального остатка выбирается минимально достаточный разрешённый локальный путь, если он обеспечивает качество и безопасность.</li>
+<li><strong>Reference-first:</strong> между модулями передаются ссылки на точные объекты/revisions вместо лишних копий.</li>
+<li><strong>Progressive Disclosure:</strong> Worker/Provider получает только минимально достаточные Rules, Skills, Tools и Context.</li>
+<li><strong>Skill ≠ Worker ≠ Provider.</strong></li>
+<li><strong>Workflow ≠ TaskGraph.</strong></li>
+<li><strong>Cache ≠ Knowledge ≠ Evidence ≠ SSoT.</strong></li>
+<li><strong>Graveyard всегда DATA</strong> до отдельного явного promotion process.</li>
+<li><strong>Learning Proposal ≠ Change.</strong></li>
+<li>Prompt не заменяет Contracts, Rules, Security, State или Workflow Engine.</li>
+<li>LLM output по умолчанию является DATA, а не Permission или Evidence внешнего side effect.</li>
+<li>Human Decision, когда он обязателен, фиксируется как типизированный CONTROL-объект.</li>
+<li>Identity и Provenance сохраняются через значимые переходы.</li>
+<li>Versioned contract неизвестной обязательной версии не интерпретируется «примерно».</li>
+<li>Physical deployment ≠ logical ownership.</li>
+<li>Telemetry ≠ Metrics ≠ Learning.</li>
+<li>Recovery опирается на State, Events, Evidence и фактическое состояние ресурсов, а не на догадку модели.</li>
+<li><strong>False success запрещён.</strong></li>
+</ol>
+<p>Для значимого действия система должна уметь объяснить: что выполнялось, почему был выбран маршрут, какие Rules и Scope действовали, кто был субъектом, какой Skill/Worker/Provider участвовал, какое Permission позволило действие, что получилось, чем это доказано и какой State стал следующим.</p>
+<h2 id="2-8-архитектурная-карта-kat9i_os">2.8. Архитектурная карта KAT9I_OS</h2>
+<p>Упрощённые логические плоскости системы:</p>
+<h3 id="control-plane">Control Plane</h3>
+<p>Core, Rule Manager, Security, TaskContract, State и Gates.</p>
+<p>Определяет управляемое и разрешённое движение задачи.</p>
+<h3 id="domain-capability-plane">Domain / Capability Plane</h3>
+<p>Domain, Skills, Workflows и Validators.</p>
+<p>Определяет предметный смысл и воспроизводимые способы работы.</p>
+<h3 id="knowledge-context-plane">Knowledge / Context Plane</h3>
+<p>Knowledge, Resources, Context и CacheEngine.</p>
+<p>Обеспечивает релевантную информацию и эффективный доступ к ней.</p>
+<h3 id="intelligence-plane">Intelligence Plane</h3>
+<p>Inference, Providers и Human Decision routes.</p>
+<p>Определяет минимально достаточный вычислительный или интеллектуальный маршрут.</p>
+<h3 id="execution-plane">Execution Plane</h3>
+<p>Coworker, Worker Registry, Execution и Integrations.</p>
+<p>Выбирает конкретного исполнителя и выполняет разрешённые действия.</p>
+<h3 id="assurance-plane">Assurance Plane</h3>
+<p>Evidence, Validators, QA и Recovery.</p>
+<p>Доказывает результат и обеспечивает корректное продолжение после проблем.</p>
+<h3 id="observation-improvement-plane">Observation / Improvement Plane</h3>
+<p>Telemetry, Metrics и Learning.</p>
+<p>Наблюдает работу системы, оценивает её и формирует предложения улучшений.</p>
+<p>Эти плоскости являются способом объяснения архитектуры, а не новыми владельцами функций.</p>
+<h2 id="2-9-статус-2-и-отношения-с-ssot">2.9. Статус §2 и отношения с SSoT</h2>
+<p>Роль этого раздела:</p>
+<div class="note"><strong>Примечание:</strong> <strong>ARCHITECTURAL MAP + OPERATING MODEL.</strong></div>
+<p>§2 объясняет связи, границы и фундаментальные инварианты. Подробную семантику определяют профильные канонические разделы.</p>
+<p>Основные ссылки:</p>
+<ul>
+<li>TaskContract → §3 <code>docs/architecture/03_TASK_CONTRACT.md</code>;</li>
+<li>Rules / Effective Ruleset / Executable-first → §4 <code>docs/architecture/04_RULES_AND_EXECUTION_PRIORITIES.md</code>;</li>
+<li>Context → §7 <code>docs/architecture/07_CONTEXT.md</code>;</li>
+<li>Inference → §10 <code>docs/architecture/10_INFERENCE_AND_DECISION_ROUTING_RU.md</code>;</li>
+<li>полный lifecycle → §20 <code>docs/architecture/20_TASK_LIFECYCLE_AND_ORCHESTRATION.md</code>;</li>
+<li>внутренние Contracts → §26 <code>docs/architecture/26_INTERNAL_CONTRACTS.md</code>;</li>
+<li>окончательная ownership map → §27 <code>docs/architecture/27_MODULE_REGISTRY_AND_RESPONSIBILITY_MAP.md</code>.</li>
+</ul>
+<p>Если обзор §2 противоречит профильному каноническому SSoT, §2 считается устаревшей картой в этой точке и должен быть синхронизирован. Нельзя поддерживать две версии истины.</p>
+<p>Принцип содержания §2:</p>
+<div class="note"><strong>Примечание:</strong> <strong>SUMMARY + BOUNDARY + REFERENCE, NOT DUPLICATE SPECIFICATION.</strong></div>
+<p>Исторически многие функции рассматривались как части широкого Core. После декомпозиции они получили специализированных владельцев. §2 сохраняет исторический смысл общего control plane, но не возвращает эти функции обратно в Core.</p>
+<p>Современное определение:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Core — канонический системный координатор жизненного цикла задачи, состояния, контрактов, переходов и общесистемной маршрутизации Skills, который вызывает специализированных владельцев и не подменяет их семантику.</strong></div>
+<p>Итоговая формула:</p>
+<p>**CORE COORDINATES.</p>
+<p>SPECIALIZED OWNERS DECIDE.</p>
+<p>SECURITY AUTHORIZES.</p>
+<p>EXECUTION ACTS.</p>
+<p>EVIDENCE PROVES.</p>
+<p>STATE RECORDS.</p>
+<p>SSoT REMAINS SINGLE.**</p>
     </section>
         
 
@@ -3339,6 +3585,7 @@ TaskContract (контракт задачи)
      TaskResult
         ↓
      ResultRef</code></pre>
+<p>Эта схема показывает структуру уже формализованной задачи, а не полный порядок intake/lifecycle. Канонический порядок финализации TaskContract определяется §20: предварительный <code>DomainCandidate</code> → <code>Effective Ruleset</code> → Active Domain → финальный TaskContract.</p>
 <h2 id="3-1-назначение">3.1. Назначение</h2>
 <p><code>TaskContract (контракт задачи)</code> — универсальный паспорт работы KAT9I_OS.</p>
 <p>Он отвечает на вопросы:</p>
@@ -3353,6 +3600,7 @@ TaskContract (контракт задачи)
 <li>требуется ли независимый QA (контроль качества).</li>
 </ul>
 <p>Контракт не должен содержать весь репозиторий, всю историю диалога, всю базу знаний, полный набор навыков или всю историю метрик. По умолчанию используются ссылки на источники и результаты.</p>
+<p>Финальный TaskContract формируется или финализируется после определения Active Domain и получения <code>RulesRef</code> на разрешённый Effective Ruleset. Предварительные intake-данные не должны притворяться финальным контрактом выполнения.</p>
 <h2 id="3-2-четыре-отдельные-сущности">3.2. Четыре отдельные сущности</h2>
 <p>KAT9I_OS разделяет описание задачи, текущее состояние, результат и зависимости:</p>
 <pre><code class="language-text">TaskContract
@@ -4624,7 +4872,7 @@ Learning (самообучение)
       <div class="badge">Каноническая архитектура</div>
       <h1 id="10-inference-выбор-ии-вычислительного-маршрута-и-человеческого-решения">10. Inference — выбор ИИ, вычислительного маршрута и человеческого решения</h1>
 <h2 id="схема">Схема</h2>
-<p>Задача или этап TaskContract (контракта задачи)</p>
+<p>Этап TaskContract / узел TaskGraph после определения требуемого Workflow/Skill</p>
 <p>→ можно выполнить локальным исполняемым кодом?</p>
 <p>→ да: выполнить локально, 0 LLM-токенов</p>
 <p>→ нет: нужен ли ИИ?</p>
@@ -4641,6 +4889,7 @@ Learning (самообучение)
 <p>→ Learning улучшает будущую маршрутизацию.</p>
 <h2 id="10-1-назначение">10.1. Назначение</h2>
 <p>Inference отвечает на вопрос: какой минимально достаточный вычислительный или интеллектуальный способ нужен для конкретного этапа задачи.</p>
+<p>Inference не является владельцем Skill Registry или generic Skill Routing. Сначала система определяет требуемый воспроизводимый способ работы / Skill для узла TaskGraph, затем Inference получает требование только для той части, которой действительно нужен вычислительный, модельный или человеческий интеллектуальный маршрут.</p>
 <p>Модель выбирается не первой. Сначала проверяется возможность выполнения обычным локальным исполняемым кодом, затем обычными локальными алгоритмами, затем локальным ИИ и только после этого внешними интеллектуальными маршрутами.</p>
 <h2 id="10-2-базовый-порядок-выбора">10.2. Базовый порядок выбора</h2>
 <ol>
@@ -4718,9 +4967,15 @@ Learning (самообучение)
 <p>При выборе маршрута учитывается, имеет ли Provider или Human Decision Provider прямой доступ к источнику и месту результата.</p>
 <p>Маршрут с прямым GitHub Connector (подключением GitHub) может быть эффективнее более мощной модели без такого доступа, потому что не требует материализации большого контекста.</p>
 <h2 id="10-11-inference-и-coworker">10.11. Inference и Coworker</h2>
-<p>Inference определяет, какой тип интеллектуального или человеческого маршрута нужен.</p>
+<p>Inference определяет, какой тип интеллектуального или человеческого маршрута нужен для уже определённого способа работы или конкретной остаточной части Skill.</p>
 <p>Coworker определяет, кто конкретно его выполнит.</p>
-<p>Пример: Inference требует NORMAL + GitHub read + USER approval. Coworker выбирает подходящего Worker для реализации, а контрольная точка решения направляется пользователю.</p>
+<p>Таким образом различаются три решения:</p>
+<ul>
+<li>Skill Routing — какой воспроизводимый способ работы нужен;</li>
+<li>Inference — какой вычислительный или интеллектуальный маршрут нужен;</li>
+<li>Coworker — кто конкретно будет исполнителем.</li>
+</ul>
+<p>Пример: выбранный Skill требует NORMAL + GitHub read + USER approval. Inference формирует соответствующий интеллектуальный маршрут, Coworker выбирает подходящего Worker для реализации, а контрольная точка решения направляется пользователю.</p>
 <h2 id="10-12-escalation-повышение-уровня">10.12. Escalation — повышение уровня</h2>
 <p>Допустимый путь: локальный код → локальный ИИ → NORMAL → HIGH → Human Decision, если именно человеческое решение необходимо.</p>
 <p>Повышение выполняется по измеримой причине: недостаточное качество, QA FAIL, отсутствие разрешения, конфликт правил, недостаток данных или невозможность гарантировать безопасное решение.</p>
@@ -4789,7 +5044,8 @@ Learning (самообучение)
 <p>Полная история инцидентов не передаётся модели каждый цикл. Используются агрегаты и отдельные релевантные события.</p>
 <h2 id="10-18-основные-принципы">10.18. Основные принципы</h2>
 <ol>
-<li>Не выбирать модель, пока не доказано, что ИИ нужен.</li>
+<li>Skill Routing и Inference Routing являются разными решениями; Inference не владеет Skill Registry.</li>
+<li>Не выбирать модель, пока не доказано, что ИИ нужен для остаточной части выбранного способа работы.</li>
 <li>Executable-first имеет первый приоритет.</li>
 <li>Local-first применяется поэтапно.</li>
 <li>Пользователь и Администратор являются отдельными человеческими маршрутами принятия решений.</li>
@@ -4804,7 +5060,7 @@ Learning (самообучение)
 <li>Learning использует результаты маршрутов и инцидентов, но не читает всю историю на каждом цикле.</li>
 </ol>
 <h2 id="10-19-главный-принцип">10.19. Главный принцип</h2>
-<div class="note"><strong>Примечание:</strong> KAT9I_OS выбирает не просто модель, а минимально достаточный и разрешённый способ получить решение: локальный код, локальный ИИ, внешний ИИ или человека. При этом данные никогда не получают управляющую силу автоматически, а критические разрешения и решения направляются тому субъекту, который действительно имеет право их принимать.</div>
+<div class="note"><strong>Примечание:</strong> KAT9I_OS выбирает не просто модель, а минимально достаточный и разрешённый способ получить решение для той части работы, которая действительно требует вычислительного или человеческого интеллекта: локальный код, локальный ИИ, внешний ИИ или человека. При этом данные никогда не получают управляющую силу автоматически, а критические разрешения и решения направляются тому субъекту, который действительно имеет право их принимать.</div>
     </section>
         
 
@@ -6028,18 +6284,20 @@ Learning (самообучение)
 <p>→ классификация CONTROL / DATA</p>
 <p>→ определение Identity (источника и роли)</p>
 <p>→ определение Workspace (рабочего пространства)</p>
+<p>→ DomainCandidate (предварительная предметная классификация, DATA)</p>
 <p>→ Effective Ruleset (набор применимых правил)</p>
-<p>→ Domain (предметная область)</p>
+<p>→ Active Domain (разрешённая предметная область)</p>
 <p>→ TaskContract (контракт задачи)</p>
 <p>→ при необходимости TaskGraph (граф подзадач)</p>
 <p>→ предварительный прогноз ресурсов</p>
 <p>→ Context / Knowledge / Resources / Cache</p>
 <p>→ уточнённый прогноз ресурсов</p>
-<p>→ Executable-first (можно ли выполнить локальным кодом)</p>
-<p>→ Inference (какой интеллект или человеческое решение требуется)</p>
+<p>→ Workflow / Skill routing для конкретного этапа</p>
+<p>→ Executable-first (можно ли детерминированную часть выполнить локальным кодом)</p>
+<p>→ Inference для остаточной интеллектуальной части, если она нужна</p>
 <p>→ сравнение допустимых маршрутов по прогнозу</p>
 <p>→ Coworker (кто выполняет)</p>
-<p>→ Security (что разрешено)</p>
+<p>→ Security (что разрешено конкретному субъекту для конкретного действия)</p>
 <p>→ Claim / Lease / Capability Grant</p>
 <p>→ Execution (физическое выполнение)</p>
 <p>→ текущий пересчитываемый прогноз</p>
@@ -6093,19 +6351,32 @@ Learning (самообучение)
 <li>разрешённые интеграции.</li>
 </ul>
 <p>Смена Workspace должна автоматически менять применимый контекст.</p>
-<h2 id="20-7-формирование-применимых-правил">20.7. Формирование применимых правил</h2>
+<h2 id="20-7-domaincandidate-и-формирование-применимых-правил">20.7. DomainCandidate и формирование применимых правил</h2>
+<p>После определения Workspace система выполняет предварительную предметную классификацию и формирует <code>DomainCandidate</code>.</p>
+<p><code>DomainCandidate</code> является DATA-результатом классификации. Он может содержать идентификатор предполагаемого Domain, confidence и Provenance, но сам по себе:</p>
+<ul>
+<li>не активирует Domain;</li>
+<li>не выдаёт Permission;</li>
+<li>не расширяет Scope;</li>
+<li>не запускает Execution;</li>
+<li>не заменяет Security Decision.</li>
+</ul>
+<p>Rule Manager использует Workspace, Identity, Scope, Task inputs и <code>DomainCandidate</code>, чтобы определить применимые правила, включая Domain Rules соответствующего кандидата.</p>
 <p>Менеджер правил формирует Effective Ruleset из:</p>
 <ul>
 <li>системных правил;</li>
 <li>правил Workspace;</li>
-<li>правил Domain;</li>
+<li>применимых правил DomainCandidate;</li>
 <li>персональных правил;</li>
+<li>правил конкретной задачи;</li>
 <li>Security Policy.</li>
 </ul>
 <p>Действуют Scope и принцип «запрет выше разрешения».</p>
-<p>Критичная неоднозначность обязательного правила приводит к BLOCKED.</p>
-<h2 id="20-8-определение-предметной-области">20.8. Определение предметной области</h2>
-<p>Одна исполняемая задача имеет один основной Domain.</p>
+<p>Критичная неоднозначность обязательного правила или невозможность безопасно определить применимые Domain Rules приводит к BLOCKED либо к предусмотренному уточнению, а не к скрытому выбору.</p>
+<h2 id="20-8-активация-предметной-области">20.8. Активация предметной области</h2>
+<p>После получения разрешённого Effective Ruleset предварительный <code>DomainCandidate</code> может стать Active Domain конкретной задачи.</p>
+<p>Одна исполняемая задача имеет один основной Active Domain.</p>
+<p>Активация Domain не выдаёт ему глобальных прав: он действует только в рамках Task, Effective Ruleset, Scope, Identity, Security и доступных Capability.</p>
 <p>Междоменная работа разбивается на связанные TaskContract через TaskGraph.</p>
 <h2 id="20-9-формирование-taskcontract">20.9. Формирование TaskContract</h2>
 <p>TaskContract фиксирует минимум:</p>
@@ -6122,6 +6393,7 @@ Learning (самообучение)
 <li>требования QA;</li>
 <li>бюджеты и ограничения, если заданы.</li>
 </ul>
+<p>Финальный TaskContract формируется или финализируется после разрешения Effective Ruleset и активации основного Domain.</p>
 <p>После отправки исполнителю контракт нельзя незаметно расширять.</p>
 <h2 id="20-10-декомпозиция">20.10. Декомпозиция</h2>
 <p>Если задача сложная, создаётся TaskGraph.</p>
@@ -6200,12 +6472,18 @@ Learning (самообучение)
 <li>обязательный QA;</li>
 <li>ограничения Security.</li>
 </ul>
-<p>Этот прогноз используется Inference при сравнении допустимых маршрутов.</p>
-<h2 id="20-18-проверка-executable-first">20.18. Проверка Executable-first</h2>
-<p>Для каждого этапа сначала проверяется:</p>
-<div class="note"><strong>Примечание:</strong> можно ли надёжно выполнить его локальным исполняемым кодом?</div>
-<p>Если да — LLM не вызывается.</p>
+<p>Этот прогноз используется при выборе Workflow/Skill и Inference при сравнении допустимых маршрутов.</p>
+<h2 id="20-18-выбор-workflow-skill-и-проверка-executable-first">20.18. Выбор Workflow / Skill и проверка Executable-first</h2>
+<p>Для конкретного узла TaskGraph сначала определяется воспроизводимый способ работы.</p>
+<p>Если существует подходящий Workflow, он используется как повторно используемое определение процесса, но не заменяет конкретный TaskGraph.</p>
+<p>Общесистемный Skill Routing использует метаданные Skill Registry, Active Domain, TaskContract, Effective Ruleset, текущий узел TaskGraph, Scope и требуемый результат.</p>
+<p><code>SkillCandidate</code> является DATA. <code>SkillSelection</code> является Decision о подходящем способе выполнения, но не является Permission.</p>
+<p>Содержание предметного Skill остаётся у его Domain или системного владельца; Core не становится вторым владельцем семантики Skill.</p>
+<p>После определения требуемого Workflow/Skill для каждого этапа сначала проверяется:</p>
+<div class="note"><strong>Примечание:</strong> можно ли надёжно выполнить детерминированную часть локальным исполняемым кодом?</div>
+<p>Если да — эта часть выполняется без LLM.</p>
 <p>Это относится к поиску, индексам, Git, валидации, расчётам, Scope Guard, тестам, метрикам, кэшу и другим формализуемым операциям.</p>
+<p>Только остаточная часть выбранного Skill, действительно требующая интеллектуального вычисления или человеческого решения, передаётся в Inference.</p>
 <h2 id="20-19-проверка-local-first">20.19. Проверка Local-first</h2>
 <p>Если нужен интеллект, при одинаково достаточном качестве предпочтение получает:</p>
 <ol>
@@ -6216,13 +6494,14 @@ Learning (самообучение)
 </ol>
 <p>Security и обязательное качество проверяются раньше экономики.</p>
 <h2 id="20-20-определение-уровня-интеллекта">20.20. Определение уровня интеллекта</h2>
-<p>Inference определяет минимально достаточный уровень конкретного этапа:</p>
+<p>Inference определяет минимально достаточный уровень только для той части конкретного этапа, которая после Skill Routing и Executable-first действительно требует интеллектуального или человеческого маршрута:</p>
 <ul>
 <li>LOW;</li>
 <li>NORMAL;</li>
 <li>HIGH.</li>
 </ul>
 <p>Уровень не назначается всей большой задаче автоматически.</p>
+<p>Inference не владеет Skill Registry или Skill Routing и не изменяет семантику выбранного Skill.</p>
 <h2 id="20-21-человек-как-маршрут-решения">20.21. Человек как маршрут решения</h2>
 <p>Если этап требует содержательного выбора или полномочия, Inference может сформировать требование:</p>
 <ul>
@@ -6258,7 +6537,7 @@ Learning (самообучение)
 <li>очереди;</li>
 <li>прогнозу выполнения.</li>
 </ul>
-<p>Inference отвечает «какой маршрут нужен», Coworker — «кто его выполнит».</p>
+<p>Skill Routing отвечает «какой способ работы нужен», Inference — «какой вычислительный или интеллектуальный маршрут нужен для остаточной части», Coworker — «кто конкретно его выполнит».</p>
 <h2 id="20-24-claim-lease-и-разрешения">20.24. Claim, Lease и разрешения</h2>
 <p>Перед исполнением Worker получает:</p>
 <ul>
@@ -6268,7 +6547,8 @@ Learning (самообучение)
 </ul>
 <p>Capability не означает автоматического разрешения использовать всё, что технически умеет Worker.</p>
 <h2 id="20-25-проверка-безопасности">20.25. Проверка безопасности</h2>
-<p>До физического действия Security проверяет:</p>
+<p>Security является сквозной границей и может ограничивать допустимые варианты раньше в lifecycle. До конкретного физического side effect выполняется окончательная проверка конкретного subject/action/resource/scope.</p>
+<p>Security проверяет:</p>
 <ul>
 <li>Identity;</li>
 <li>Rules;</li>
@@ -6397,12 +6677,13 @@ Learning (самообучение)
 </ul>
 <p>Ошибка очистки учитывается отдельно от успеха основного результата.</p>
 <h2 id="20-38-телеметрия">20.38. Телеметрия</h2>
-<p>Каждый этап создаёт структурированные события:</p>
+<p>Каждый этап эмитит структурированные события о начале, завершении, блокировке, ошибке и других значимых переходах. Telemetry является каноническим владельцем их наблюдаемой фиксации и последующей телеметрической обработки.</p>
+<p>Фиксируются как минимум:</p>
 <ul>
 <li>начало;</li>
 <li>завершение;</li>
-<li>блокировку;</li>
-<li>ошибку;</li>
+<li>блокировка;</li>
+<li>ошибка;</li>
 <li>Worker;</li>
 <li>Provider;</li>
 <li>Token usage;</li>
@@ -6548,6 +6829,8 @@ Learning (самообучение)
 <li><strong>Сначала ссылка (Reference-first).</strong></li>
 <li><strong>Сначала доказательство (Evidence-first).</strong></li>
 <li><strong>Данные не управляют системой (CONTROL / DATA boundary).</strong></li>
+<li><strong>Candidate не является Selection или Permission.</strong></li>
+<li><strong>Skill Routing не является Inference Routing.</strong></li>
 <li><strong>До дорогого выполнения — прогноз ресурсов.</strong></li>
 <li><strong>После результата — сравнение прогноза с фактом.</strong></li>
 <li><strong>Успех означает проверенный результат, а не наличие ответа модели.</strong></li>
@@ -8633,9 +8916,11 @@ Learning (самообучение)
 <h2 id="27-3-общая-карта-модулей">27.3. Общая карта модулей</h2>
 <div class="table-container"><table class="doc-table"><thead><tr><th>Модуль</th><th>Главный вопрос</th></tr></thead><tbody><tr><td>Core — ядро управления</td><td>Что должна организовать система?</td></tr><tr><td>Rule Manager — менеджер правил</td><td>Какие обязательные правила применимы?</td></tr><tr><td>Security — безопасность</td><td>Разрешено ли действие?</td></tr><tr><td>Domain — предметная область</td><td>Что означает задача в данной области?</td></tr><tr><td>Context — контекст</td><td>Что исполнителю нужно знать сейчас?</td></tr><tr><td>Knowledge — знания</td><td>Что система уже знает как проверенное знание?</td></tr><tr><td>Resources — ресурсы</td><td>Где находится нужный объект?</td></tr><tr><td>CacheEngine — движок кэша</td><td>Что можно безопасно не вычислять повторно и как это быстро переиспользовать?</td></tr><tr><td>Planning &amp; Forecasting — планирование и прогнозирование</td><td>Сколько ресурсов вероятно потребуется?</td></tr><tr><td>Inference — выбор вычислительного интеллекта</td><td>Какой уровень интеллекта и маршрут вычисления нужен?</td></tr><tr><td>Coworker — исполнители</td><td>Кто конкретно выполнит работу?</td></tr><tr><td>Execution — исполнение</td><td>Как физически выполнить разрешённое действие?</td></tr><tr><td>Integrations — интеграции</td><td>Как технически обратиться к внешней системе?</td></tr><tr><td>QA — независимая проверка</td><td>Соответствует ли результат требованиям?</td></tr><tr><td>Recovery — восстановление</td><td>Как продолжить после отказа?</td></tr><tr><td>Telemetry — телеметрия</td><td>Что произошло?</td></tr><tr><td>Metrics — метрики</td><td>Насколько хорошо это произошло?</td></tr><tr><td>Learning — самообучение</td><td>Что следует улучшить?</td></tr><tr><td>Personal Layer — персональный слой</td><td>Что относится именно к конкретному пользователю?</td></tr><tr><td>Visualization — визуализация</td><td>Как человеку увидеть работу системы?</td></tr><tr><td>Desktop Shell — настольная оболочка Electron</td><td>Как пользователь взаимодействует с KAT9I_OS как с приложением?</td></tr><tr><td>Configuration — конфигурация</td><td>Как система настроена в этой установке?</td></tr><tr><td>Storage — хранение</td><td>Где физически хранится состояние?</td></tr></tbody></table></div>
 <h2 id="27-4-core-ядро-управления">27.4. Core — ядро управления</h2>
-<p>Core создаёт и поддерживает общесистемные контракты задачи, координирует жизненный цикл, связывает модули через формальные интерфейсы и управляет TaskContract и TaskGraph.</p>
-<p>Core не выполняет Shell-команды, не выбирает конкретную модель вместо Inference, не выбирает конкретного Worker вместо Coworker, не хранит всю Базу знаний, не реализует GitHub и не забирает предметную логику Domain.</p>
-<p>Каноническое владение: TaskContract, общая модель TaskGraph и жизненный цикл задачи.</p>
+<p>Core создаёт и поддерживает общесистемные контракты задачи, координирует жизненный цикл, связывает модули через формальные интерфейсы, управляет TaskContract и общей моделью TaskGraph, а также поддерживает общесистемный Skill Registry и generic Skill Routing.</p>
+<p>Skill Registry является системным каталогом идентичности, revision, владельца, метаданных и References на канонические определения Skills. Он не является второй копией предметного содержания Skills.</p>
+<p>Generic Skill Routing отвечает за обнаружение подходящих <code>SkillCandidate</code> и выбор способа работы на системном уровне. <code>SkillCandidate</code> является DATA, а <code>SkillSelection</code> — Decision, но не Permission.</p>
+<p>Core не выполняет Shell-команды, не выбирает конкретную модель вместо Inference, не выбирает конкретного Worker вместо Coworker, не хранит всю Базу знаний, не реализует GitHub, не забирает предметную логику Domain и не становится владельцем семантики всех Skills.</p>
+<p>Каноническое владение: TaskContract, общая модель TaskGraph, жизненный цикл задачи, общесистемный Skill Registry и generic Skill Routing.</p>
 <h2 id="27-5-rule-manager-менеджер-правил">27.5. Rule Manager — менеджер правил</h2>
 <p>Rule Manager хранит и применяет обязательные правила, определяет применимость по Scope, разрешает конфликты по принципу <code>deny wins — запрет выше разрешения</code> и формирует Effective Ruleset.</p>
 <p>Rule Manager не хранит Preferences, не выбирает Worker, не исполняет действие и не создаёт новые обязательные правила из наблюдений Learning без контролируемой процедуры.</p>
@@ -8646,9 +8931,10 @@ Learning (самообучение)
 <p>Security не оценивает предметное качество результата, не выбирает лучший Worker и не оптимизирует стоимость.</p>
 <p>Каноническое владение: Security Decision и системная граница разрешений.</p>
 <h2 id="27-7-domains-предметные-области">27.7. Domains — предметные области</h2>
-<p>Domain отвечает за смысл правильного выполнения задачи конкретного класса: предметные Workflow, Skills, Validators, формат результата, Domain Rules и связи с Knowledge.</p>
-<p>Domain не реализует общий Security, не выбирает Provider или Worker напрямую и не управляет общесистемным TaskRuntimeState.</p>
-<p>Каноническое владение: предметная логика.</p>
+<p>Domain отвечает за смысл правильного выполнения задачи конкретного класса: предметные Workflow, семантическое содержание Skills, Validators, формат результата, Domain Rules и связи с Knowledge.</p>
+<p>Domain или соответствующий системный модуль остаётся каноническим владельцем содержания своего Skill. Регистрация этого Skill в общесистемном Skill Registry не передаёт Core предметное ownership.</p>
+<p>Domain не реализует общий Security, не выбирает Provider или Worker напрямую, не управляет общесистемным TaskRuntimeState и не создаёт собственный конкурирующий общесистемный Skill Registry / generic Skill Router.</p>
+<p>Каноническое владение: предметная логика, включая семантику предметных Skills и Workflows.</p>
 <h2 id="27-8-context-контекст">27.8. Context — контекст</h2>
 <p>Context определяет минимально достаточную информацию для конкретного этапа и формирует ContextRef, Context Manifest, Context Pack и Context Budget.</p>
 <p>Context не является Базой знаний, не выдаёт разрешения на ресурсы, не выбирает Worker и не хранит все исходные данные.</p>
@@ -8676,7 +8962,7 @@ Learning (самообучение)
 <h2 id="27-13-inference-выбор-вычислительного-интеллекта">27.13. Inference — выбор вычислительного интеллекта</h2>
 <p>Inference выбирает минимально достаточный вычислительный маршрут с учётом Executable-first, Local-first, Security, качества и TaskEstimate.</p>
 <p>Варианты включают локальный код, локальный ИИ, LOW/NORMAL/HIGH, подписочные и API-маршруты.</p>
-<p>Inference не выбирает конкретного Worker и не исполняет Tool.</p>
+<p>Inference не выбирает конкретного Worker, не исполняет Tool и не является владельцем Skill Registry или generic Skill Routing. Он получает Inference Requirement для конкретной части уже определённого способа работы или узла TaskGraph.</p>
 <p>Каноническое владение: Provider Route и маршрутизация вычислительного интеллекта.</p>
 <h2 id="27-14-coworker-исполнители">27.14. Coworker — исполнители</h2>
 <p>Coworker отвечает, кто конкретно должен выполнить работу. Управляет Worker Registry, Capability Profile, availability, Claim, Lease, generation, scheduling и Handoff.</p>
@@ -8779,8 +9065,10 @@ Learning (самообучение)
 <h2 id="27-32-кто-принимает-ключевые-решения">27.32. Кто принимает ключевые решения</h2>
 <ul>
 <li><strong>Что делать:</strong> USER/событие → Core → Domain → TaskContract.</li>
+<li><strong>Какой Domain предположительно применим:</strong> Core / generic classification → DomainCandidate (DATA); активация происходит после Effective Ruleset.</li>
 <li><strong>Какие правила действуют:</strong> Rule Manager.</li>
 <li><strong>Можно ли:</strong> Security.</li>
+<li><strong>Какой воспроизводимый способ работы нужен:</strong> Core generic Skill Routing с использованием предметной семантики владельца Skill.</li>
 <li><strong>Что нужно знать:</strong> Context.</li>
 <li><strong>Где данные:</strong> Resources.</li>
 <li><strong>Как технически получить внешний ресурс:</strong> Integrations.</li>
@@ -8804,20 +9092,23 @@ Learning (самообучение)
 <h2 id="27-35-матрица-ключевых-контрактов">27.35. Матрица ключевых контрактов</h2>
 <div class="table-container"><table class="doc-table"><thead><tr><th>Контракт</th><th>Канонический владелец</th><th>Основные потребители</th></tr></thead><tbody><tr><td>TaskContract</td><td>Core</td><td>Domain, Context, Coworker, Execution, QA</td></tr><tr><td>TaskRuntimeState</td><td>Core / состояние задач</td><td>Coworker, Execution, Recovery, Visualization</td></tr><tr><td>TaskGraph</td><td>Core</td><td>Coworker, Execution, Visualization</td></tr><tr><td>Effective Ruleset</td><td>Rule Manager</td><td>Core, Security, Execution</td></tr><tr><td>Security Decision</td><td>Security</td><td>Core, Execution, Integrations</td></tr><tr><td>Capability Grant</td><td>Security</td><td>Coworker, Execution, Integrations</td></tr><tr><td>Context Pack</td><td>Context</td><td>Worker, Inference</td></tr><tr><td>ResourceRef</td><td>Resources</td><td>Context, Execution, Integrations</td></tr><tr><td>KnowledgeRef</td><td>Knowledge</td><td>Context, Domain, Learning</td></tr><tr><td>TaskEstimate</td><td>Planning</td><td>Inference, Coworker, Visualization</td></tr><tr><td>Provider Route</td><td>Inference</td><td>Coworker, Execution</td></tr><tr><td>Claim / Lease</td><td>Coworker</td><td>Execution, Recovery</td></tr><tr><td>Integration Request</td><td>Integrations</td><td>Execution</td></tr><tr><td>EvidenceRef</td><td>Execution</td><td>QA, Core, Learning</td></tr><tr><td>ResultRef</td><td>Execution</td><td>Core, QA, следующий Worker</td></tr><tr><td>QA Result / Change Evidence</td><td>QA</td><td>Core, Execution, Learning</td></tr><tr><td>Telemetry Event</td><td>Telemetry</td><td>Metrics, Visualization</td></tr><tr><td>MetricsSnapshot</td><td>Metrics</td><td>Learning, Planning, Visualization</td></tr><tr><td>Learning Proposal</td><td>Learning</td><td>владелец изменяемой функции</td></tr><tr><td>Human Decision</td><td>Personal/Core</td><td>Security, Core, Workflow</td></tr><tr><td>UI Command</td><td>Desktop Shell / Core boundary</td><td>Identity, Security, Core</td></tr></tbody></table></div>
 <h2 id="27-36-матрица-источников-истины">27.36. Матрица источников истины</h2>
-<div class="table-container"><table class="doc-table"><thead><tr><th>Сущность</th><th>Источник истины</th></tr></thead><tbody><tr><td>Архитектура</td><td>канонические Markdown-документы</td></tr><tr><td>Схема контракта</td><td>канонический каталог схем</td></tr><tr><td>Код</td><td>Git</td></tr><tr><td>GitHub-задача</td><td>GitHub Issue</td></tr><tr><td>Внутреннее исполнение задачи</td><td>TaskRuntimeState</td></tr><tr><td>Обязательные правила</td><td>Rule Manager</td></tr><tr><td>Проверенные знания</td><td>Knowledge Base</td></tr><tr><td>Ресурс</td><td>исходная система + ResourceRef</td></tr><tr><td>Решение о повторном использовании и runtime-кэш</td><td>CacheEngine</td></tr><tr><td>Worker registration</td><td>Worker Registry</td></tr><tr><td>Lease</td><td>Coworker</td></tr><tr><td>Безопасность действия</td><td>Security Decision</td></tr><tr><td>Фактическое выполнение</td><td>Evidence</td></tr><tr><td>QA</td><td>QA Result / Change Evidence с source revision, ChangeSet и областью применимости</td></tr><tr><td>Сырые события</td><td>Telemetry</td></tr><tr><td>Числовые показатели</td><td>Metrics</td></tr><tr><td>Прогноз</td><td>TaskEstimate</td></tr><tr><td>Learning state</td><td>Learning Store</td></tr><tr><td>Секрет</td><td>Secret Store</td></tr><tr><td>UI-состояние</td><td>производное представление системного состояния</td></tr><tr><td>HTML-документация</td><td>производное представление Markdown</td></tr></tbody></table></div>
+<div class="table-container"><table class="doc-table"><thead><tr><th>Сущность</th><th>Источник истины</th></tr></thead><tbody><tr><td>Архитектура</td><td>канонические Markdown-документы</td></tr><tr><td>Схема контракта</td><td>канонический каталог схем</td></tr><tr><td>Код</td><td>Git</td></tr><tr><td>GitHub-задача</td><td>GitHub Issue</td></tr><tr><td>Внутреннее исполнение задачи</td><td>TaskRuntimeState</td></tr><tr><td>Обязательные правила</td><td>Rule Manager</td></tr><tr><td>Проверенные знания</td><td>Knowledge Base</td></tr><tr><td>Ресурс</td><td>исходная система + ResourceRef</td></tr><tr><td>Решение о повторном использовании и runtime-кэш</td><td>CacheEngine</td></tr><tr><td>Регистрация Skills и их системные метаданные/References</td><td>Skill Registry / Core</td></tr><tr><td>Семантическое содержание конкретного Skill</td><td>соответствующий Domain или системный модуль</td></tr><tr><td>Worker registration</td><td>Worker Registry</td></tr><tr><td>Lease</td><td>Coworker</td></tr><tr><td>Безопасность действия</td><td>Security Decision</td></tr><tr><td>Фактическое выполнение</td><td>Evidence</td></tr><tr><td>QA</td><td>QA Result / Change Evidence с source revision, ChangeSet и областью применимости</td></tr><tr><td>Сырые события</td><td>Telemetry</td></tr><tr><td>Числовые показатели</td><td>Metrics</td></tr><tr><td>Прогноз</td><td>TaskEstimate</td></tr><tr><td>Learning state</td><td>Learning Store</td></tr><tr><td>Секрет</td><td>Secret Store</td></tr><tr><td>UI-состояние</td><td>производное представление системного состояния</td></tr><tr><td>HTML-документация</td><td>производное представление Markdown</td></tr></tbody></table></div>
 <h2 id="27-37-порядок-ключевых-решений">27.37. Порядок ключевых решений</h2>
 <p>Рекомендуемый базовый порядок:</p>
 <ol>
 <li>Intake — приём;</li>
 <li>Workspace;</li>
-<li>Rules;</li>
-<li>Domain;</li>
+<li>DomainCandidate — предварительная предметная классификация DATA;</li>
+<li>Rules — Effective Ruleset с учётом применимых Domain Rules;</li>
+<li>Active Domain — активация предметной области;</li>
 <li>TaskContract;</li>
 <li>предварительный Planning;</li>
 <li>Context / Knowledge / Resources;</li>
 <li>CacheEngine;</li>
 <li>уточнённый Planning;</li>
-<li>Inference;</li>
+<li>Workflow / Skill Routing;</li>
+<li>Executable-first;</li>
+<li>Inference для недетерминированного остатка;</li>
 <li>Coworker;</li>
 <li>Security Grant;</li>
 <li>Execution;</li>
@@ -8908,12 +9199,12 @@ Learning (самообучение)
 <ol>
 <li>Каждая ответственность имеет одного канонического владельца.</li>
 <li>Оркестратор вызывает модули, но не забирает их ответственность.</li>
-<li>Domain определяет предметную работу.</li>
+<li>Domain определяет предметную работу и семантику своих Skills/Workflows; Core поддерживает общесистемный Skill Registry и generic Skill Routing без копирования этой семантики.</li>
 <li>Rule Manager определяет обязательные правила.</li>
 <li>Security определяет разрешённость действия.</li>
 <li>Context определяет минимально достаточные сведения.</li>
 <li>Resources определяет логический ресурс, Integrations — способ доступа.</li>
-<li>Planning прогнозирует, Inference выбирает интеллект, Coworker выбирает исполнителя, Execution выполняет.</li>
+<li>Planning прогнозирует, Skill Routing выбирает способ работы, Inference выбирает интеллект, Coworker выбирает исполнителя, Execution выполняет.</li>
 <li>Evidence и QA являются разными уровнями подтверждения.</li>
 <li>Telemetry фиксирует события, Metrics их измеряет, Learning улучшает систему.</li>
 <li>Visualization является представлением, а не источником состояния.</li>
