@@ -31,6 +31,7 @@ schemas/
     ├── CapabilityGrant.json          # Выданный мандат прав и возможностей
     ├── SystemEvent.json              # Универсальный конверт системных событий
     ├── ModuleRegistry.json           # Машинный реестр модулей и граф зависимостей
+    ├── RequirementsRegistry.json     # T0 traceability-реестр требований без дублирования SSoT
     ├── Identity.json                 # Идентичность субъекта и привязка к Windows
     ├── ApprovalRecord.json           # Структурированное одобрение человеком с защитой от replay
     ├── JournalEvent.json             # Элемент append-only журнала событий Event Journal
@@ -48,6 +49,8 @@ schemas/
 ```
 
 Физический список файлов в `schemas/v1/` может быть шире этого краткого перечня по мере развития уже принятых контрактов. Каноническим является сам каталог и конкретные схемы, а не пример дерева выше.
+
+`RequirementsRegistry.json` относится к engineering/control plane разработки: он валидирует T0 traceability-реестр `requirements_registry.json`, но не становится вторым SSoT содержания требований. Смысл Requirement остаётся в `canonical_ssot`, указанном реестром.
 
 ## 4. Политика версионирования и эволюции схем
 
