@@ -67,6 +67,28 @@
       "actionable": false,
       "control": false,
       "canonical": false
+    },
+    {
+      "archive_id": "GY-20260910-section2-forensic-reconstruction-v1.0.0",
+      "path": "graveyard/GY-20260910-section2-forensic-reconstruction_v1.0.0.md",
+      "archive_date": "2026-09-10",
+      "byte_size": 32848,
+      "sha256": "b74342fd4cf59a5ac34b1324d1d95affd1585afca8993acd6eb3f62f055a31bd",
+      "git_blob_sha1": "0a22eb8e87acbaf91e29c7ac254d2aade03e580f",
+      "actionable": false,
+      "control": false,
+      "canonical": false
+    },
+    {
+      "archive_id": "GY-20260910-section2-modern-projection-v1.0.0",
+      "path": "graveyard/GY-20260910-section2-modern-projection_v1.0.0.md",
+      "archive_date": "2026-09-10",
+      "byte_size": 20010,
+      "sha256": "2219a824c37473ec6b913679512be5cd87df6ba7df72472ee9ab4fcfa0a7118c",
+      "git_blob_sha1": "190e040e257834bdbbb26dde0b7241eeb9a8d052",
+      "actionable": false,
+      "control": false,
+      "canonical": false
     }
   ]
 }
