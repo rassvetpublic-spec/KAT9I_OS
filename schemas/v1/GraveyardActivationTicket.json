@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kat9i.org/schemas/v1/GraveyardActivationTicket.json",
+  "title": "GraveyardActivationTicket",
+  "description": "Неисполняемый запечатанный пакет параметров безопасного перехода GraveyardCandidate в обычный рабочий процесс. Сам ticket остаётся DATA; side effect разрешается только отдельным ApprovalRecord, чей action_hash совпадает с SHA-256 канонического ticket.",
+  "type": "object",
+  "version": "1.0.0",
+  "additionalProperties": false,
+  "required": [
+    "activation_id",
+    "command",
+    "task_id",
+    "candidate_id",
+    "resurrected_from",
+    "source_ref",
+    "canon_checked_revision",
+    "proposed_work",
+    "issued_at",
+    "expires_at",
+    "actionable",
+    "control",
+    "requires_approval"
+  ],
+  "properties": {
+    "activation_id": {
+      "type": "string",
+      "pattern": "^gya-[a-f0-9]{16}$",
+      "description": "Устойчивый идентификатор точного activation ticket."
+    },
+    "command": {
+      "const": "EXCAVATE_IDEA",
+      "description": "Тип пользовательского намерения: безопасно вернуть идею из Graveyard в обычный workflow."
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{3,64}$",
+      "description": "Идентификатор уже существующей пользовательской review-задачи, в рамках которой формируется ApprovalRecord. Graveyard сам эту задачу не создаёт."
+    },
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^gyc-[a-f0-9]{16}$"
+    },
+    "resurrected_from": {
+      "type": "string",
+      "pattern": "^GY-[a-zA-Z0-9._-]{3,120}$"
+    },
+    "source_ref": {
+      "type": "string",
+      "pattern": "^ctx-[a-zA-Z0-9_-]{8,160}$"
+    },
+    "canon_checked_revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Точная revision актуального канона, на которой подтверждён COMPATIBLE."
+    },
+    "proposed_work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "summary", "target"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["ISSUE", "ADR", "TASK_CONTRACT"],
+          "description": "Какой обычный рабочий объект предлагается создать после подтверждения."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Целевой репозиторий/домен/контур обычного workflow."
+        }
+      }
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actionable": {
+      "const": false,
+      "description": "Ticket не является задачей и не может сам запускать работу."
+    },
+    "control": {
+      "const": false,
+      "description": "Ticket остаётся DATA; CONTROL появляется только из отдельно проверенного Human Approval."
+    },
+    "requires_approval": {
+      "const": true
+    }
+  }
+}

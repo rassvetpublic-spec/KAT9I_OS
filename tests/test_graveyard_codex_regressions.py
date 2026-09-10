@@ -1,0 +1,277 @@
+# -*- coding: utf-8 -*-
+"""Regression coverage for Codex review on exact Graveyard approval boundary."""
+
+import copy
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import patch
+
+from scripts.check_graveyard import (
+    CONTROL_TEXT_SUFFIXES,
+    _find_concrete_graveyard_ref,
+    _iter_control_text_files,
+    _read_control_text,
+    validate_graveyard,
+)
+from scripts.graveyard_context import (
+    _APPROVAL_SEAL,
+    _VerifiedApprovalOutcome,
+    REPO_ROOT,
+    activation_action_hash,
+    build_activation_ticket,
+    can_seed_planning,
+    confirm_for_normal_workflow,
+    create_reactivation_candidate,
+    record_canon_check,
+    validate_candidate_policy,
+    verified_work_provenance,
+)
+from scripts.graveyard_excavate import _trusted_nonce_state_path, _trusted_now_iso
+
+
+class TestLatestCodexRegressions(unittest.TestCase):
+    def test_nested_graveyard_directory_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "graveyard" / "alias").mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, "alias/каталог"):
+                validate_graveyard(root)
+
+    def test_bomless_utf16_both_endians_detect_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for encoding in ("utf-16-le", "utf-16-be"):
+                path = Path(tmp) / "control.cmd"
+                path.write_bytes('type graveyard/GY-test.md'.encode(encoding))
+                self.assertIsNotNone(_find_concrete_graveyard_ref(_read_control_text(path)))
+
+    def test_split_path_reference_detected(self):
+        self.assertIsNotNone(_find_concrete_graveyard_ref('Path("graveyard") / "GY-test.md"'))
+
+    def test_pyw_control_file_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            path = root / "scripts" / "control.pyw"
+            path.write_text('open("graveyard/GY-test.md")', encoding="utf-8")
+            self.assertIn(path, list(_iter_control_text_files(root)))
+
+    def test_percent_encoded_file_uri_cannot_seed_planning(self):
+        uri = 'file:///workspace/graveyard/%47Y-test.md'
+        self.assertFalse(can_seed_planning({
+            "source_class": "history", "resolver": "history_store", "ref_id": "ctx-history12345678",
+            "uri": uri, "provenance": {"source_uri": uri}, "actionable": True, "control": True,
+        }))
+
+    def setUp(self):
+        manifest = json.loads((REPO_ROOT / "graveyard" / "MANIFEST.json").read_text(encoding="utf-8"))
+        self.manifest = manifest
+        self.archive_id = manifest["archives"][0]["archive_id"]
+        self.now = "2026-09-09T15:02:00Z"
+        self.created = "2026-09-09T15:00:00Z"
+        self.revision = "main@0123456789abcdef"
+
+    def _checked_candidate(self):
+        candidate = create_reactivation_candidate(
+            self.archive_id,
+            "Проверить latest Codex regressions",
+            selector="section:sealed",
+            root=REPO_ROOT,
+            created_at=self.created,
+        )
+        return record_canon_check(
+            candidate,
+            status="COMPATIBLE",
+            checked_revision=self.revision,
+            root=REPO_ROOT,
+        )
+
+    def _identity(self):
+        return {
+            "identity_id": "id-user12345678",
+            "subject_type": "HUMAN_USER",
+            "display_name": "Local User",
+            "roles": ["LOCAL_USER"],
+            "trust_level": "AUTHENTICATED",
+            "windows_binding": {
+                "security_identifier": "S-1-5-21-1000",
+                "account_name": "LOCAL\\\\User",
+                "is_elevated": False,
+                "account_hash": "sha256:" + "a" * 64,
+            },
+            "created_at": "2026-09-09T14:00:00Z",
+        }
+
+    def test_candidate_id_binds_manifest_path_and_hash_revision(self):
+        candidate = create_reactivation_candidate(
+            self.archive_id,
+            "Manifest binding must survive Archive ID remap",
+            root=REPO_ROOT,
+            created_at=self.created,
+        )
+        swapped = copy.deepcopy(self.manifest)
+        self.assertGreaterEqual(len(swapped["archives"]), 2)
+        first, second = swapped["archives"][0], swapped["archives"][1]
+        first["archive_id"], second["archive_id"] = second["archive_id"], first["archive_id"]
+        with patch("scripts.graveyard_context.load_manifest", return_value=swapped):
+            with self.assertRaises(ValueError):
+                validate_candidate_policy(candidate, root=REPO_ROOT)
+
+    def test_dot_relative_graveyard_uri_cannot_seed_planning(self):
+        forged = {
+            "ref_id": "ctx-history12345678",
+            "uri": "./graveyard/GY-test.md",
+            "source_class": "history",
+            "resolver": "history_store",
+            "actionable": True,
+            "control": True,
+            "provenance": {"source_uri": "./graveyard/GY-test.md"},
+        }
+        self.assertFalse(can_seed_planning(forged))
+
+    def test_windows_case_variant_graveyard_uri_cannot_seed_planning(self):
+        forged = {
+            "ref_id": "ctx-history12345678",
+            "uri": "GRAVEYARD/GY-test.md",
+            "source_class": "history",
+            "resolver": "history_store",
+            "actionable": True,
+            "control": True,
+            "provenance": {"source_uri": "GrAvEyArD/GY-test.md"},
+        }
+        self.assertFalse(can_seed_planning(forged))
+
+    def test_absolute_and_file_graveyard_uri_cannot_seed_planning(self):
+        variants = (
+            "C:\\workspace\\KAT9I_OS\\graveyard\\GY-test.md",
+            "file:///workspace/KAT9I_OS/graveyard/GY-test.md",
+        )
+        for uri in variants:
+            forged = {
+                "ref_id": "ctx-history12345678",
+                "uri": uri,
+                "source_class": "history",
+                "resolver": "history_store",
+                "actionable": True,
+                "control": True,
+                "provenance": {"source_uri": uri},
+            }
+            with self.subTest(uri=uri):
+                self.assertFalse(can_seed_planning(forged))
+
+    def test_verified_outcome_exposes_only_copies_not_mutable_sealed_state(self):
+        candidate = self._checked_candidate()
+        ticket = build_activation_ticket(
+            candidate,
+            task_id="review-task-95",
+            proposed_work={"kind": "ISSUE", "summary": "Normal workflow handoff", "target": "rassvetpublic-spec/KAT9I_OS"},
+            issued_at=self.created,
+            expires_at="2026-09-09T15:30:00Z",
+            root=REPO_ROOT,
+        )
+        identity = self._identity()
+        approval = {
+            "approval_id": "appr-graveyard123456",
+            "approver_identity_id": identity["identity_id"],
+            "approver_role": "LOCAL_USER",
+            "task_id": "review-task-95",
+            "action_hash": activation_action_hash(ticket, root=REPO_ROOT),
+            "nonce": "nonce-sealed-outcome-0001",
+            "reason": "Exact ticket approved.",
+            "issued_at": "2026-09-09T15:01:00Z",
+            "expires_at": "2026-09-09T15:20:00Z",
+        }
+        outcome = confirm_for_normal_workflow(
+            candidate,
+            activation_ticket=ticket,
+            approval_record=approval,
+            identity=identity,
+            used_nonces=set(),
+            now=self.now,
+            root=REPO_ROOT,
+        )
+        exposed_approval = outcome.approval_record
+        exposed_candidate = outcome.candidate
+        exposed_approval["approval_id"] = "appr-forged12345678"
+        exposed_candidate["owner_confirmation_ref"] = "appr-forged12345678"
+        used = set()
+        with self.assertRaisesRegex(ValueError, "истёк"):
+            verified_work_provenance(outcome, used_nonces=used, now="2026-09-09T16:00:00Z", root=REPO_ROOT)
+        self.assertFalse(used)
+        provenance = verified_work_provenance(outcome, used_nonces=used, now=self.now, root=REPO_ROOT)
+        forged_outcome = _VerifiedApprovalOutcome(
+            outcome._candidate_bytes, outcome._activation_ticket_bytes,
+            outcome._approval_record_bytes, outcome._identity_bytes, _APPROVAL_SEAL,
+        )
+        with self.assertRaisesRegex(ValueError, "replay"):
+            verified_work_provenance(forged_outcome, used_nonces=used, now=self.now, root=REPO_ROOT)
+        with self.assertRaisesRegex(ValueError, "истёк"):
+            verified_work_provenance(forged_outcome, used_nonces=set(), now="2026-09-09T16:00:00Z", root=REPO_ROOT)
+        self.assertEqual(provenance["approval_id"], "appr-graveyard123456")
+        self.assertEqual(outcome.candidate["owner_confirmation_ref"], "appr-graveyard123456")
+
+    def test_windows_cmd_and_bat_are_scanned_as_control_text(self):
+        self.assertIn(".cmd", CONTROL_TEXT_SUFFIXES)
+        self.assertIn(".bat", CONTROL_TEXT_SUFFIXES)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            cmd = scripts / "auto_plan.cmd"
+            cmd.write_text("type graveyard\\GY-test.md\n", encoding="utf-8")
+            bat = scripts / "auto_plan.bat"
+            bat.write_text("type graveyard\\GY-test.md\n", encoding="utf-8")
+            yielded = {p.name for p in _iter_control_text_files(root)}
+            self.assertEqual(yielded, {"auto_plan.cmd", "auto_plan.bat"})
+
+    def test_extensionless_script_is_scanned_as_control_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scripts = root / "scripts"
+            scripts.mkdir()
+            helper = scripts / "auto_plan"
+            helper.write_text("cat graveyard/GY-test.md\n", encoding="utf-8")
+            yielded = {p.name for p in _iter_control_text_files(root)}
+            self.assertIn("auto_plan", yielded)
+
+    def test_concrete_ref_guard_normalizes_dot_segments(self):
+        self.assertEqual(
+            _find_concrete_graveyard_ref("type graveyard/./GY-test.md"),
+            "graveyard/./GY-test.md",
+        )
+        self.assertEqual(
+            _find_concrete_graveyard_ref("type graveyard\\.\\GY-test.md"),
+            "graveyard\\.\\GY-test.md",
+        )
+
+    def test_utf16_windows_control_file_is_decoded_and_scanned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "auto_plan.cmd"
+            path.write_text("type graveyard\\GY-test.md\r\n", encoding="utf-16")
+            text = _read_control_text(path)
+            self.assertIsNotNone(_find_concrete_graveyard_ref(text))
+
+    def test_cli_approval_uses_trusted_clock_and_single_replay_store(self):
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "graveyard_excavate.py"), "approve", "--help"],
+            cwd=REPO_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertNotIn("--now", proc.stdout)
+        self.assertNotIn("--used-nonces", proc.stdout)
+        parsed = datetime.fromisoformat(_trusted_now_iso().replace("Z", "+00:00"))
+        self.assertIsNotNone(parsed.tzinfo)
+        self.assertEqual(
+            _trusted_nonce_state_path(REPO_ROOT),
+            REPO_ROOT / ".kat9i-runtime" / "graveyard-used-nonces.json",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

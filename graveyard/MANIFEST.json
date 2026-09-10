@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "source_class": "graveyard",
+  "actionable": false,
+  "control": false,
+  "canonical": false,
+  "auto_promotion": false,
+  "ssot": false,
+  "owner_reactivation_required": true,
+  "archive_policy": {
+    "immutable_history": true,
+    "prefer_new_version_over_in_place_edit": true,
+    "current_canon_wins_on_conflict": true
+  },
+  "archives": [
+    {
+      "archive_id": "GY-20260909-ai-github-toolchain",
+      "path": "graveyard/GY-20260909-ai-github-toolchain_v1.0.0.md",
+      "archive_date": "2026-09-09",
+      "byte_size": 63697,
+      "sha256": "75bc6f1e00b34bf2a0d2f7d2b0992ddefef78575b5bd470203ae6528685ea4f4",
+      "git_blob_sha1": "29fdb45fa8779db8cc03c72840e759562617c40c",
+      "actionable": false,
+      "control": false,
+      "canonical": false
+    },
+    {
+      "archive_id": "GY-20260909-kat9i-convergence",
+      "path": "graveyard/GY-20260909-kat9i-convergence.md",
+      "archive_date": "2026-09-09",
+      "byte_size": 56931,
+      "sha256": "ddc0d7a69b8d4c00d69d2faffe37e637a023bd49a142c96ba7650b26fb129c1d",
+      "git_blob_sha1": "e8332a62ca2b584e2fdd09e248fec38573c6d0aa",
+      "actionable": false,
+      "control": false,
+      "canonical": false
+    },
+    {
+      "archive_id": "GY-20260909-KAT9I-OS-chat-graveyard",
+      "path": "graveyard/GY-20260909-KAT9I-OS-chat-graveyard.md",
+      "archive_date": "2026-09-09",
+      "byte_size": 54985,
+      "sha256": "3e7bcb54a7e0250f6be10e7f09224527e02a9212bbe4742078c9bcba3d3a7a9c",
+      "git_blob_sha1": "ccd2214831d40852417128ac7cc1b2bd36122e1d",
+      "actionable": false,
+      "control": false,
+      "canonical": false
+    },
+    {
+      "archive_id": "GY-20260909-kat9i-pr67-qa-context",
+      "path": "graveyard/GY-20260909-kat9i-pr67-qa-context.md",
+      "archive_date": "2026-09-09",
+      "byte_size": 37959,
+      "sha256": "6ad4c4ca10e8d8b2d130944ae354d9f90c3f0f6756079cc3a85cf8baa0876bf0",
+      "git_blob_sha1": "d54847ddea26cf26df07f989c56730ba23f53b19",
+      "actionable": false,
+      "control": false,
+      "canonical": false
+    }
+  ]
+}
