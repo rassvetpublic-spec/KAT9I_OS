@@ -137,9 +137,15 @@ Human Approval использует уже существующие канони
 
 Повтор того же nonce блокируется как replay.
 
+### Trusted CLI handoff
+
+Production-facing путь `approve` не принимает от вызывающего кода текущее время или путь replay-store. Владение доверенными входами вынесено из reference API в отдельный адаптер `scripts/graveyard_trusted_handoff.py`: он получает системное UTC-время и использует один фиксированный `.kat9i-runtime/graveyard-used-nonces.json`. Read/check/consume/persist выполняются под cross-process lock, запись — через `fsync` и атомарный `os.replace`.
+
+Функции Python, позволяющие явно передать `now`, `used_nonces` или `nonce_state_path`, остаются только reference/test API и не являются production security boundary. CLI `approve` делегирует решение отдельному trusted adapter без этих параметров. Будущий Rust Core может заменить этот адаптер, не меняя `ActivationTicket`/`ApprovalRecord` контракт.
+
 ## Автоматическая защита
 
-Quality Gate запускает `scripts/check_graveyard.py`, контрактные проверки и `tests/test_graveyard_context.py`.
+Quality Gate запускает `scripts/check_graveyard.py`, контрактные проверки и Graveyard regression tests.
 
 Проверяется минимум:
 
@@ -149,6 +155,8 @@ Quality Gate запускает `scripts/check_graveyard.py`, контрактн
 - `actionable/control/canonical=false`;
 - отсутствие незарегистрированных архивов;
 - отсутствие прямой зависимости канонического/управляющего контура от конкретного `graveyard/GY-*`;
+- repo-wide symlink/junction aliases, которые разрешаются внутрь `graveyard/`, запрещены даже если control-код не содержит строку `graveyard`;
+- Python control-код дополнительно проверяется AST-aware анализом compile-time строковых и path-выражений без выполнения кода;
 - append-only правило для уже существующих архивов при PR/push сравнении;
 - сохранение DATA/CONTROL после Context retrieval;
 - запрет seed для Planner даже после подмены `source_class`;
@@ -159,9 +167,12 @@ Quality Gate запускает `scripts/check_graveyard.py`, контрактн
 - task binding;
 - expiry;
 - replay nonce;
-- отсутствие side effect в reference handler.
+- отсутствие side effect в reference handler;
+- trusted adapter и CLI boundary не принимают caller-supplied clock/replay-store path.
 
-Проверка fail-closed: неоднозначность или нарушение границы приводит к FAIL Quality Gate.
+Статический SSoT scanner — **defence-in-depth**, а не самостоятельная security boundary. Он предназначен для раннего обнаружения случайных и детерминированно распознаваемых зависимостей. Основной fail-closed барьер DATA→CONTROL остаётся runtime-политикой `Context/Planner`: Graveyard-контекст не может стать seed для планирования только потому, что статический scanner не распознал намеренно динамическую или обфусцированную конструкцию.
+
+Проверка fail-closed: неоднозначность или нарушение проверяемой границы приводит к FAIL Quality Gate.
 
 ## Как добавить новый архив
 
@@ -176,7 +187,7 @@ Quality Gate запускает `scripts/check_graveyard.py`, контрактн
 
 ## Граница текущей реализации
 
-Сейчас реализованы **машинные контракты + исполняемый reference handler + fail-closed CI Evidence**.
+Сейчас реализованы **машинные контракты + исполняемый reference handler + отдельный trusted CLI adapter + fail-closed CI Evidence**.
 
 Не реализованы и сознательно не маскируются под готовые:
 
@@ -184,13 +195,12 @@ Quality Gate запускает `scripts/check_graveyard.py`, контрактн
 - production Rust Core Context/Planner integration;
 - реальный UI → Core IPC для этой команды;
 - реальное создание GitHub Issue/ADR/TaskContract;
-- durable replay-store nonce после перезапуска;
 - проверка Windows token/SID непосредственно в Rust Core.
 
-Причина — это Runtime/Product scope G3. Управляющий Gate #62 запрещает новый Runtime/Product-код до PASS предшествующих Gate; #41 является профильным Rust Core/Electron контуром. Поэтому текущий PR #97 не обходит Gate и не создаёт фальшивый параллельный runtime.
+То есть durable replay-защита CLI уже существует, но она не выдаётся за полноценную изоляцию будущего Rust Runtime. Python seal и reference API остаются type/test boundary; отдельный `graveyard_trusted_handoff.py` закрывает текущую production-facing границу времени/replay-store, а основная production-изоляция должна жить в Core при появлении соответствующего Runtime scope.
 
 ## Импортированные архивы
 
 Точный реестр и контрольные суммы находятся в `MANIFEST.json`.
 
-Текущий bootstrap содержит четыре исторических снимка от 2026-09-09. Их содержимое импортировано без текстовых изменений и может содержать намеренно устаревшие правила или статусы.
+Сейчас manifest содержит пять исторических снимков: четыре bootstrap-архива от 2026-09-09 и отдельный DATA-only аудит полезных остатков закрытого PR #86 от 2026-09-10. Их содержимое может намеренно содержать устаревшие правила или статусы и не является CONTROL.

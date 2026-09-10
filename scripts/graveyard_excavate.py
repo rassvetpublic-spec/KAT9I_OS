@@ -2,8 +2,8 @@
 """Безопасный reference handler команды «Раскопать идею».
 
 No GitHub Issue/ADR/TaskContract side effects. Production Electron/Rust wiring is
-still gated by G3. CLI approval consumes replay nonce under one trusted
-repo-local store with a cross-process lock, trusted system time and atomic writes.
+still gated by G3. Production-facing CLI approval delegates trusted clock and
+replay-store ownership to scripts/graveyard_trusted_handoff.py.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -39,12 +38,14 @@ def _fail(message: str) -> None:
 
 
 def _trusted_now_iso() -> str:
-    """CLI security boundary: current time comes only from system UTC clock."""
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    """Compatibility/test helper; production CLI uses the separate trusted adapter."""
+    from scripts.graveyard_trusted_handoff import trusted_now_iso
+
+    return trusted_now_iso()
 
 
 def _trusted_nonce_state_path(root: Path = REPO_ROOT) -> Path:
-    """Production-facing CLI uses one fixed replay store; callers cannot redirect it."""
+    """Compatibility/test helper; production CLI cannot supply this root."""
     return root / ".kat9i-runtime" / "graveyard-used-nonces.json"
 
 
@@ -122,7 +123,7 @@ def approve_excavate_request(
     now: str,
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """In-memory approval helper. Tests/internal callers may inject time explicitly."""
+    """Reference/test helper. Production-facing callers must use the trusted adapter."""
     if prepared.get("status") != "AWAITING_OWNER_CONFIRMATION":
         _fail("Approve разрешён только для AWAITING_OWNER_CONFIRMATION bundle")
     candidate = prepared.get("candidate")
@@ -190,7 +191,7 @@ def approve_excavate_request_with_nonce_file(
     now: str,
     root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    """Serialize replay check+consume+persist as one critical section."""
+    """Reference/test helper that serializes replay check+consume+persist."""
     parent = nonce_state_path.parent
     parent.mkdir(parents=True, exist_ok=True)
     if parent.is_symlink() or nonce_state_path.is_symlink():
@@ -220,6 +221,17 @@ def approve_excavate_request_with_nonce_file(
             lock_path.unlink()
         except FileNotFoundError:
             pass
+
+
+def _approve_via_trusted_cli_boundary(
+    prepared: dict[str, Any],
+    approval_record: dict[str, Any],
+    identity: dict[str, Any],
+) -> dict[str, Any]:
+    """Delegate production-facing approval to the separate trusted adapter."""
+    from scripts.graveyard_trusted_handoff import approve_trusted
+
+    return approve_trusted(prepared, approval_record, identity)
 
 
 def _write_json(value: dict[str, Any], output: Path | None) -> None:
@@ -262,12 +274,10 @@ def main() -> int:
         _write_json(result, args.output)
         return 0
 
-    result = approve_excavate_request_with_nonce_file(
+    result = _approve_via_trusted_cli_boundary(
         _load_json(args.prepared),
-        approval_record=_load_json(args.approval),
-        identity=_load_json(args.identity),
-        nonce_state_path=_trusted_nonce_state_path(),
-        now=_trusted_now_iso(),
+        _load_json(args.approval),
+        _load_json(args.identity),
     )
     _write_json(result, args.output)
     return 0

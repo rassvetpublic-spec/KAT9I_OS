@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
@@ -13,18 +14,23 @@ from pathlib import Path
 MARKER = "# GRAVEYARD / DATA ONLY / NON-CANONICAL / NON-ACTIONABLE / NO AUTO-PROMOTION"
 FALSE_POLICY_FIELDS = ("actionable", "control", "canonical", "auto_promotion", "ssot")
 CONTROL_TEXT_SUFFIXES = {
-    ".md", ".json", ".yml", ".yaml", ".toml", ".py", ".ps1", ".psm1", ".psd1", ".sh",
+    ".md", ".json", ".yml", ".yaml", ".toml", ".py", ".pyw", ".ps1", ".psm1", ".psd1", ".sh",
     ".cmd", ".bat", ".rs", ".ts", ".tsx", ".js", ".mjs", ".cjs",
     ".html", ".xml", ".ini", ".cfg", ".txt",
 }
+PYTHON_CONTROL_SUFFIXES = {".py", ".pyw"}
 CONTROL_EXTENSIONLESS_DIRS = {"scripts", "tools", "bin", ".github"}
 CONCRETE_GRAVEYARD_REF = re.compile(
     r"graveyard(?:[\\/]+(?:\.)?)*[\\/]+GY-[A-Za-z0-9._-]+\.md",
     re.IGNORECASE,
 )
-# Этот тест обязан содержать заведомо плохую concrete-reference строку, иначе
-# невозможно доказать, что guard её ловит. Это единственное осознанное исключение.
-CONTROL_SCAN_ALLOWLIST = {Path("tests/test_graveyard.py"), Path("tests/test_graveyard_codex_regressions.py")}
+# Эти тесты обязаны содержать заведомо плохие concrete-reference строки, иначе
+# невозможно доказать, что guard их ловит. Это единственные осознанные исключения.
+CONTROL_SCAN_ALLOWLIST = {
+    Path("tests/test_graveyard.py"),
+    Path("tests/test_graveyard_codex_regressions.py"),
+    Path("tests/test_graveyard_issue99.py"),
+}
 
 
 def _git_blob_sha1(data: bytes) -> str:
@@ -45,6 +51,65 @@ def _validate_archive_relative_path(relative: str) -> Path:
     if not rel.name.startswith("GY-") or rel.suffix.lower() != ".md":
         _fail(f"Некорректный путь архива: {relative}")
     return rel
+
+
+def _is_alias(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    return bool(callable(is_junction) and is_junction())
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _validate_repo_aliases(root: Path, graveyard: Path) -> None:
+    """Reject repo-wide symlink/junction aliases resolving into Graveyard.
+
+    Static scanning cannot infer a hidden alias from source text. We therefore
+    inspect aliases themselves before scanning control files and fail closed if
+    any repository alias resolves to the Graveyard directory or a child of it.
+    """
+    graveyard_real = graveyard.resolve(strict=True)
+    for current, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        try:
+            current_rel = current_path.relative_to(root)
+        except ValueError:
+            _fail(f"Repo walk вышел за root: {current_path}")
+        if ".git" in current_rel.parts:
+            dirnames[:] = []
+            continue
+
+        names = list(dirnames) + list(filenames)
+        for name in names:
+            candidate = current_path / name
+            if candidate == graveyard:
+                continue
+            if not _is_alias(candidate):
+                continue
+            try:
+                resolved = candidate.resolve(strict=True)
+            except (OSError, RuntimeError) as exc:
+                _fail(f"Repo alias не удалось безопасно разрешить: {candidate}: {exc}")
+            if resolved == graveyard_real or _is_within(resolved, graveyard_real):
+                _fail(
+                    "Repo-wide alias не может указывать в Graveyard: "
+                    f"{candidate.relative_to(root)} -> {resolved}"
+                )
+
+        kept_dirs: list[str] = []
+        for name in dirnames:
+            candidate = current_path / name
+            if candidate == graveyard or _is_alias(candidate):
+                continue
+            kept_dirs.append(name)
+        dirnames[:] = kept_dirs
 
 
 def _iter_control_text_files(root: Path):
@@ -92,7 +157,6 @@ def _read_control_text(path: Path) -> str:
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
-        # Common Windows scripts may be UTF-16LE without BOM.
         if b"\x00" in data:
             for encoding in ("utf-16-le", "utf-16-be"):
                 try:
@@ -116,23 +180,134 @@ def _find_concrete_graveyard_ref(text: str) -> str | None:
     return None
 
 
+def _ast_call_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _ast_call_name(node.value)
+        return f"{parent}.{node.attr}" if parent else node.attr
+    return None
+
+
+def _ast_static_string(node: ast.AST, env: dict[str, str]) -> str | None:
+    """Safely fold only deterministic string/path expressions; never execute code."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return env.get(node.id)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _ast_static_string(node.left, env)
+        right = _ast_static_string(node.right, env)
+        if left is not None and right is not None:
+            return left + right
+        return None
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        left = _ast_static_string(node.left, env)
+        right = _ast_static_string(node.right, env)
+        if left is not None and right is not None:
+            return left.rstrip("/\\") + "/" + right.lstrip("/\\")
+        return None
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+                return None
+            parts.append(value.value)
+        return "".join(parts)
+    if isinstance(node, ast.Call):
+        name = (_ast_call_name(node.func) or "").casefold()
+        if name in {"path", "pathlib.path", "purepath", "pathlib.purepath", "posixpath", "windowspath"}:
+            if len(node.args) == 1:
+                return _ast_static_string(node.args[0], env)
+            return None
+        if name in {"os.path.join", "posixpath.join", "ntpath.join"}:
+            parts = [_ast_static_string(arg, env) for arg in node.args]
+            if parts and all(part is not None for part in parts):
+                return "/".join(str(part).strip("/\\") for part in parts)
+            return None
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "joinpath":
+            base = _ast_static_string(node.func.value, env)
+            parts = [_ast_static_string(arg, env) for arg in node.args]
+            if base is not None and all(part is not None for part in parts):
+                return "/".join([base.rstrip("/\\")] + [str(part).strip("/\\") for part in parts])
+    return None
+
+
+def _find_python_ast_graveyard_ref(text: str) -> str | None:
+    """Detect compile-time Python path construction that resolves to a GY archive."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        _fail(f"Python control-файл не удалось разобрать AST: line={exc.lineno}: {exc.msg}")
+
+    def scan_block(statements: list[ast.stmt], inherited: dict[str, str]) -> str | None:
+        env = dict(inherited)
+        for statement in statements:
+            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                found = scan_block(statement.body, env)
+                if found:
+                    return found
+                continue
+            nested_blocks: list[list[ast.stmt]] = []
+            if isinstance(statement, ast.If):
+                nested_blocks.extend([statement.body, statement.orelse])
+            elif isinstance(statement, (ast.For, ast.AsyncFor, ast.While)):
+                nested_blocks.extend([statement.body, statement.orelse])
+            elif isinstance(statement, ast.Try):
+                nested_blocks.extend([statement.body, statement.orelse, statement.finalbody])
+                nested_blocks.extend(handler.body for handler in statement.handlers)
+            elif isinstance(statement, (ast.With, ast.AsyncWith)):
+                nested_blocks.append(statement.body)
+
+            value_node: ast.AST | None = None
+            targets: list[ast.AST] = []
+            if isinstance(statement, ast.Assign):
+                value_node = statement.value
+                targets = list(statement.targets)
+            elif isinstance(statement, ast.AnnAssign) and statement.value is not None:
+                value_node = statement.value
+                targets = [statement.target]
+            if value_node is not None:
+                value = _ast_static_string(value_node, env)
+                if value and _find_concrete_graveyard_ref(value):
+                    return value
+                if value is not None:
+                    for target in targets:
+                        if isinstance(target, ast.Name):
+                            env[target.id] = value
+
+            for node in ast.walk(statement):
+                value = _ast_static_string(node, env)
+                if value and _find_concrete_graveyard_ref(value):
+                    return value
+            for block in nested_blocks:
+                found = scan_block(block, env)
+                if found:
+                    return found
+        return None
+
+    return scan_block(tree.body, {})
+
+
 def validate_graveyard(root: Path) -> None:
     graveyard = root / "graveyard"
     manifest_path = graveyard / "MANIFEST.json"
     readme_path = graveyard / "README.md"
 
-    if graveyard.is_symlink() or getattr(graveyard, "is_junction", lambda: False)():
+    if _is_alias(graveyard):
         _fail("Graveyard directory не может быть alias")
     for child in graveyard.iterdir():
-        if child.is_symlink() or child.is_dir() or not child.is_file():
+        if _is_alias(child) or child.is_dir() or not child.is_file():
             _fail(f"Graveyard содержит alias/каталог вместо обычного файла: {child.name}")
 
-    if readme_path.is_symlink() or manifest_path.is_symlink():
-        _fail("graveyard/README.md и MANIFEST.json должны быть обычными файлами, не symlink")
+    if _is_alias(readme_path) or _is_alias(manifest_path):
+        _fail("graveyard/README.md и MANIFEST.json должны быть обычными файлами, не alias")
     if not readme_path.is_file():
         _fail("Отсутствует graveyard/README.md")
     if not manifest_path.is_file():
         _fail("Отсутствует graveyard/MANIFEST.json")
+
+    _validate_repo_aliases(root, graveyard)
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema_version") != "1.0":
@@ -179,8 +354,8 @@ def validate_graveyard(root: Path) -> None:
                 _fail(f"{archive_id}: {field} должен быть false")
 
         path = root / rel_path
-        if path.is_symlink():
-            _fail(f"Graveyard archive не может быть symlink: {normalized}")
+        if _is_alias(path):
+            _fail(f"Graveyard archive не может быть alias: {normalized}")
         if not path.is_file():
             _fail(f"Архив из manifest отсутствует: {normalized}")
         data = path.read_bytes()
@@ -196,8 +371,8 @@ def validate_graveyard(root: Path) -> None:
 
     actual: set[str] = set()
     for path in graveyard.glob("GY-*.md"):
-        if path.is_symlink():
-            _fail(f"Незарегистрированный или зарегистрированный GY archive не может быть symlink: {path.name}")
+        if _is_alias(path):
+            _fail(f"Незарегистрированный или зарегистрированный GY archive не может быть alias: {path.name}")
         actual.add(path.relative_to(root).as_posix())
     if actual != paths:
         missing = sorted(paths - actual)
@@ -207,6 +382,8 @@ def validate_graveyard(root: Path) -> None:
     for path in _iter_control_text_files(root):
         text = _read_control_text(path)
         concrete_ref = _find_concrete_graveyard_ref(text)
+        if concrete_ref is None and path.suffix.lower() in PYTHON_CONTROL_SUFFIXES:
+            concrete_ref = _find_python_ast_graveyard_ref(text)
         if concrete_ref:
             _fail(
                 "Канонический/исполняемый контур ссылается на конкретный Graveyard archive: "
@@ -238,7 +415,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     validate_graveyard(root)
     validate_append_only(root, os.environ.get("GRAVEYARD_BASE_SHA"))
-    print("Graveyard: DATA/CONTROL, manifest, integrity, symlink, SSoT boundary и append-only проверки пройдены.")
+    print("Graveyard: DATA/CONTROL, manifest, integrity, repo aliases, AST SSoT boundary и append-only проверки пройдены.")
     return 0
 
 
