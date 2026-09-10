@@ -797,7 +797,7 @@ Discovery не должен автоматически выдавать Trust.
 - **OQ-002** — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41) — **ACCEPTED** (ADR-038).
 - **OQ-004** — минимальный безопасный внутренний API между Electron и Core (Issue #41) — **ACCEPTED** (ADR-038, `schemas/v1/CoreIpcMessage.json`).
 - **OQ-008** — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45) — **ACCEPTED** (ADR-039, `schemas/v1/SecretRef.json`).
-- **OQ-010** — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).
+- **OQ-010** — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill) — **ACCEPTED** (ADR-047).
 
 Остальные вопросы не входят в список `OPEN BEFORE v0.1` выше и откладываются строго по своим детальным статусам: OQ-011 — `DEFERRED UNTIL PRE-RELEASE`, OQ-012 и OQ-013 — `DEFERRED UNTIL v0.2`; будущие OQ получают собственный явный этап. Они не должны считаться закрытыми или переноситься на другой срок только из-за этой сводки.
 
@@ -930,18 +930,26 @@ Discovery не должен автоматически выдавать Trust.
    - Защита от дублирующих побочных действий (`SKIP_ALREADY_EXECUTED`);
    - Retention: минимум 30 суток для аудита.
 
-## 32.62. OQ-010 — правила завершения Core при закрытии Electron
+## 32.62. OQ-010 / ADR-047 — жизненный цикл Electron UI и Core
 
-Нужно определить пользовательский UX:
+> **Статус:** `ACCEPTED` (ADR-047; канонические источники: [§22](22_CONFIGURATION_STARTUP_AND_UPDATES.md), [§23](23_TECHNOLOGY_STACK_AND_RUNTIME.md), Issue #122).
 
-- закрытие окна → Tray;
-- отдельная команда «Завершить KAT9I_OS»;
-- поведение активных задач;
-- Windows shutdown.
+Принят основной инвариант:
 
-Статус:
+> **UI lifecycle ≠ Core lifecycle.**
 
-`OPEN BEFORE Electron P0`.
+Решение:
+
+1. Закрытие главного окна (`X`) скрывает окно / переводит UI в Tray; Core и активные задачи продолжают работу.
+2. Отдельный выход из Electron UI может завершить UI, но Core остаётся в headless/background режиме.
+3. Повторный Electron выполняет gap-free reconnect: snapshot связывается с Event Journal sequence cursor, а подписка/replay продолжается после этого cursor; независимые `get_system_state` и `subscribe_events` без cursor/replay или эквивалентной атомарной границы запрещены, потому что могут потерять событие.
+4. `Завершить KAT9I_OS` является отдельной CONTROL-операцией: `DRAINING → безопасный Checkpoint/пауза → Journal/State → Lease/fencing cleanup → shutdown`.
+5. Неизвестный результат активного side effect не считается успехом; используется WAIT, разрешённый policy `FORCE STOP` либо BLOCKED/Recovery.
+6. Windows shutdown/reboot допускает только best-effort фиксацию подтверждённого состояния в доступное ОС время; система не рассчитывает на полное завершение всех Task.
+7. При следующем запуске Recovery выполняется до приёма новых изменяющих задач.
+8. Отдельный Shutdown Manager не создаётся: используются существующие Core lifecycle, Recovery, Event Journal, Checkpoint и Lease/fencing.
+
+Конкретная реализация Tray, Windows service/daemon, таймаутов OS shutdown и UI-команд относится к Electron/Runtime реализации и не изменяет принятую архитектурную границу.
 
 ## 32.63. OQ-011 — система обновления Electron/Runtime
 
