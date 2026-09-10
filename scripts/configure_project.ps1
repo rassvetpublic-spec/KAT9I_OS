@@ -274,14 +274,28 @@ function EnsureItems{
   if($LASTEXITCODE -ne 0){throw 'Не удалось получить полный список открытых Issues. Project не изменён дальше.'}
   if($j){
     $items=@(($j -join "`n")|ConvertFrom-Json)
-    $urls+=@($items|ForEach-Object{$_.url}|Where-Object{-not [string]::IsNullOrWhiteSpace([string]$_)})
+    foreach($item in $items){
+      $urlProperty=$null
+      if($null -ne $item){$urlProperty=$item.PSObject.Properties['url']}
+      if($null -eq $urlProperty -or [string]::IsNullOrWhiteSpace([string]$urlProperty.Value)){
+        throw 'Список открытых Issues содержит элемент без непустого url. Project не изменён дальше.'
+      }
+      $urls+=[string]$urlProperty.Value
+    }
   }
 
   $j=& gh pr list --repo $repo --state open --limit 1000 --json url
   if($LASTEXITCODE -ne 0){throw 'Не удалось получить полный список открытых PR. Project не изменён дальше.'}
   if($j){
     $items=@(($j -join "`n")|ConvertFrom-Json)
-    $urls+=@($items|ForEach-Object{$_.url}|Where-Object{-not [string]::IsNullOrWhiteSpace([string]$_)})
+    foreach($item in $items){
+      $urlProperty=$null
+      if($null -ne $item){$urlProperty=$item.PSObject.Properties['url']}
+      if($null -eq $urlProperty -or [string]::IsNullOrWhiteSpace([string]$urlProperty.Value)){
+        throw 'Список открытых PR содержит элемент без непустого url. Project не изменён дальше.'
+      }
+      $urls+=[string]$urlProperty.Value
+    }
   }
 
   $urls+="https://github.com/$repo/issues/62"
