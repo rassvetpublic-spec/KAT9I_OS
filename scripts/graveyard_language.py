@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Русскоязычная нормализация новых Graveyard-сводок.
-
-Основной язык Graveyard — русский. Известные английские технические термины
-при первом существенном употреблении автоматически получают краткое русское
-пояснение. Исторические append-only архивы этим модулем не переписываются.
-"""
+"""Русскоязычная нормализация новых Graveyard-сводок."""
 
 from __future__ import annotations
 
@@ -15,16 +10,16 @@ TECHNICAL_TERM_EXPLANATIONS = OrderedDict([
     ("SSoT", "единый источник истины"),
     ("DATA", "данные, не являющиеся управляющей командой"),
     ("CONTROL", "управляющая информация, разрешающая действие"),
-    ("ContextRef", "ссылка на источник контекста с provenance и trust-признаками"),
+    ("ContextRef", "ссылка на источник контекста с происхождением и уровнем доверия"),
     ("provenance", "происхождение и цепочка источников данных"),
     ("trust", "уровень доверия к источнику или субъекту"),
     ("Graveyard", "слой исторических неисполняемых данных"),
     ("Knowledge Distillation", "выжимка полезного знания из большого исходного контекста"),
     ("ChangeSet", "точный набор изменений"),
     ("Change Evidence", "доказательство проверки самого изменения"),
-    ("Integration Evidence", "доказательство совместимости изменения с текущим target"),
+    ("Integration Evidence", "доказательство совместимости изменения с текущей целью"),
     ("Impact Assessment", "оценка влияния изменения на ранее полученные доказательства"),
-    ("QA REUSE", "повторное использование применимых доказательств QA"),
+    ("QA REUSE", "повторное использование применимых доказательств проверки качества"),
     ("DELTA QA", "проверка только изменившейся или затронутой части"),
     ("FULL QA", "полная независимая проверка изменения"),
     ("Promotion", "безопасное продвижение проверенного изменения в целевое состояние"),
@@ -53,7 +48,7 @@ TECHNICAL_TERM_EXPLANATIONS = OrderedDict([
     ("schema", "машинная схема структуры данных"),
     ("JSON Schema", "стандарт машинного описания и проверки JSON-данных"),
     ("SemVer", "семантическое версионирование"),
-    ("GitHub Actions", "система автоматических workflow GitHub"),
+    ("GitHub Actions", "система автоматических рабочих процессов GitHub"),
     ("workflow", "рабочий процесс из связанных шагов"),
     ("target", "целевое состояние или ветка, куда продвигается изменение"),
     ("main", "основная каноническая ветка репозитория"),
@@ -68,7 +63,6 @@ IGNORED_LATIN = {
 
 
 def is_russian_first(text: str) -> bool:
-    """Проверяет, что объясняющий текст преимущественно русскоязычный."""
     cyr = len(CYRILLIC_RE.findall(text))
     latin = len(re.findall(r"[A-Za-z]", text))
     if cyr == 0:
@@ -81,24 +75,26 @@ def _already_explained(text: str, term: str, pos: int) -> bool:
     return bool(re.match(r"\s*(?:—|-|\()\s*[А-Яа-яЁё]", tail))
 
 
-def add_russian_explanations(text: str) -> tuple[str, list[str]]:
-    """Добавляет русское пояснение при первом существенном употреблении известных терминов."""
+def add_russian_explanations(text: str, extra: dict[str, str] | None = None) -> tuple[str, list[str]]:
     result = text
     added: list[str] = []
-    for term, explanation in TECHNICAL_TERM_EXPLANATIONS.items():
+    explanations = OrderedDict(TECHNICAL_TERM_EXPLANATIONS)
+    for term, explanation in (extra or {}).items():
+        if not re.search(r"[А-Яа-яЁё]", explanation):
+            raise ValueError(f"Пояснение для {term} должно быть русским")
+        explanations[term] = explanation
+    for term, explanation in explanations.items():
         pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(term)}(?![A-Za-z0-9_])")
         match = pattern.search(result)
         if not match or _already_explained(result, term, match.start()):
             continue
-        replacement = f"{term} — {explanation}"
-        result = result[:match.start()] + replacement + result[match.end():]
+        result = result[:match.start()] + f"{term} — {explanation}" + result[match.end():]
         added.append(term)
     return result, added
 
 
-def unexplained_english_terms(text: str) -> list[str]:
-    """Возвращает неизвестные английские термины, которые требуют словаря/пояснения."""
-    known = set(TECHNICAL_TERM_EXPLANATIONS) | IGNORED_LATIN
+def unexplained_english_terms(text: str, extra: dict[str, str] | None = None) -> list[str]:
+    known = set(TECHNICAL_TERM_EXPLANATIONS) | set(extra or {}) | IGNORED_LATIN
     found: list[str] = []
     for token in LATIN_WORD_RE.findall(text):
         if token in known or token.lower().startswith(("http", "github.com")):
@@ -110,8 +106,8 @@ def unexplained_english_terms(text: str) -> list[str]:
     return found
 
 
-def normalize_graveyard_text(text: str) -> tuple[str, list[str]]:
-    normalized, added = add_russian_explanations(text)
+def normalize_graveyard_text(text: str, extra: dict[str, str] | None = None) -> tuple[str, list[str]]:
+    normalized, added = add_russian_explanations(text, extra)
     if not is_russian_first(normalized):
         raise ValueError("Новая Graveyard-сводка должна быть русскоязычной")
     return normalized, added
