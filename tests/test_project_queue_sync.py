@@ -5,9 +5,11 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BEHAVIOR = ROOT / "tests" / "test_project_queue_sync.ps1"
+QUEUE_BEHAVIOR = ROOT / "tests" / "test_project_queue_sync.ps1"
+OPTION_BEHAVIOR = ROOT / "tests" / "test_project_option_append.ps1"
 CONFIG = ROOT / "scripts" / "configure_project.ps1"
 SYNC = ROOT / "scripts" / "project_queue_sync.ps1"
+WORKFLOW = ROOT / ".github" / "workflows" / "project-queue-sync.yml"
 
 
 class ProjectQueueSyncTests(unittest.TestCase):
@@ -22,11 +24,23 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertNotIn("merge_pull_request", sync)
         self.assertNotIn("gh pr merge", sync)
 
-    def test_behavior_suite(self):
+    def test_workflow_is_trusted_and_never_merges(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("KAT9I_PROJECT_TOKEN", text)
+        self.assertIn("project_queue_event.py", text)
+        self.assertIn("configure_project.ps1", text)
+        self.assertIn("project_queue_sync.ps1", text)
+        self.assertIn("Антигравити", text)
+        self.assertNotIn("gh pr merge", text)
+        self.assertNotIn("merge_pull_request", text)
+        self.assertNotIn("pull_request_target", text)
+        self.assertLess(text.index("configure_project.ps1"), text.index("project_queue_sync.ps1"))
+
+    def _run_pwsh(self, path: Path, expected: str):
         pwsh = shutil.which("pwsh")
-        self.assertIsNotNone(pwsh, "PowerShell 7 (pwsh) обязателен для Project queue tests")
+        self.assertIsNotNone(pwsh, "PowerShell 7 (pwsh) обязателен для Project tests")
         result = subprocess.run(
-            [pwsh, "-NoProfile", "-File", str(BEHAVIOR)],
+            [pwsh, "-NoProfile", "-File", str(path)],
             cwd=ROOT,
             text=True,
             encoding="utf-8",
@@ -35,7 +49,13 @@ class ProjectQueueSyncTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, result.returncode, msg=f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
-        self.assertIn("PASS: Project queue lifecycle", result.stdout)
+        self.assertIn(expected, result.stdout)
+
+    def test_queue_behavior_suite(self):
+        self._run_pwsh(QUEUE_BEHAVIOR, "PASS: Project queue lifecycle")
+
+    def test_safe_option_append_suite(self):
+        self._run_pwsh(OPTION_BEHAVIOR, "PASS: Антигравити добавляется")
 
 
 if __name__ == "__main__":
