@@ -31,8 +31,8 @@ class SafeRemediationOrderingTests(unittest.TestCase):
              patch.object(safe.core, mutation_names[1]) as view_mutation, \
              patch.object(safe.core, mutation_names[2]) as item_mutation, \
              patch.object(safe.core, mutation_names[3]) as add_mutation:
-            with self.assertRaisesRegex(core.RemediationError, "inventory is incomplete"):
-                safe.safe_remediation(core.OWNER, core.REPOSITORY, core.PROJECT_NUMBER, apply=True)
+            with self.assertRaisesRegex(safe.core.RemediationError, "inventory is incomplete"):
+                safe.safe_remediation(safe.core.OWNER, safe.core.REPOSITORY, safe.core.PROJECT_NUMBER, apply=True)
             worker_mutation.assert_not_called()
             view_mutation.assert_not_called()
             item_mutation.assert_not_called()
@@ -46,12 +46,12 @@ class SafeRemediationOrderingTests(unittest.TestCase):
              patch.object(safe.core, "find_select_field", return_value={}), \
              patch.object(safe.core, "missing_open_items", return_value=[]), \
              patch.object(safe.core, "collect_closed_outcomes", return_value={}), \
-             patch.object(safe.core, "build_plan", side_effect=core.RemediationError("self-QA")), \
+             patch.object(safe.core, "build_plan", side_effect=safe.core.RemediationError("self-QA")), \
              patch.object(safe.core, "apply_worker_field_update") as worker_mutation, \
              patch.object(safe.core, "apply_delete_views") as view_mutation, \
              patch.object(safe.core, "apply_item_edits") as item_mutation:
-            with self.assertRaisesRegex(core.RemediationError, "self-QA"):
-                safe.safe_remediation(core.OWNER, core.REPOSITORY, core.PROJECT_NUMBER, apply=True)
+            with self.assertRaisesRegex(safe.core.RemediationError, "self-QA"):
+                safe.safe_remediation(safe.core.OWNER, safe.core.REPOSITORY, safe.core.PROJECT_NUMBER, apply=True)
             worker_mutation.assert_not_called()
             view_mutation.assert_not_called()
             item_mutation.assert_not_called()
@@ -74,7 +74,7 @@ class SafeRemediationOrderingTests(unittest.TestCase):
         values = {"Исполнитель": "Antigravity", "Проверяющий": "AGY"}
         with patch.object(safe.core, "item_fields", return_value=values), \
              patch.object(safe.core, "is_controlled", return_value=True):
-            with self.assertRaisesRegex(core.RemediationError, "canonical self-QA"):
+            with self.assertRaisesRegex(safe.core.RemediationError, "canonical self-QA"):
                 safe.assert_no_canonical_self_qa(snapshot)
 
     def test_failed_post_audit_preserves_before_plan_and_after_evidence(self):
@@ -100,7 +100,7 @@ class SafeRemediationOrderingTests(unittest.TestCase):
              patch.object(safe.core, "apply_worker_field_update"), \
              patch.object(safe.core, "apply_delete_views"), \
              patch.object(safe.core, "apply_item_edits"):
-            report = safe.safe_remediation(core.OWNER, core.REPOSITORY, core.PROJECT_NUMBER, apply=True)
+            report = safe.safe_remediation(safe.core.OWNER, safe.core.REPOSITORY, safe.core.PROJECT_NUMBER, apply=True)
         self.assertEqual("FAIL", report["verdict"])
         self.assertEqual([], report["before_audit"])
         self.assertEqual("CONTROLLED_QA", report["after_audit"][0]["code"])
