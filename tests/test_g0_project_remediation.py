@@ -211,7 +211,8 @@ class G0ProjectRemediationTests(unittest.TestCase):
         self.assertIn("first_line", text)
         self.assertIn("test \"$first_line\" = 'KAT9I-CONTROL/1 | G0-REMEDIATE'", text)
         self.assertIn("KAT9I_PROJECT_TOKEN", text)
-        self.assertIn("g0_project_remediation.py --apply", text)
+        self.assertIn("g0_project_remediation_safe.py --apply", text)
+        self.assertNotIn("g0_project_remediation.py --apply", text)
 
 
 if __name__ == "__main__":
