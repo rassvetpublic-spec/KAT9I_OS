@@ -78,6 +78,7 @@ class TestRequirementsRegistry(unittest.TestCase):
             "modules_registry.json",
             "AGENTS.md",
             "docs/GITHUB_WORKFLOW.md",
+            "QA_PROTOCOL.md",
             "config/architecture_convergence_policy.json",
             ".github/workflows/quality.yml",
             ".github/workflows/project-queue-sync.yml",
@@ -132,10 +133,22 @@ class TestRequirementsRegistryCorrectiveInvariants(unittest.TestCase):
                 support_path = REPO_ROOT / self._repo_path(supporting)
                 self.assertTrue(support_path.exists(), f"{item['requirement_id']}: supporting_ref не разрешается: {supporting}")
 
+    def test_machine_contract_refs_are_literal_resolvable_repo_files(self):
+        for item in self.registry["requirements"]:
+            for ref in item["machine_contract_refs"]:
+                self.assertNotIn("*", ref, f"{item['requirement_id']}: wildcard contract ref: {ref}")
+                path = REPO_ROOT / self._repo_path(ref)
+                self.assertTrue(path.is_file(), f"{item['requirement_id']}: machine_contract_ref не разрешяется: {ref}")
+
     def test_each_requirement_has_one_canonical_owner(self):
         for item in self.registry["requirements"]:
             owner = item["canonical_owner"]
             self.assertNotIn("/", owner, f"{item['requirement_id']}: составной canonical_owner: {owner}")
+
+    def test_owner_gap_does_not_invent_canonical_owner(self):
+        for item in self.registry["requirements"]:
+            if item["coverage_status"] == "OWNER_GAP":
+                self.assertEqual(item["canonical_owner"], "UNRESOLVED")
 
     def test_noncovered_requirement_has_gap_of_same_kind(self):
         by_kind = {}

@@ -9,8 +9,8 @@ T0 материализует inventory/traceability для следующей A
 - Corrective implementation provenance: `2e7795fe3dbb47ad54ba6d4325be22d1131557b7`.
 - Graveyard SSoT corrective provenance: `0252f888f8a0a32ddf1644fde284bda4a10aa9cc`.
 - Integrated G0 control-plane baseline: `d28547da5286eb7f275a74449d88d398018de8e4` (PR #133); последующие G0 repair-коммиты относятся к control-plane и не расширяют нормативный Requirement inventory T0.
-- Requirements: **50**.
-- Findings/gaps: **18**.
+- Requirements: **51**.
+- Findings/gaps: **19**.
 - ABC: `UNASSESSED` для всех Requirement.
 - XYZ: `UNASSESSED` для всех Requirement.
 
@@ -32,9 +32,11 @@ T0 материализует inventory/traceability для следующей A
 - `CONTRADICTION`: 1
 - `COVERED`: 30
 - `TRACEABILITY_GAP`: 1
+- `OWNER_GAP`: 1
 
 ## Зарегистрированные findings
 
+- `OWNER_GAP`: 1
 - `CONTRACT_GAP`: 16
 - `CONTRADICTION`: 1
 - `TRACEABILITY_GAP`: 1
@@ -47,6 +49,10 @@ OQ-010 уже закрыт в inventory baseline как **ACCEPTED / ADR-047** �
 
 ## Исправления после review
 
+- `QA_PROTOCOL.md` включён в canonical inventory и связан с отдельным Requirement control-plane QA-протокола;
+- `machine_contract_refs` теперь содержат только literal разрешимые schema refs, wildcard запрещён regression-тестом;
+- OQ-010 использует профильный §22 как canonical SSoT, §23/ADR-047 остаются supporting provenance;
+- языковая политика фиксирует `OWNER_GAP` вместо создания несуществующего canonical owner;
 - добавлена явная Requirement-связь для §20 Task Lifecycle;
 - `canonical_ssot` нормализован до одной разрешимой ссылки, дополнительные ссылки вынесены в `supporting_refs`;
 - составные canonical owners устранены;
