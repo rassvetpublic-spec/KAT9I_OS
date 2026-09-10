@@ -139,9 +139,9 @@ Human Approval использует уже существующие канони
 
 ### Trusted CLI handoff
 
-Production-facing путь `approve` не принимает от вызывающего кода текущее время или путь replay-store. На границе CLI используются системные UTC-часы и один фиксированный `.kat9i-runtime/graveyard-used-nonces.json`; read/check/consume/persist выполняются под cross-process lock, запись — через `fsync` и атомарный `os.replace`.
+Production-facing путь `approve` не принимает от вызывающего кода текущее время или путь replay-store. Владение доверенными входами вынесено из reference API в отдельный адаптер `scripts/graveyard_trusted_handoff.py`: он получает системное UTC-время и использует один фиксированный `.kat9i-runtime/graveyard-used-nonces.json`. Read/check/consume/persist выполняются под cross-process lock, запись — через `fsync` и атомарный `os.replace`.
 
-Функции Python, позволяющие явно передать `now`, `used_nonces` или `nonce_state_path`, остаются только reference/test API и не являются production security boundary. Production-facing CLI вызывает отдельную внутреннюю trusted boundary без этих параметров. Будущий Rust Core может заменить этот адаптер, не меняя `ActivationTicket`/`ApprovalRecord` контракт.
+Функции Python, позволяющие явно передать `now`, `used_nonces` или `nonce_state_path`, остаются только reference/test API и не являются production security boundary. CLI `approve` делегирует решение отдельному trusted adapter без этих параметров. Будущий Rust Core может заменить этот адаптер, не меняя `ActivationTicket`/`ApprovalRecord` контракт.
 
 ## Автоматическая защита
 
@@ -168,7 +168,7 @@ Quality Gate запускает `scripts/check_graveyard.py`, контрактн
 - expiry;
 - replay nonce;
 - отсутствие side effect в reference handler;
-- trusted CLI boundary не принимает caller-supplied clock/replay-store path.
+- trusted adapter и CLI boundary не принимают caller-supplied clock/replay-store path.
 
 Статический SSoT scanner — **defence-in-depth**, а не самостоятельная security boundary. Он предназначен для раннего обнаружения случайных и детерминированно распознаваемых зависимостей. Основной fail-closed барьер DATA→CONTROL остаётся runtime-политикой `Context/Planner`: Graveyard-контекст не может стать seed для планирования только потому, что статический scanner не распознал намеренно динамическую или обфусцированную конструкцию.
 
@@ -187,7 +187,7 @@ Quality Gate запускает `scripts/check_graveyard.py`, контрактн
 
 ## Граница текущей реализации
 
-Сейчас реализованы **машинные контракты + исполняемый reference handler + trusted CLI handoff + fail-closed CI Evidence**.
+Сейчас реализованы **машинные контракты + исполняемый reference handler + отдельный trusted CLI adapter + fail-closed CI Evidence**.
 
 Не реализованы и сознательно не маскируются под готовые:
 
@@ -197,7 +197,7 @@ Quality Gate запускает `scripts/check_graveyard.py`, контрактн
 - реальное создание GitHub Issue/ADR/TaskContract;
 - проверка Windows token/SID непосредственно в Rust Core.
 
-То есть durable replay-защита CLI уже существует, но она не выдаётся за полноценную изоляцию будущего Rust Runtime. Python seal и reference API остаются type/test boundary; основная production-изоляция должна жить в Core при появлении соответствующего Runtime scope.
+То есть durable replay-защита CLI уже существует, но она не выдаётся за полноценную изоляцию будущего Rust Runtime. Python seal и reference API остаются type/test boundary; отдельный `graveyard_trusted_handoff.py` закрывает текущую production-facing границу времени/replay-store, а основная production-изоляция должна жить в Core при появлении соответствующего Runtime scope.
 
 ## Импортированные архивы
 
