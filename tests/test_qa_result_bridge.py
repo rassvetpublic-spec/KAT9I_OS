@@ -93,12 +93,21 @@ def event(body=None, association="OWNER", created_at="2026-09-10T16:11:00Z"):
     }
 
 
-def review(body=None, association="OWNER", submitted_at="2026-09-10T16:10:00Z", review_id=REVIEW_ID):
+def review(
+    body=None,
+    association="OWNER",
+    submitted_at="2026-09-10T16:10:00Z",
+    review_id=REVIEW_ID,
+    commit_id=HEAD,
+    state="COMMENTED",
+):
     return {
         "id": review_id,
         "body": body if body is not None else result_body(),
         "author_association": association,
         "submitted_at": submitted_at,
+        "commit_id": commit_id,
+        "state": state,
     }
 
 
@@ -157,6 +166,16 @@ class QaResultBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(BridgeError, "review_id"):
             resolve_bridge(event(), [command_comment()], review(review_id=9002), live_pr())
 
+    def test_review_commit_id_must_match_live_head(self):
+        with self.assertRaisesRegex(BridgeError, "commit_id"):
+            resolve_bridge(event(), [command_comment()], review(commit_id=NEW_HEAD), live_pr())
+
+    def test_dismissed_or_pending_review_is_not_accepted_evidence(self):
+        for state in ("DISMISSED", "PENDING", ""):
+            with self.subTest(state=state):
+                with self.assertRaisesRegex(BridgeError, "submitted state"):
+                    resolve_bridge(event(), [command_comment()], review(state=state), live_pr())
+
     def test_review_must_precede_controller_attestation(self):
         with self.assertRaisesRegex(BridgeError, "created after"):
             resolve_bridge(
@@ -167,11 +186,11 @@ class QaResultBridgeTests(unittest.TestCase):
             )
 
     def test_unknown_command_id_rejects(self):
-        with self.assertRaisesRegex(BridgeError, "unknown or ambiguous"):
+        with self.assertRaisesRegex(BridgeError, "unknown command_id"):
             resolve_bridge(event(), [], review(), live_pr())
 
     def test_non_owner_command_is_data_and_cannot_authorize(self):
-        with self.assertRaisesRegex(BridgeError, "unknown or ambiguous"):
+        with self.assertRaisesRegex(BridgeError, "unknown command_id"):
             resolve_bridge(event(), [command_comment(association="CONTRIBUTOR")], review(), live_pr())
 
     def test_command_must_exist_before_review(self):
@@ -195,13 +214,22 @@ class QaResultBridgeTests(unittest.TestCase):
             created_at="2026-09-10T16:10:30Z",
             comment_id=1002,
         )
-        with self.assertRaisesRegex(BridgeError, "malformed owner QA-COMMAND"):
+        with self.assertRaisesRegex(BridgeError, "latest owner QA-COMMAND is malformed"):
             resolve_bridge(event(), [command_comment(), malformed], review(), live_pr())
 
-    def test_duplicate_command_id_is_ambiguous(self):
-        second = command_comment(comment_id=1002, created_at="2026-09-10T16:09:30Z")
-        with self.assertRaisesRegex(BridgeError, "unknown or ambiguous"):
-            resolve_bridge(event(), [command_comment(), second], review(), live_pr())
+    def test_historical_malformed_command_does_not_permanently_block_new_valid_command(self):
+        malformed_old = command_comment(
+            body=COMMAND_MARKER + "\ncommand_id=BROKEN",
+            created_at="2026-09-10T16:08:00Z",
+            comment_id=999,
+        )
+        resolved = resolve_bridge(event(), [malformed_old, command_comment()], review(), live_pr())
+        self.assertEqual("ACCEPT", resolved["decision"])
+
+    def test_duplicate_valid_command_id_is_rejected(self):
+        older_duplicate = command_comment(comment_id=999, created_at="2026-09-10T16:08:30Z")
+        with self.assertRaisesRegex(BridgeError, "duplicate command_id"):
+            resolve_bridge(event(), [older_duplicate, command_comment()], review(), live_pr())
 
     def test_bridge_receipt_makes_replay_noop(self):
         receipt = {
@@ -228,6 +256,16 @@ class QaResultBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(BridgeError, "cannot contain blocking"):
             resolve_bridge(event(), [command_comment()], review(body=rb), live_pr())
 
+    def test_follow_up_section_is_mandatory_even_when_count_is_zero(self):
+        rb = result_body(follow_up_candidates="0").split("\n\nFOLLOW_UP_CANDIDATES", 1)[0]
+        with self.assertRaisesRegex(BridgeError, "FOLLOW_UP_CANDIDATES"):
+            resolve_bridge(event(), [command_comment()], review(body=rb), live_pr())
+
+    def test_positive_follow_up_count_requires_section_content(self):
+        rb = result_body().split("\n\nFOLLOW_UP_CANDIDATES", 1)[0] + "\n\nFOLLOW_UP_CANDIDATES\n"
+        with self.assertRaisesRegex(BridgeError, "section has no content"):
+            resolve_bridge(event(), [command_comment()], review(body=rb), live_pr())
+
     def test_result_sink_hijack_rejects(self):
         rb = result_body(result_sink="OWNER_ISSUE_COMMENT")
         with self.assertRaisesRegex(BridgeError, "result_sink"):
@@ -235,7 +273,7 @@ class QaResultBridgeTests(unittest.TestCase):
 
     def test_command_capability_escalation_fails_closed(self):
         elevated = command_comment(body=command_body(allow_merge="true"))
-        with self.assertRaisesRegex(BridgeError, "malformed owner QA-COMMAND"):
+        with self.assertRaisesRegex(BridgeError, "latest owner QA-COMMAND is malformed"):
             resolve_bridge(event(), [elevated], review(), live_pr())
 
     def test_duplicate_result_metadata_rejects(self):
