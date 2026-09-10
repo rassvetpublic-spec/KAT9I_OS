@@ -17,7 +17,7 @@ on:
         description: Состояние очереди
         required: true
         type: choice
-        options: [READY, ACTIVE, QA, QUEUED, BLOCKED, DONE]
+        options: [INBOX, READY, ACTIVE, QA, QUEUED, BLOCKED, DONE]
 
 permissions:
   contents: read
@@ -30,6 +30,7 @@ concurrency:
 
 jobs:
   sync:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
@@ -43,10 +44,15 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_ACTION: ${{ github.event.action }}
+          EVENT_ACTOR: ${{ github.actor }}
           DISPATCH_URL: ${{ inputs.url }}
           DISPATCH_STATE: ${{ inputs.state }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$EVENT_ACTOR" != "rassvetpublic-spec" ]; then
+              echo "::error::Восстановительную синхронизацию Project может запускать только владелец."
+              exit 1
+            fi
             printf 'url=%s\n' "$DISPATCH_URL" >> "$GITHUB_OUTPUT"
             printf 'state=%s\n' "$DISPATCH_STATE" >> "$GITHUB_OUTPUT"
             exit 0
@@ -87,4 +93,4 @@ jobs:
         env:
           ITEM_URL: ${{ steps.resolve.outputs.url }}
           ITEM_STATE: ${{ steps.resolve.outputs.state }}
-        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker 'ChatGPT' -QaWorker 'Антигравити'
+        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker 'ChatGPT' -QaWorker 'AGY'

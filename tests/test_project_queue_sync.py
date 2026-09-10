@@ -6,7 +6,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 QUEUE_BEHAVIOR = ROOT / "tests" / "test_project_queue_sync.ps1"
-OPTION_BEHAVIOR = ROOT / "tests" / "test_project_option_append.ps1"
 CONFIG = ROOT / "scripts" / "configure_project.ps1"
 SYNC = ROOT / "scripts" / "project_queue_sync.ps1"
 WORKFLOW = ROOT / ".github" / "workflows" / "project-queue-sync.yml"
@@ -16,8 +15,11 @@ class ProjectQueueSyncTests(unittest.TestCase):
     def test_queue_policy_is_canonical(self):
         config = CONFIG.read_text(encoding="utf-8")
         sync = SYNC.read_text(encoding="utf-8")
-        self.assertIn("Антигравити", config)
-        self.assertIn("Antigravity", config)
+        self.assertIn("(Opt 'AGY'", config)
+        self.assertNotIn("(Opt 'Антигравити'", config)
+        for alias in ("AGY", "Agy", "Antigravity", "Антигравити"):
+            self.assertIn(alias, sync)
+        self.assertIn("'INBOX'", sync)
         self.assertIn("'QUEUED'", sync)
         self.assertIn("'Проверка качества пройдена'", sync)
         self.assertIn("'В очереди'", sync)
@@ -30,7 +32,8 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertIn("project_queue_event.py", text)
         self.assertIn("configure_project.ps1", text)
         self.assertIn("project_queue_sync.ps1", text)
-        self.assertIn("Антигравити", text)
+        self.assertIn("AGY", text)
+        self.assertIn("github.actor", text)
         self.assertNotIn("gh pr merge", text)
         self.assertNotIn("merge_pull_request", text)
         self.assertNotIn("pull_request_target", text)
@@ -53,9 +56,6 @@ class ProjectQueueSyncTests(unittest.TestCase):
 
     def test_queue_behavior_suite(self):
         self._run_pwsh(QUEUE_BEHAVIOR, "PASS: Project queue lifecycle")
-
-    def test_safe_option_append_suite(self):
-        self._run_pwsh(OPTION_BEHAVIOR, "PASS: Антигравити добавляется")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 CONTROL_MARKERS = {
+    "FAST-READY": "READY",
     "FAST-CLAIM": "ACTIVE",
     "FAST-QA": "QA",
     "FAST-QA-PASS": "QUEUED",
@@ -40,8 +41,8 @@ def resolve(event_name: str, action: str, event: dict) -> dict | None:
         if not url:
             raise ValueError("issues event не содержит html_url")
         if action in {"opened", "reopened"}:
-            return {"url": url, "state": "READY"}
-        if action == "closed":
+            return {"url": url, "state": "INBOX"}
+        if action == "closed" and issue.get("state_reason") == "completed":
             return {"url": url, "state": "DONE"}
         return None
 
