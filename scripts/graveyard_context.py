@@ -415,7 +415,7 @@ def confirm_for_normal_workflow(
     _validate_schema(root, "GraveyardActivationTicket.json", activation_ticket)
     _validate_ticket_matches_candidate(candidate, activation_ticket)
     approval_id = validate_approval_for_activation(
-        activation_ticket, approval_record, identity, used_nonces=used_nonces, now=now, root=root
+        activation_ticket, approval_record, identity, used_nonces=set(used_nonces), now=now, root=root
     )
     updated = copy.deepcopy(candidate)
     updated["state"] = "APPROVED_FOR_NORMAL_WORKFLOW"
@@ -442,8 +442,15 @@ def reject_candidate(candidate: dict[str, Any], *, root: Path = REPO_ROOT) -> di
     return updated
 
 
-def verified_work_provenance(outcome: _VerifiedApprovalOutcome, *, root: Path = REPO_ROOT) -> dict[str, str]:
-    """Build provenance only from immutable evidence sealed by confirm_for_normal_workflow."""
+def verified_work_provenance(
+    outcome: _VerifiedApprovalOutcome, *, used_nonces: set[str], now: str,
+    root: Path = REPO_ROOT,
+) -> dict[str, str]:
+    """Revalidate evidence and consume its nonce at the final handoff boundary.
+
+    The Python seal is a type guard, not an authentication boundary. The caller
+    must supply trusted time and a shared replay store (locked durably by CLI).
+    """
     if not isinstance(outcome, _VerifiedApprovalOutcome) or outcome.seal is not _APPROVAL_SEAL:
         _fail("Provenance требует внутренний verified Approval outcome")
     candidate = _json_from_bytes(outcome._candidate_bytes)
@@ -463,6 +470,9 @@ def verified_work_provenance(outcome: _VerifiedApprovalOutcome, *, root: Path = 
         _fail("approval ref не совпадает с ApprovalRecord")
     if approval.get("task_id") != ticket.get("task_id") or approval.get("action_hash") != activation_action_hash(ticket, root=root):
         _fail("Verified outcome потерял exact Approval binding")
+    validate_approval_for_activation(
+        ticket, approval, identity, used_nonces=used_nonces, now=now, root=root
+    )
     return {
         "resurrected_from": candidate["archive_id"],
         "graveyard_candidate_id": candidate["candidate_id"],

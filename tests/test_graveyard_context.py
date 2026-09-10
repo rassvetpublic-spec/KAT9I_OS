@@ -214,7 +214,7 @@ class TestGraveyardContextBoundary(unittest.TestCase):
         forged["activation_ref"] = prepared["activation_ticket"]["activation_id"]
         forged["owner_confirmation_ref"] = "appr-forged12345678"
         with self.assertRaises(ValueError):
-            verified_work_provenance(forged, root=REPO_ROOT)
+            verified_work_provenance(forged, used_nonces=set(), now="2026-09-09T15:02:00Z", root=REPO_ROOT)
 
     def test_wrong_action_hash_task_identity_are_rejected(self):
         prepared = self._prepare()

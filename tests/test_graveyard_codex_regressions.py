@@ -19,6 +19,8 @@ from scripts.check_graveyard import (
     validate_graveyard,
 )
 from scripts.graveyard_context import (
+    _APPROVAL_SEAL,
+    _VerifiedApprovalOutcome,
     REPO_ROOT,
     activation_action_hash,
     build_activation_ticket,
@@ -196,7 +198,19 @@ class TestLatestCodexRegressions(unittest.TestCase):
         exposed_candidate = outcome.candidate
         exposed_approval["approval_id"] = "appr-forged12345678"
         exposed_candidate["owner_confirmation_ref"] = "appr-forged12345678"
-        provenance = verified_work_provenance(outcome, root=REPO_ROOT)
+        used = set()
+        with self.assertRaisesRegex(ValueError, "истёк"):
+            verified_work_provenance(outcome, used_nonces=used, now="2026-09-09T16:00:00Z", root=REPO_ROOT)
+        self.assertFalse(used)
+        provenance = verified_work_provenance(outcome, used_nonces=used, now=self.now, root=REPO_ROOT)
+        forged_outcome = _VerifiedApprovalOutcome(
+            outcome._candidate_bytes, outcome._activation_ticket_bytes,
+            outcome._approval_record_bytes, outcome._identity_bytes, _APPROVAL_SEAL,
+        )
+        with self.assertRaisesRegex(ValueError, "replay"):
+            verified_work_provenance(forged_outcome, used_nonces=used, now=self.now, root=REPO_ROOT)
+        with self.assertRaisesRegex(ValueError, "истёк"):
+            verified_work_provenance(forged_outcome, used_nonces=set(), now="2026-09-09T16:00:00Z", root=REPO_ROOT)
         self.assertEqual(provenance["approval_id"], "appr-graveyard123456")
         self.assertEqual(outcome.candidate["owner_confirmation_ref"], "appr-graveyard123456")
 

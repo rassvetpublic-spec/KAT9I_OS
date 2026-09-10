@@ -142,7 +142,7 @@ def approve_excavate_request(
     return {
         "status": "APPROVED_FOR_NORMAL_WORKFLOW",
         "candidate": outcome.candidate,
-        "provenance": verified_work_provenance(outcome, root=root),
+        "provenance": verified_work_provenance(outcome, used_nonces=used_nonces, now=now, root=root),
         "side_effect_performed": False,
     }
 
