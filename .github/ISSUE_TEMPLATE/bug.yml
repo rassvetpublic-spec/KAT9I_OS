@@ -1,0 +1,68 @@
+name: Ошибка
+description: Сообщить, что в KAT9I_OS что-то работает неправильно
+title: "[Ошибка] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опишите проблему так, чтобы её можно было повторить и проверить. Не публикуйте токены, пароли, ключи и другие секреты.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что должно было произойти?
+      description: Опишите ожидаемое поведение простыми словами.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что произошло на самом деле?
+      description: Что сломалось, пропало, зависло или показало неверный результат?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Как повторить ошибку?
+      description: Перечислите шаги по порядку. Если ошибка появляется не всегда, так и напишите.
+      placeholder: |
+        1. Открыть...
+        2. Нажать...
+        3. Увидеть...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Где это происходит?
+      description: Версия, ветка, экран, модуль, Windows или другая полезная информация. Если не знаете — напишите «не знаю».
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Что не нужно менять в рамках исправления?
+      description: Известные границы задачи. Если не знаете — напишите «не знаю».
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Как проверить исправление?
+      description: Какой тест или действие покажет, что ошибка действительно устранена?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Дополнительные данные
+      description: Ссылки, безопасные логи или скриншоты без секретов. Поле можно оставить пустым.
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Проверка перед отправкой
+      options:
+        - label: Я не добавляю в Issue токены, пароли, приватные ключи и другие секреты.
+          required: true

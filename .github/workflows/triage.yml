@@ -5,6 +5,7 @@ on:
     types: [opened]
 
 permissions:
+  contents: read
   issues: write
 
 jobs:
@@ -12,133 +13,71 @@ jobs:
     name: triage
     runs-on: ubuntu-latest
     steps:
-      - name: process-issue
+      - name: Получить репозиторий
+        uses: actions/checkout@v4
+
+      - name: Классифицировать обращение
+        id: classify
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from scripts.triage_helper import classify_issue_text, format_triage_comment
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          issue = event.get("issue")
+          if not issue:
+              raise SystemExit("В событии GitHub нет Issue.")
+
+          repository = event.get("repository") or {}
+          owner = ((repository.get("owner") or {}).get("login")) or ""
+          repo = repository.get("name") or ""
+          if not owner or not repo:
+              raise SystemExit("Не удалось определить owner/repo из события GitHub.")
+
+          result = classify_issue_text(issue.get("title") or "", issue.get("body") or "")
+          payload = {
+              "labels": result["labels"],
+              "comment": format_triage_comment(result, owner, repo),
+          }
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as fh:
+              fh.write("result=" + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+          PY
+
+      - name: Добавить метки и комментарий
         uses: actions/github-script@v7
+        env:
+          TRIAGE_RESULT: ${{ steps.classify.outputs.result }}
         with:
           script: |
             const issue = context.payload.issue;
             if (!issue) return;
-            const title = issue.title || '';
-            const body = issue.body || '';
-            const text = (title + '\n' + body).toLowerCase();
 
-            // 1. Определение типа обращения
-            let issueType = 'Вопрос / Обсуждение';
-            const labelsToAdd = [];
+            const result = JSON.parse(process.env.TRIAGE_RESULT || '{}');
+            const labels = Array.isArray(result.labels) ? result.labels : [];
+            const comment = typeof result.comment === 'string' ? result.comment : '';
 
-            if (text.includes('сообщить об ошибке') || text.includes('баг') || text.includes('ошибка') || text.includes('crash') || text.includes('fail')) {
-              issueType = 'Ошибка (Bug)';
-              labelsToAdd.push('bug');
-            } else if (text.includes('предложить идею') || text.includes('фича') || text.includes('feature') || text.includes('добавить')) {
-              issueType = 'Улучшение (Enhancement)';
-              labelsToAdd.push('enhancement');
-            } else if (text.includes('документация непонятна') || text.includes('документ') || text.includes('тз') || text.includes('словарь')) {
-              issueType = 'Документация';
-              labelsToAdd.push('documentation');
-            } else {
-              labelsToAdd.push('question');
-            }
-
-            // 2. Определение предполагаемого Domain и модуля
-            let domainCandidate = 'Общий / Не определен';
-            let moduleCandidate = 'Core / Не определен';
-            let confidence = 'LOW';
-            let requiresManualReview = true;
-
-            const secKeys = ['security', 'безопасн', 'secret', 'секрет', 'парол', 'токен', 'grant', 'права доступа', 'уязвимост'];
-            const uiKeys = ['electron', 'ui', 'интерфейс', 'кнопк', 'html', 'отображени', 'виджет', 'css'];
-            const workerKeys = ['worker', 'коворкер', 'исполнител', 'lease', 'claim', 'heartbeat', 'задач'];
-            const ctxKeys = ['контекст', 'context', 'база знаний', 'knowledge', 'ресурс', 'resource'];
-            const infraKeys = ['ci', 'github actions', 'workflow', 'triage', 'quality', 'линтер', 'тест'];
-            const docsKeys = ['документ', 'тз', 'архитектур', 'словарь', 'раздел'];
-
-            if (secKeys.some(k => text.includes(k))) {
-              domainCandidate = 'Security & Governance';
-              moduleCandidate = 'Security / Secret Store';
-              confidence = 'HIGH';
-              requiresManualReview = false;
-            } else if (uiKeys.some(k => text.includes(k))) {
-              domainCandidate = 'User Experience & Visualization';
-              moduleCandidate = 'Desktop Shell (Electron) / Visualization';
-              confidence = 'HIGH';
-              requiresManualReview = false;
-            } else if (workerKeys.some(k => text.includes(k))) {
-              domainCandidate = 'Task Execution & Workers';
-              moduleCandidate = 'Coworker / Execution';
-              confidence = 'HIGH';
-              requiresManualReview = false;
-            } else if (ctxKeys.some(k => text.includes(k))) {
-              domainCandidate = 'Information & Context';
-              moduleCandidate = 'Context / Knowledge Base / Resources';
-              confidence = 'HIGH';
-              requiresManualReview = false;
-            } else if (infraKeys.some(k => text.includes(k))) {
-              domainCandidate = 'Engineering & Infrastructure';
-              moduleCandidate = 'QA / CI Infrastructure';
-              confidence = 'HIGH';
-              requiresManualReview = false;
-            } else if (docsKeys.some(k => text.includes(k))) {
-              domainCandidate = 'Architecture & Documentation';
-              moduleCandidate = 'Documentation / Specifications';
-              confidence = 'HIGH';
-              requiresManualReview = false;
-            }
-
-            // 3. Приоритет-кандидат
-            let priorityCandidate = 'P2 (Стандартный кандидат)';
-            if (domainCandidate.includes('Security') || text.includes('секрет') || text.includes('уязвимост')) {
-              priorityCandidate = 'P0 (Критический кандидат)';
-            } else if (text.includes('ошибка') || text.includes('сломал') || text.includes('crash')) {
-              priorityCandidate = 'P1 (Важный кандидат)';
-            }
-
-            // 4. Уровень решения USER / ADMIN
-            let decisionLevel = 'Не требуется (стандартная работа)';
-            if (domainCandidate.includes('Security') || text.includes('admin') || text.includes('администратор') || text.includes('секрет') || text.includes('доступ')) {
-              decisionLevel = 'Требуется ADMIN Approval';
-            } else if (text.includes('выбор') || text.includes('согласован') || text.includes('user') || text.includes('пользовател')) {
-              decisionLevel = 'Требуется USER Decision';
-            }
-
-            // Добавление меток
-            if (labelsToAdd.length > 0) {
+            if (labels.length > 0) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue.number,
-                labels: labelsToAdd
+                labels
               });
             }
 
-            const reviewNotice = requiresManualReview
-              ? '⚠️ **Внимание:** уровень уверенности автоматического классификатора **LOW**. Требуется ручной разбор координатором проекта.'
-              : '✅ Предварительная классификация выполнена автоматически с высокой уверенностью (**HIGH**).';
-
-            const commentBody = [
-              'Приветствуем! Спасибо за обращение в KAT9I_OS.',
-              '',
-              'Это обращение зарегистрировано и обработано системой первичного автоматического разбора (**triage**):',
-              '',
-              `- **Тип обращения:** ${issueType}`,
-              `- **Предполагаемый Domain (кандидат):** ${domainCandidate}`,
-              `- **Предполагаемый модуль (кандидат):** ${moduleCandidate}`,
-              `- **Рекомендуемый приоритет:** ${priorityCandidate}`,
-              `- **Уровень решения:** ${decisionLevel}`,
-              '',
-              reviewNotice,
-              '',
-              '> [!NOTE]',
-              '> Данные оценки являются предварительными рекомендациями робота-помощника (DATA) и не наделяют процессами CONTROL или автоматическими правами.',
-              '',
-              '**Полезные материалы для старта:**',
-              `- [Режим «Я здесь впервые»](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/FIRST_TIME_GUIDE.md)`,
-              `- [Словарь терминов KAT9I_OS](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/GLOSSARY.md)`,
-              `- [GitHub для коворкеров](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/guides/GITHUB_FOR_COWORKERS.md)`
-            ].join('\n');
+            if (!comment) {
+              throw new Error('Классификатор не вернул комментарий triage.');
+            }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue.number,
-              body: commentBody
+              body: comment
             });

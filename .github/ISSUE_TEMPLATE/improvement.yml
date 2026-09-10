@@ -1,0 +1,64 @@
+name: Улучшение
+description: Улучшить уже существующую функцию, процесс или документацию
+title: "[Улучшение] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Эта форма нужна, когда функция уже существует, но её можно сделать понятнее, надёжнее или удобнее. Не публикуйте секреты.
+  - type: textarea
+    id: current
+    attributes:
+      label: Как работает сейчас?
+      description: Опишите текущее состояние простыми словами.
+    validations:
+      required: true
+  - type: textarea
+    id: desired
+    attributes:
+      label: Как должно стать лучше?
+      description: Какой результат вы хотите получить после улучшения?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Зачем это нужно?
+      description: Что станет проще, быстрее, безопаснее или понятнее?
+    validations:
+      required: true
+  - type: textarea
+    id: work
+    attributes:
+      label: Что нужно изменить?
+      description: Основные шаги или идеи. Если точного решения нет — это нормально.
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Что не входит в задачу?
+      description: Укажите границы. Если не знаете — напишите «не знаю».
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Как проверить результат?
+      description: Что должно быть заметно или измеримо после изменения?
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Когда задачу считать готовой?
+      description: Перечислите проверяемые критерии готовности.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Проверка перед отправкой
+      options:
+        - label: Я не добавляю в Issue токены, пароли, приватные ключи и другие секреты.
+          required: true
