@@ -122,6 +122,21 @@ class GraveyardPrSalvageTests(unittest.TestCase):
             rejected = [item for item in report["items"] if item["category"] == "REJECTED_OPTION_CANDIDATE"]
             self.assertTrue(rejected)
 
+    def test_previous_salvage_comment_does_not_trigger_small_pr(self):
+        temp, root = self._root()
+        with temp:
+            payload = self._payload(
+                pr={"title": "Мелкая правка", "body": "", "changed_files": 1, "additions": 3, "deletions": 1, "commits": 1},
+                issue_comments=[{
+                    "body": "<!-- graveyard-pr-salvage-audit -->\nDATA-only отчёт: не переносить изменения автоматически.",
+                    "url": "https://example.invalid/salvage",
+                }],
+            )
+            report = build_audit(payload, root=root)
+            self.assertFalse(report["audit_required"])
+            self.assertEqual(report["audit_reason"], "CLOSED_UNMERGED_SMALL")
+            self.assertFalse(report["source_is_superseded_candidate"])
+
     def test_secret_like_values_are_redacted(self):
         temp, root = self._root()
         with temp:
