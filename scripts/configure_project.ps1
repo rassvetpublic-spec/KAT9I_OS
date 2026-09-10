@@ -180,7 +180,7 @@ mutation($input:CreateProjectV2FieldInput!){
   }
 
   if($legacy.Count -gt 0){
-  throw "Поле '$($f.name)' требует небезопасной миграции существующих option ID: $(($legacy)-join ', '). Скрипт остановлен без изменения значений."
+  throw "Поле '$($f.name)' требует изменения option ID: небезопасная миграция существующих значений: $(($legacy)-join ', '). Скрипт остановлен без изменения значений."
 }
 
 if($missing.Count -gt 0){
