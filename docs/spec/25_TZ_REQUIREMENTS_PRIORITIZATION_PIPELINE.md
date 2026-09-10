@@ -105,7 +105,7 @@ T0:
 
 T0 не должен незаметно принимать новое архитектурное решение.
 
-Если во время inventory обнаружена неопределённость, она становится `GAP`, `CONFLICT` или отдельным OQ/Issue.
+Если во время inventory обнаружена неопределённость, она фиксируется как `GAP` в Requirement status, как `CONTRADICTION` в Coverage/Contradiction status либо как отдельный OQ/Issue.
 
 То есть:
 
@@ -373,7 +373,7 @@ ABC и XYZ являются управляемыми метаданными ан
 
 1. **Requirements Registry** — реестр и traceability;
 2. **ABC×XYZ Matrix** — приоритет архитектурной проработки;
-3. **Coverage/Contradiction Report** — список GAP/CONFLICT и их владельцев.
+3. **Coverage/Contradiction Report** — список GAP/CONTRADICTION и их владельцев.
 
 Архитектурные решения, появившиеся в T4, продолжают храниться у своих профильных SSoT/ADR, а не внутри этих отчётов.
 

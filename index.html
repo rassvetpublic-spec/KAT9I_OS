@@ -3641,7 +3641,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 </ul>
 <h3 id="25-5-2-что-t0-не-делает">25.5.2. Что T0 не делает</h3>
 <p>T0 не должен незаметно принимать новое архитектурное решение.</p>
-<p>Если во время inventory обнаружена неопределённость, она становится <code>GAP</code>, <code>CONFLICT</code> или отдельным OQ/Issue.</p>
+<p>Если во время inventory обнаружена неопределённость, она фиксируется как <code>GAP</code> в Requirement status, как <code>CONTRADICTION</code> в Coverage/Contradiction status либо как отдельный OQ/Issue.</p>
 <p>То есть:</p>
 <p><strong>Inventory ≠ Architecture Decision.</strong></p>
 <h3 id="25-5-3-выход-t0">25.5.3. Выход T0</h3>
@@ -3839,7 +3839,7 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <ol>
 <li><strong>Requirements Registry</strong> — реестр и traceability;</li>
 <li><strong>ABC×XYZ Matrix</strong> — приоритет архитектурной проработки;</li>
-<li><strong>Coverage/Contradiction Report</strong> — список GAP/CONFLICT и их владельцев.</li>
+<li><strong>Coverage/Contradiction Report</strong> — список GAP/CONTRADICTION и их владельцев.</li>
 </ol>
 <p>Архитектурные решения, появившиеся в T4, продолжают храниться у своих профильных SSoT/ADR, а не внутри этих отчётов.</p>
 <h2 id="25-18-definition-of-done-первой-итерации">25.18. Definition of Done первой итерации</h2>
