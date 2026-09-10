@@ -7,22 +7,42 @@ $scriptPath=Join-Path $PSScriptRoot '..' 'scripts' 'project_queue_sync.ps1'
 function Assert-Equal($Expected,$Actual,[string]$Message){
   if($Expected -cne $Actual){throw "$Message Ожидалось='$Expected', фактически='$Actual'."}
 }
+function Assert-HasKey($Map,[string]$Key,[string]$Message){
+  if(-not $Map.Contains($Key)){throw $Message}
+}
+function Assert-NoKey($Map,[string]$Key,[string]$Message){
+  if($Map.Contains($Key)){throw $Message}
+}
 
 $expected=@{
   READY=@('Готово к работе','Свободно','Нет')
   ACTIVE=@('В работе','Активно','Частично')
-  QA=@('Проверка QA','На проверке','Автопроверки пройдены')
+  QA=@('Проверка QA','На проверке','Частично')
   QUEUED=@('Проверка QA','В очереди','Проверка качества пройдена')
   BLOCKED=@('Заблокировано','Заблокировано','Частично')
-  DONE=@('Готово','Освобождено','Проверка качества пройдена')
 }
 foreach($stateName in $expected.Keys){
   $p=QueueProfile $stateName 'ChatGPT' 'Антигравити'
   Assert-Equal $expected[$stateName][0] $p['Статус'] "Неверный Статус для $stateName."
   Assert-Equal $expected[$stateName][1] $p['Исполнение'] "Неверное Исполнение для $stateName."
   Assert-Equal $expected[$stateName][2] $p['Доказательство'] "Неверное Доказательство для $stateName."
+}
+$done=QueueProfile 'DONE' 'ChatGPT' 'Антигравити'
+Assert-Equal 'Готово' $done['Статус'] 'Неверный Статус для DONE.'
+Assert-Equal 'Освобождено' $done['Исполнение'] 'Неверное Исполнение для DONE.'
+Assert-NoKey $done 'Доказательство' 'DONE не должен выдумывать QA Evidence.'
+
+foreach($stateName in @('ACTIVE','QA','QUEUED')){
+  $p=QueueProfile $stateName 'ChatGPT' 'Антигравити'
+  Assert-HasKey $p 'Исполнитель' "$stateName должен фиксировать Исполнителя."
+  Assert-HasKey $p 'Проверяющий' "$stateName должен фиксировать Проверяющего."
   Assert-Equal 'ChatGPT' $p['Исполнитель'] "Неверный Исполнитель для $stateName."
   Assert-Equal 'Антигравити' $p['Проверяющий'] "Неверный Проверяющий для $stateName."
+}
+foreach($stateName in @('READY','BLOCKED','DONE')){
+  $p=QueueProfile $stateName 'ChatGPT' 'Антигравити'
+  Assert-NoKey $p 'Исполнитель' "$stateName не должен автоматически приписывать ChatGPT."
+  Assert-NoKey $p 'Проверяющий' "$stateName не должен автоматически приписывать Антигравити."
 }
 
 $script:Calls=@()
