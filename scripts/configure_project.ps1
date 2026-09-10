@@ -8,6 +8,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $ApiVersion='2026-03-10'
+$script:ProjectPreflightOnly=$false
 
 $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 [Console]::InputEncoding = $Utf8NoBom
@@ -132,6 +133,7 @@ function EnsureSelect([string]$Name,[string[]]$FieldAliases,[object[]]$Defs){
   $f=Find-Field $p.fields.nodes $aliases
 
   if(-not $f){
+    if($script:ProjectPreflightOnly){return}
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){
  createProjectV2Field(input:$input){
@@ -220,6 +222,7 @@ function EnsureIteration{
     Write-Host 'Проверено поле: Итерация (3 дня)'
     return
   }
+  if($script:ProjectPreflightOnly){return}
 
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){
@@ -239,6 +242,7 @@ function EnsureLink{
   if(-not $p){throw "Project #$ProjectNumber не найден."}
 
   if($p.title -ne 'KAT9I_OS — разработка'){
+    if($script:ProjectPreflightOnly){return}
 $q=@'
 mutation($input:UpdateProjectV2Input!){
  updateProjectV2(input:$input){projectV2{id title}}
@@ -249,6 +253,7 @@ mutation($input:UpdateProjectV2Input!){
   }
 
   if(-not (@($p.repositories.nodes)|Where-Object{$_.id -eq $repo.id})){
+    if($script:ProjectPreflightOnly){return}
 $q=@'
 mutation($input:LinkProjectV2ToRepositoryInput!){
  linkProjectV2ToRepository(input:$input){repository{id}}
@@ -260,6 +265,7 @@ mutation($input:LinkProjectV2ToRepositoryInput!){
 }
 
 function EnsureItems{
+  if($script:ProjectPreflightOnly){return}
   $repo="$Owner/$Repository"
   $urls=@()
 
@@ -350,10 +356,13 @@ function PreflightViews{
 
 function Invoke-ProjectConfiguration([scriptblock]$Apply){
   $null=PreflightViews
+  $script:ProjectPreflightOnly=$true
+  try { & $Apply } finally { $script:ProjectPreflightOnly=$false }
   & $Apply
 }
 
 function EnsureViews{
+  if($script:ProjectPreflightOnly){return}
   $required=@('Этап','Приоритет','Область','Исполнитель','Проверяющий','Исполнение')
   $m=$null
   for($attempt=1;$attempt -le 10;$attempt++){

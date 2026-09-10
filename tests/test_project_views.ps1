@@ -299,4 +299,27 @@ if(-not $thrown){throw 'Ожидалась fail-closed ошибка для ка�
 if($script:GqlCalls -ne 0){throw "Дублирующиеся значения вызвали GraphQL mutation: calls = $($script:GqlCalls)"}
 $script:CustomFields=$null
 
+# Неоднозначность в позднем поле должна обнаруживаться до EnsureLink/ранних записей.
+$script:CustomFields=@(
+  [pscustomobject]@{id='P1';name='Приоритет';__typename='ProjectV2SingleSelectField';options=@()},
+  [pscustomobject]@{id='P2';name='Priority';__typename='ProjectV2SingleSelectField';options=@()}
+)
+$script:GqlCalls=0
+$script:RestWrites=0
+$script:ItemAddCalls=0
+$thrown=$false
+try {
+  Invoke-ProjectConfiguration $script:ProductionApply
+} catch {
+  $thrown=$true
+  if($_.Exception.Message -notmatch 'неоднозначные поля Project'){
+    throw "Получена другая ошибка позднего alias-preflight: $($_.Exception.Message)"
+  }
+}
+if(-not $thrown){throw 'Ожидалась ошибка позднего alias-preflight.'}
+if($script:GqlCalls -ne 0 -or $script:RestWrites -ne 0 -or $script:ItemAddCalls -ne 0){
+  throw 'Поздняя неоднозначность была обнаружена после записи.'
+}
+$script:CustomFields=$null
+
 Write-Host 'PASS: Project policy запускает фактическое production-тело entrypoint под read-only preflight; mutation-вызовы вне защищённого Apply запрещены, а case-variant, старый QA filter и дубль дают 0 REST writes / 0 GraphQL mutations / 0 item-add.'
