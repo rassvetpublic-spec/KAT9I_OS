@@ -6,6 +6,7 @@ T0 материализует inventory/traceability для следующей A
 
 - Baseline current main: `c2b15c87b7310c1b26e79d2088a2be3137ba13d5`.
 - Corrective implementation provenance: `2e7795fe3dbb47ad54ba6d4325be22d1131557b7`.
+- Graveyard SSoT corrective provenance: `0252f888f8a0a32ddf1644fde284bda4a10aa9cc`.
 - Requirements: **50**.
 - Findings/gaps: **18**.
 - ABC: `UNASSESSED` для всех Requirement.
@@ -49,7 +50,7 @@ OQ-010 уже закрыт в current main как **ACCEPTED / ADR-047** пос�
 - составные canonical owners устранены;
 - `REQ-TASKGRAPH-001` сохраняет принятый Requirement status, а отсутствие схемы отражается только через `CONTRACT_GAP`;
 - coverage↔gap-kind проверяется детерминированно;
-- полнота canonical source→Requirement linkage проверяется тестом.
+- полнота canonical source→Requirement linkage проверяется тестом;
 - Graveyard DATA-only: `schemas/README.md#5` является canonical SSoT, а `graveyard/README.md` оставлен только supporting provenance.
 
 ## DoD T0
