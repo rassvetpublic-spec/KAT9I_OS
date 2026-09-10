@@ -46,11 +46,15 @@
 
 ## 27.4. Core — ядро управления
 
-Core создаёт и поддерживает общесистемные контракты задачи, координирует жизненный цикл, связывает модули через формальные интерфейсы и управляет TaskContract и TaskGraph.
+Core создаёт и поддерживает общесистемные контракты задачи, координирует жизненный цикл, связывает модули через формальные интерфейсы, управляет TaskContract и общей моделью TaskGraph, а также поддерживает общесистемный Skill Registry и generic Skill Routing.
 
-Core не выполняет Shell-команды, не выбирает конкретную модель вместо Inference, не выбирает конкретного Worker вместо Coworker, не хранит всю Базу знаний, не реализует GitHub и не забирает предметную логику Domain.
+Skill Registry является системным каталогом идентичности, revision, владельца, метаданных и References на канонические определения Skills. Он не является второй копией предметного содержания Skills.
 
-Каноническое владение: TaskContract, общая модель TaskGraph и жизненный цикл задачи.
+Generic Skill Routing отвечает за обнаружение подходящих `SkillCandidate` и выбор способа работы на системном уровне. `SkillCandidate` является DATA, а `SkillSelection` — Decision, но не Permission.
+
+Core не выполняет Shell-команды, не выбирает конкретную модель вместо Inference, не выбирает конкретного Worker вместо Coworker, не хранит всю Базу знаний, не реализует GitHub, не забирает предметную логику Domain и не становится владельцем семантики всех Skills.
+
+Каноническое владение: TaskContract, общая модель TaskGraph, жизненный цикл задачи, общесистемный Skill Registry и generic Skill Routing.
 
 ## 27.5. Rule Manager — менеджер правил
 
@@ -72,11 +76,13 @@ Security не оценивает предметное качество резу�
 
 ## 27.7. Domains — предметные области
 
-Domain отвечает за смысл правильного выполнения задачи конкретного класса: предметные Workflow, Skills, Validators, формат результата, Domain Rules и связи с Knowledge.
+Domain отвечает за смысл правильного выполнения задачи конкретного класса: предметные Workflow, семантическое содержание Skills, Validators, формат результата, Domain Rules и связи с Knowledge.
 
-Domain не реализует общий Security, не выбирает Provider или Worker напрямую и не управляет общесистемным TaskRuntimeState.
+Domain или соответствующий системный модуль остаётся каноническим владельцем содержания своего Skill. Регистрация этого Skill в общесистемном Skill Registry не передаёт Core предметное ownership.
 
-Каноническое владение: предметная логика.
+Domain не реализует общий Security, не выбирает Provider или Worker напрямую, не управляет общесистемным TaskRuntimeState и не создаёт собственный конкурирующий общесистемный Skill Registry / generic Skill Router.
+
+Каноническое владение: предметная логика, включая семантику предметных Skills и Workflows.
 
 ## 27.8. Context — контекст
 
@@ -132,7 +138,7 @@ Inference выбирает минимально достаточный вычи�
 
 Варианты включают локальный код, локальный ИИ, LOW/NORMAL/HIGH, подписочные и API-маршруты.
 
-Inference не выбирает конкретного Worker и не исполняет Tool.
+Inference не выбирает конкретного Worker, не исполняет Tool и не является владельцем Skill Registry или generic Skill Routing. Он получает Inference Requirement для конкретной части уже определённого способа работы или узла TaskGraph.
 
 Каноническое владение: Provider Route и маршрутизация вычислительного интеллекта.
 
@@ -311,8 +317,10 @@ Secret Store является специализированной инфрас�
 ## 27.32. Кто принимает ключевые решения
 
 - **Что делать:** USER/событие → Core → Domain → TaskContract.
+- **Какой Domain предположительно применим:** Core / generic classification → DomainCandidate (DATA); активация происходит после Effective Ruleset.
 - **Какие правила действуют:** Rule Manager.
 - **Можно ли:** Security.
+- **Какой воспроизводимый способ работы нужен:** Core generic Skill Routing с использованием предметной семантики владельца Skill.
 - **Что нужно знать:** Context.
 - **Где данные:** Resources.
 - **Как технически получить внешний ресурс:** Integrations.
@@ -379,6 +387,8 @@ Domain знает, что нужен PR; Resources знает репозитор
 | Проверенные знания | Knowledge Base |
 | Ресурс | исходная система + ResourceRef |
 | Решение о повторном использовании и runtime-кэш | CacheEngine |
+| Регистрация Skills и их системные метаданные/References | Skill Registry / Core |
+| Семантическое содержание конкретного Skill | соответствующий Domain или системный модуль |
 | Worker registration | Worker Registry |
 | Lease | Coworker |
 | Безопасность действия | Security Decision |
@@ -398,24 +408,27 @@ Domain знает, что нужен PR; Resources знает репозитор
 
 1. Intake — приём;
 2. Workspace;
-3. Rules;
-4. Domain;
-5. TaskContract;
-6. предварительный Planning;
-7. Context / Knowledge / Resources;
-8. CacheEngine;
-9. уточнённый Planning;
-10. Inference;
-11. Coworker;
-12. Security Grant;
-13. Execution;
-14. Validators;
-15. Evidence;
-16. QA;
-17. Result;
-18. Telemetry;
-19. Metrics;
-20. Learning.
+3. DomainCandidate — предварительная предметная классификация DATA;
+4. Rules — Effective Ruleset с учётом применимых Domain Rules;
+5. Active Domain — активация предметной области;
+6. TaskContract;
+7. предварительный Planning;
+8. Context / Knowledge / Resources;
+9. CacheEngine;
+10. уточнённый Planning;
+11. Workflow / Skill Routing;
+12. Executable-first;
+13. Inference для недетерминированного остатка;
+14. Coworker;
+15. Security Grant;
+16. Execution;
+17. Validators;
+18. Evidence;
+19. QA;
+20. Result;
+21. Telemetry;
+22. Metrics;
+23. Learning.
 
 Независимые операции могут выполняться параллельно, но операции с побочными эффектами остаются управляемыми зависимостями TaskGraph.
 
@@ -518,12 +531,12 @@ Quality Gate должен со временем обнаруживать:
 
 1. Каждая ответственность имеет одного канонического владельца.
 2. Оркестратор вызывает модули, но не забирает их ответственность.
-3. Domain определяет предметную работу.
+3. Domain определяет предметную работу и семантику своих Skills/Workflows; Core поддерживает общесистемный Skill Registry и generic Skill Routing без копирования этой семантики.
 4. Rule Manager определяет обязательные правила.
 5. Security определяет разрешённость действия.
 6. Context определяет минимально достаточные сведения.
 7. Resources определяет логический ресурс, Integrations — способ доступа.
-8. Planning прогнозирует, Inference выбирает интеллект, Coworker выбирает исполнителя, Execution выполняет.
+8. Planning прогнозирует, Skill Routing выбирает способ работы, Inference выбирает интеллект, Coworker выбирает исполнителя, Execution выполняет.
 9. Evidence и QA являются разными уровнями подтверждения.
 10. Telemetry фиксирует события, Metrics их измеряет, Learning улучшает систему.
 11. Visualization является представлением, а не источником состояния.
