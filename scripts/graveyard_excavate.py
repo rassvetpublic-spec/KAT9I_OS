@@ -45,8 +45,15 @@ def _trusted_now_iso() -> str:
 
 
 def _trusted_nonce_state_path(root: Path = REPO_ROOT) -> Path:
-    """Compatibility/test helper; production CLI cannot supply this root."""
-    return root / ".kat9i-runtime" / "graveyard-used-nonces.json"
+    """Compatibility/test helper reusing the trusted adapter path definition."""
+    from scripts.graveyard_trusted_handoff import (
+        TRUSTED_NONCE_STATE_RELATIVE_PATH,
+        trusted_nonce_state_path,
+    )
+
+    if root == REPO_ROOT:
+        return trusted_nonce_state_path()
+    return root / TRUSTED_NONCE_STATE_RELATIVE_PATH
 
 
 def _load_json(path: Path) -> dict[str, Any]:

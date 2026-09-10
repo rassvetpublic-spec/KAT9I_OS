@@ -16,6 +16,9 @@ from typing import Any
 from scripts.graveyard_context import REPO_ROOT
 
 
+TRUSTED_NONCE_STATE_RELATIVE_PATH = Path(".kat9i-runtime") / "graveyard-used-nonces.json"
+
+
 def trusted_now_iso() -> str:
     """Read current UTC from the process system clock at the trusted adapter."""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -23,7 +26,7 @@ def trusted_now_iso() -> str:
 
 def trusted_nonce_state_path() -> Path:
     """Return the one fixed repo-local replay store used by production-facing CLI."""
-    return REPO_ROOT / ".kat9i-runtime" / "graveyard-used-nonces.json"
+    return REPO_ROOT / TRUSTED_NONCE_STATE_RELATIVE_PATH
 
 
 def approve_trusted(
