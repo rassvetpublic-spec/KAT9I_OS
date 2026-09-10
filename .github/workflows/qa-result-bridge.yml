@@ -1,8 +1,8 @@
 name: QA — мост результата в Project lifecycle
 
 on:
-  pull_request_review:
-    types: [submitted]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -10,14 +10,15 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: qa-result-bridge-${{ github.event.pull_request.number }}
+  group: qa-result-bridge-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
   bridge:
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.review.body, 'KAT9I-QA-RESULT/1')
+      github.event.issue.pull_request != null &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, 'KAT9I-CONTROL/1 | QA-ACCEPT')
     runs-on: ubuntu-latest
     steps:
       - name: Получить доверенную версию bridge из main
@@ -25,24 +26,35 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
 
-      - name: Прочитать текущий PR и owner issue comments
+      - name: Извлечь ссылку на QA review из Controller attestation
+        id: attest
+        shell: bash
+        run: |
+          set -euo pipefail
+          REVIEW_ID="$(python scripts/qa_result_bridge.py extract-review-id --event-path "$GITHUB_EVENT_PATH")"
+          printf 'review_id=%s\n' "$REVIEW_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Прочитать live PR, owner comments и referenced review
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REVIEW_ID: ${{ steps.attest.outputs.review_id }}
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments.json
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}" > qa-review.json
 
-      - name: Проверить QA-COMMAND и QA-RESULT fail-closed
+      - name: Проверить QA-COMMAND → AGY result → Controller attestation
         id: validate
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/qa_result_bridge.py \
+          python scripts/qa_result_bridge.py resolve \
             --event-path "$GITHUB_EVENT_PATH" \
             --comments-path issue-comments.json \
+            --review-path qa-review.json \
             --current-pr-path current-pr.json \
             --output bridge-decision.json \
             --comment-output bridge-comment.md
@@ -53,22 +65,29 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
               out.write(f"decision={data.get('decision','')}\n")
               out.write(f"command_id={data.get('command_id','')}\n")
+              out.write(f"exact_head={data.get('exact_head','')}\n")
           PY
 
       - name: Нет нового управляющего перехода
         if: steps.validate.outputs.decision != 'ACCEPT'
-        run: echo "QA result не требует нового lifecycle transition."
+        run: echo "Controller attestation не требует нового lifecycle transition."
 
-      - name: Опубликовать trusted lifecycle marker от bridge
+      - name: Повторно проверить live HEAD и опубликовать trusted lifecycle marker
         if: steps.validate.outputs.decision == 'ACCEPT'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          EXPECTED_HEAD: ${{ steps.validate.outputs.exact_head }}
         run: |
           set -euo pipefail
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::SECRET_MISSING: KAT9I_PROJECT_TOKEN не передан; lifecycle не изменён."
+            exit 1
+          fi
+          LIVE_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::STALE_HEAD: PR HEAD изменился после Controller attestation; FAST marker не публикуется."
             exit 1
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$(cat bridge-comment.md)" >/dev/null
