@@ -31,7 +31,7 @@ TRUSTED_HUMAN_LEVELS = {"AUTHENTICATED", "FULL_LOCAL_TRUST"}
 _APPROVAL_SEAL = object()
 
 
-def _canonical_json_bytes(value: dict[str, Any]) -> bytes:
+def _canonical_json_bytes(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
@@ -206,7 +206,7 @@ def _archive_binding(entry: dict[str, Any]) -> str:
 
 
 def _candidate_id(archive_id: str, selector: str, idea_summary: str, archive_binding: str) -> str:
-    payload = f"{archive_id}\n{archive_binding}\n{selector}\n{idea_summary}".encode("utf-8")
+    payload = _canonical_json_bytes([archive_id, archive_binding, selector, idea_summary])
     return "gyc-" + hashlib.sha256(payload).hexdigest()[:16]
 
 
