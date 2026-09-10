@@ -22,7 +22,7 @@ function Get-PropertyValue($Object,[string]$Name){
 function Normalize-QaWorker([string]$Name){
   if([string]::IsNullOrWhiteSpace($Name)){return ''}
   $value=$Name.Trim()
-  if(@('AGY','Agy','Antigravity','Антигравити') -contains $value){return 'AGY'}
+  if(@('AGY','Agy','Antigravity','Антигравити','Antigravity (AGY)','Антигравити (AGY)') -contains $value){return 'AGY'}
   return $value
 }
 
