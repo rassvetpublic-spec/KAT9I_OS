@@ -86,11 +86,6 @@ jobs:
           gh auth status
           gh project view 2 --owner rassvetpublic-spec --format json >/dev/null
 
-      - name: Проверить и синхронизировать схему Project
-        if: steps.resolve.outputs.state != ''
-        shell: pwsh
-        run: ./scripts/configure_project.ps1
-
       - name: Синхронизировать lifecycle карточки
         if: steps.resolve.outputs.state != ''
         shell: pwsh
