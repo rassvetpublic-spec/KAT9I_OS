@@ -1,0 +1,49 @@
+name: Issue 126 fix headings
+
+on:
+  push:
+    branches:
+      - docs/issue-126-tz-requirements-abc-xyz-plan
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fix Russian headings and regenerate docs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('docs/spec/25_TZ_REQUIREMENTS_PRIORITIZATION_PIPELINE.md')
+          s = p.read_text(encoding='utf-8')
+          replacements = {
+              '## 25.5. T0 — Full Requirements Inventory': '## 25.5. T0 — Полная инвентаризация требований (Full Requirements Inventory)',
+              '### A — Critical': '### A — Критичные требования (Critical)',
+              '### B — Important': '### B — Важные требования (Important)',
+              '### C — Optional / Optimization': '### C — Опциональные требования и оптимизация (Optional / Optimization)',
+              '### X — Stable': '### X — Стабильные требования (Stable)',
+              '### Y — Moderate uncertainty': '### Y — Умеренная неопределённость (Moderate uncertainty)',
+              '### Z — High uncertainty': '### Z — Высокая неопределённость (High uncertainty)',
+              '## 25.9. Coverage / Contradiction Pass': '## 25.9. Проверка покрытия и противоречий (Coverage / Contradiction Pass)',
+              '## 25.10. T4 — Architecture Convergence': '## 25.10. T4 — Архитектурная сходимость (Architecture Convergence)',
+              '## 25.11. T5 — Architecture Baseline': '## 25.11. T5 — Архитектурная базовая линия (Architecture Baseline)',
+              '## 25.14. Graveyard': '## 25.14. Архив Graveyard',
+          }
+          for old, new in replacements.items():
+              if s.count(old) != 1:
+                  raise SystemExit(f'Expected one heading: {old!r}, got {s.count(old)}')
+              s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          python scripts/generate_html_docs.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/spec/25_TZ_REQUIREMENTS_PRIORITIZATION_PIPELINE.md index.html
+          git commit -m "docs: align T0-T5 headings with language policy (#126)"
+          git push
