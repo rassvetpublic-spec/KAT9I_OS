@@ -7627,9 +7627,9 @@ Learning (самообучение)
 <p>Это действие не является командой остановки Core и не требует изменения состояния активных задач только из-за исчезновения окна.</p>
 <h2 id="22-64-отдельный-выход-из-electron-ui">22.64. Отдельный выход из Electron UI</h2>
 <p>Пользователь может отдельно завершить процесс Electron UI. Core продолжает headless/background работу, если не получена отдельная разрешённая команда завершения KAT9I_OS.</p>
-<p>При повторном запуске Electron интерфейс восстанавливает представление через существующий IPC-контракт:</p>
-<p><code>connect/authenticate → core.get_system_state → core.subscribe_events</code>.</p>
-<p>Каноническое состояние не реконструируется из памяти UI. Интерфейс перечитывает его у Core.</p>
+<p>При повторном запуске Electron интерфейс восстанавливает представление через gap-free IPC reconnect. Snapshot и последующая подписка должны иметь одну логическую границу, чтобы события между ними не терялись.</p>
+<p>Базовый контракт для Electron P0: <code>core.get_system_state</code> возвращает snapshot вместе с <code>last_sequence_number</code> Event Journal, после чего <code>core.subscribe_events(after_sequence=...)</code> обязан выдать все события после этого sequence, включая накопившиеся между snapshot и подпиской. Эквивалентная реализация допустима только если она даёт ту же гарантию отсутствия окна потери событий.</p>
+<p>Каноническое состояние не реконструируется из памяти UI. Интерфейс перечитывает snapshot у Core и продолжает поток событий с подтверждённого sequence cursor. Два независимых вызова без cursor/replay или другой атомарной границы не считаются корректным reconnect.</p>
 <h2 id="22-65-явная-команда-завершить-kat9i_os">22.65. Явная команда «Завершить KAT9I_OS»</h2>
 <p>Завершение всей KAT9I_OS является отдельной CONTROL-операцией. Закрытие окна не подменяет эту команду.</p>
 <p>Перед штатной остановкой Core:</p>
@@ -7795,7 +7795,7 @@ Learning (самообучение)
 <ul>
 <li>закрытие главного окна переводит UI в скрытое/Tray-состояние и не завершает Core;</li>
 <li>отдельный выход из Electron может завершить UI, сохранив headless/background Core;</li>
-<li>повторный запуск Electron перечитывает каноническое состояние у Core через <code>core.get_system_state</code> и возобновляет события через <code>core.subscribe_events</code>;</li>
+<li>повторный запуск Electron выполняет gap-free reconnect: получает snapshot с подтверждённым Event Journal sequence cursor и возобновляет <code>core.subscribe_events</code> после этого cursor (или использует эквивалентную атомарную snapshot/subscription границу), поэтому событие между snapshot и подпиской не теряется;</li>
 <li>завершение всей KAT9I_OS является отдельной CONTROL-операцией Core и выполняется по канонической shutdown-семантике §22;</li>
 <li>Windows shutdown/reboot не считается доказательством штатного завершения активной работы: после следующего запуска Recovery подтверждает состояние до приёма новой изменяющей работы.</li>
 </ul>
@@ -11975,7 +11975,7 @@ Learning (самообучение)
 <li><strong>OQ-002</strong> — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41) — <strong>ACCEPTED</strong> (ADR-038).</li>
 <li><strong>OQ-004</strong> — минимальный безопасный внутренний API между Electron и Core (Issue #41) — <strong>ACCEPTED</strong> (ADR-038, <code>schemas/v1/CoreIpcMessage.json</code>).</li>
 <li><strong>OQ-008</strong> — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45) — <strong>ACCEPTED</strong> (ADR-039, <code>schemas/v1/SecretRef.json</code>).</li>
-<li><strong>OQ-010</strong> — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).</li>
+<li><strong>OQ-010</strong> — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill) — <strong>ACCEPTED</strong> (ADR-047).</li>
 </ul>
 <p>Остальные вопросы не входят в список <code>OPEN BEFORE v0.1</code> выше и откладываются строго по своим детальным статусам: OQ-011 — <code>DEFERRED UNTIL PRE-RELEASE</code>, OQ-012 и OQ-013 — <code>DEFERRED UNTIL v0.2</code>; будущие OQ получают собственный явный этап. Они не должны считаться закрытыми или переноситься на другой срок только из-за этой сводки.</p>
 <h2 id="32-52-oq-001-основной-язык-стек-core">32.52. OQ-001 — основной язык/стек Core</h2>
@@ -12131,7 +12131,7 @@ Learning (самообучение)
 <ol>
 <li>Закрытие главного окна (<code>X</code>) скрывает окно / переводит UI в Tray; Core и активные задачи продолжают работу.</li>
 <li>Отдельный выход из Electron UI может завершить UI, но Core остаётся в headless/background режиме.</li>
-<li>Повторный Electron подключается к существующему Core и перечитывает каноническое состояние через <code>core.get_system_state</code>, затем возобновляет события через <code>core.subscribe_events</code>.</li>
+<li>Повторный Electron выполняет gap-free reconnect: snapshot связывается с Event Journal sequence cursor, а подписка/replay продолжается после этого cursor; независимые <code>get_system_state</code> и <code>subscribe_events</code> без cursor/replay или эквивалентной атомарной границы запрещены, потому что могут потерять событие.</li>
 <li><code>Завершить KAT9I_OS</code> является отдельной CONTROL-операцией: <code>DRAINING → безопасный Checkpoint/пауза → Journal/State → Lease/fencing cleanup → shutdown</code>.</li>
 <li>Неизвестный результат активного side effect не считается успехом; используется WAIT, разрешённый policy <code>FORCE STOP</code> либо BLOCKED/Recovery.</li>
 <li>Windows shutdown/reboot допускает только best-effort фиксацию подтверждённого состояния в доступное ОС время; система не рассчитывает на полное завершение всех Task.</li>

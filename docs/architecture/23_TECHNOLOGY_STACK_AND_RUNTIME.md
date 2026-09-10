@@ -154,7 +154,7 @@ Core:
 
 - закрытие главного окна переводит UI в скрытое/Tray-состояние и не завершает Core;
 - отдельный выход из Electron может завершить UI, сохранив headless/background Core;
-- повторный запуск Electron перечитывает каноническое состояние у Core через `core.get_system_state` и возобновляет события через `core.subscribe_events`;
+- повторный запуск Electron выполняет gap-free reconnect: получает snapshot с подтверждённым Event Journal sequence cursor и возобновляет `core.subscribe_events` после этого cursor (или использует эквивалентную атомарную snapshot/subscription границу), поэтому событие между snapshot и подпиской не теряется;
 - завершение всей KAT9I_OS является отдельной CONTROL-операцией Core и выполняется по канонической shutdown-семантике §22;
 - Windows shutdown/reboot не считается доказательством штатного завершения активной работы: после следующего запуска Recovery подтверждает состояние до приёма новой изменяющей работы.
 
