@@ -14,6 +14,9 @@ $script:ItemAddCalls=0
 $script:IterationMode=$false
 $script:IterationDuration=3
 $script:CustomFields=$null
+$script:ViewCreationMode=$false
+$script:CreationViews=@()
+$script:CapturedCreateViewInput=$null
 
 function New-View([string]$Name,[string]$Id,[string]$Layout,[string]$Filter){
   [pscustomobject]@{id=$Id;name=$Name;layout=$Layout;filter=$Filter}
@@ -106,6 +109,26 @@ function Snapshot {
       repository=[pscustomobject]@{id='REPO';nameWithOwner='rassvetpublic-spec/KAT9I_OS'}
     }
   }
+  if($script:ViewCreationMode){
+    $fields=@()
+    $i=1
+    foreach($name in $script:Required){
+      $fields+=[pscustomobject]@{id="F$i";name=$name;__typename='ProjectV2Field'}
+      $i++
+    }
+    return [pscustomobject]@{
+      user=[pscustomobject]@{
+        projectV2=[pscustomobject]@{
+          id='PROJECT'
+          title='KAT9I_OS — разработка'
+          repositories=[pscustomobject]@{nodes=@([pscustomobject]@{id='REPO';nameWithOwner='rassvetpublic-spec/KAT9I_OS'})}
+          fields=[pscustomobject]@{nodes=$fields}
+          views=[pscustomobject]@{nodes=@($script:CreationViews)}
+        }
+      }
+      repository=[pscustomobject]@{id='REPO';nameWithOwner='rassvetpublic-spec/KAT9I_OS'}
+    }
+  }
   if($script:IterationMode){
     $iteration=[pscustomobject]@{
       id='ITER'
@@ -168,6 +191,26 @@ function Rest {
 function Gql {
   param([string]$Query,[hashtable]$Variables)
   $script:GqlCalls++
+  if($script:ViewCreationMode){
+    if($Query -match 'createProjectV2View'){
+      $script:CapturedCreateViewInput=$Variables.input
+      $newId='NEWVIEW'
+      $script:CreationViews+=New-View $Variables.input.name $newId $Variables.input.layout ''
+      return [pscustomobject]@{data=[pscustomobject]@{createProjectV2View=[pscustomobject]@{projectV2View=[pscustomobject]@{id=$newId}}}}
+    }
+    if($Query -match 'updateProjectV2View'){
+      $updated=@()
+      foreach($view in $script:CreationViews){
+        if($view.id -eq $Variables.input.viewId){
+          $updated+=New-View $view.name $view.id $view.layout $Variables.input.filter
+        } else {
+          $updated+=$view
+        }
+      }
+      $script:CreationViews=$updated
+      return [pscustomobject]@{data=[pscustomobject]@{updateProjectV2View=[pscustomobject]@{projectV2View=[pscustomobject]@{id=$Variables.input.viewId}}}}
+    }
+  }
   throw 'GraphQL mutation не должна выполняться в fail-closed сценарии.'
 }
 
@@ -184,6 +227,7 @@ function gh {
 
 function Assert-ViewsFailClosed([object[]]$Views,[string]$ExpectedMessage){
   $script:IterationMode=$false
+  $script:ViewCreationMode=$false
   $script:MockViews=$Views
   $script:GqlCalls=0
   $script:RestWrites=0
@@ -203,6 +247,7 @@ function Assert-ViewsFailClosed([object[]]$Views,[string]$ExpectedMessage){
 
 function Assert-EntrypointFailClosed([object[]]$Views,[string]$ExpectedMessage){
   $script:IterationMode=$false
+  $script:ViewCreationMode=$false
   $script:MockViews=$Views
   $script:GqlCalls=0
   $script:RestWrites=0
@@ -299,8 +344,21 @@ if(-not $thrown){throw 'Ожидалась fail-closed ошибка для ка�
 if($script:GqlCalls -ne 0){throw "Дублирующиеся значения вызвали GraphQL mutation: calls = $($script:GqlCalls)"}
 $script:CustomFields=$null
 
-# Неоднозначность в позднем поле должна обнаруживаться до EnsureLink/ранних записей.
+# Alias раннего поля не должен переименовываться в read-only проходе, если позднее поле неоднозначно.
 $script:CustomFields=@(
+  [pscustomobject]@{
+    id='GATE'
+    name='Gate'
+    __typename='ProjectV2SingleSelectField'
+    options=@(
+      [pscustomobject]@{id='G0';name='G0 — Порядок проекта и задач'},
+      [pscustomobject]@{id='G1';name='G1 — ТЗ и базовая архитектура'},
+      [pscustomobject]@{id='G2';name='G2 — Машинные контракты'},
+      [pscustomobject]@{id='G3';name='G3 — Основа исполняемой системы'},
+      [pscustomobject]@{id='G4';name='G4 — Сквозная версия v0.1'},
+      [pscustomobject]@{id='G5';name='G5 — После v0.1'}
+    )
+  },
   [pscustomobject]@{id='P1';name='Приоритет';__typename='ProjectV2SingleSelectField';options=@()},
   [pscustomobject]@{id='P2';name='Priority';__typename='ProjectV2SingleSelectField';options=@()}
 )
@@ -318,8 +376,20 @@ try {
 }
 if(-not $thrown){throw 'Ожидалась ошибка позднего alias-preflight.'}
 if($script:GqlCalls -ne 0 -or $script:RestWrites -ne 0 -or $script:ItemAddCalls -ne 0){
-  throw 'Поздняя неоднозначность была обнаружена после записи.'
+  throw 'Поздняя неоднозначность была обнаружена после записи или ранний alias был переименован в preflight.'
 }
 $script:CustomFields=$null
 
-Write-Host 'PASS: Project policy запускает фактическое production-тело entrypoint под read-only preflight; mutation-вызовы вне защищённого Apply запрещены, а case-variant, старый QA filter и дубль дают 0 REST writes / 0 GraphQL mutations / 0 item-add.'
+# Недостающий первый View должен создаваться через реальный projectId и GraphQL enum TABLE_LAYOUT.
+$script:ViewCreationMode=$true
+$script:CreationViews=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
+$script:CapturedCreateViewInput=$null
+$script:GqlCalls=0
+EnsureViews
+if($null -eq $script:CapturedCreateViewInput){throw 'EnsureViews не вызвал createProjectV2View для отсутствующего канонического View.'}
+if($script:CapturedCreateViewInput.projectId -cne 'PROJECT'){throw 'createProjectV2View получил неверный projectId.'}
+if($script:CapturedCreateViewInput.layout -cne 'TABLE_LAYOUT'){throw "createProjectV2View получил неверный layout: $($script:CapturedCreateViewInput.layout)"}
+if($script:CreationViews.Count -ne 5){throw "После создания ожидаются 5 Views, фактически $($script:CreationViews.Count)."}
+$script:ViewCreationMode=$false
+
+Write-Host 'PASS: Project policy запускает фактическое production-тело entrypoint под read-only preflight; alias-переименование не пишет в preflight; fail-closed сценарии дают 0 REST/GraphQL/item-add; недостающий View создаётся с projectId и TABLE_LAYOUT.'
