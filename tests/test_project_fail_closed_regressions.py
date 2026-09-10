@@ -26,7 +26,7 @@ class ProjectFailClosedRegressionTests(unittest.TestCase):
             result.returncode,
             msg=f"PowerShell regression test упал.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}",
         )
-        self.assertIn("PASS: #101 regression", result.stdout)
+        self.assertIn("PASS: #101/#104 regression", result.stdout)
 
 
 if __name__ == "__main__":
