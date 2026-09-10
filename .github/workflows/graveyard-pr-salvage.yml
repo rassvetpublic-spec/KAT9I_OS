@@ -1,0 +1,179 @@
+name: Graveyard — salvage-аудит закрытых PR
+
+on:
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Номер PR для повторного DATA-only аудита"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+concurrency:
+  group: graveyard-pr-salvage-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  salvage:
+    name: Сохранить DATA-only evidence закрытого PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Зафиксировать PR и exact canon revision
+        id: meta
+        uses: actions/github-script@v7
+        env:
+          MANUAL_PR_NUMBER: ${{ inputs.pr_number || '' }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const number = context.payload.pull_request?.number || Number(process.env.MANUAL_PR_NUMBER || 0);
+            if (!number) throw new Error('Не удалось определить номер PR');
+            const {data: repository} = await github.rest.repos.get({owner, repo});
+            const {data: branch} = await github.rest.repos.getBranch({owner, repo, branch: repository.default_branch});
+            core.setOutput('pr_number', String(number));
+            core.setOutput('canon_sha', branch.commit.sha);
+
+      - name: Получить только доверенный exact canon
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.canon_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Собрать GitHub evidence относительно pinned canon
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+          CANON_SHA: ${{ steps.meta.outputs.canon_sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const number = Number(process.env.PR_NUMBER);
+            const canonSha = process.env.CANON_SHA;
+            const marker = '<!-- graveyard-pr-salvage-audit -->';
+
+            const {data: pr} = await github.rest.pulls.get({owner, repo, pull_number: number});
+            const {data: canonCommit} = await github.rest.repos.getCommit({owner, repo, ref: canonSha});
+            const {data: tree} = await github.rest.git.getTree({
+              owner, repo, tree_sha: canonCommit.commit.tree.sha, recursive: 'true'
+            });
+            const mainBlobs = new Map(
+              (tree.tree || []).filter(x => x.type === 'blob').map(x => [x.path, x.sha])
+            );
+            const files = await github.paginate(github.rest.pulls.listFiles, {owner, repo, pull_number: number, per_page: 100});
+            const reviewComments = await github.paginate(github.rest.pulls.listReviewComments, {owner, repo, pull_number: number, per_page: 100});
+            const allIssueComments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number: number, per_page: 100});
+            const issueComments = allIssueComments.filter(c => !(c.body || '').includes(marker));
+
+            fs.writeFileSync('salvage-input.json', JSON.stringify({
+              repository: `${owner}/${repo}`,
+              canon_revision: canonSha,
+              pr: {
+                number: pr.number,
+                title: pr.title || '',
+                body: pr.body || '',
+                state: pr.state,
+                merged: Boolean(pr.merged),
+                closed_at: pr.closed_at,
+                head_sha: pr.head.sha,
+                base_ref: pr.base.ref,
+                changed_files: pr.changed_files || 0,
+                additions: pr.additions || 0,
+                deletions: pr.deletions || 0,
+                commits: pr.commits || 0,
+                labels: (pr.labels || []).map(x => x.name),
+              },
+              files: files.map(f => ({
+                filename: f.filename,
+                status: f.status,
+                sha: f.sha || null,
+                additions: f.additions || 0,
+                deletions: f.deletions || 0,
+                changes: f.changes || 0,
+                main_blob_sha: mainBlobs.get(f.filename) || null,
+              })),
+              review_comments: reviewComments.map(c => ({
+                body: c.body || '',
+                path: c.path || null,
+                line: c.line || c.original_line || null,
+                url: c.html_url || null,
+              })),
+              issue_comments: issueComments.map(c => ({
+                body: c.body || '',
+                url: c.html_url || null,
+                created_at: c.created_at || null,
+              })),
+            }, null, 2));
+
+      - name: Выполнить fail-closed salvage-классификацию
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/graveyard_pr_salvage.py --input salvage-input.json --output-dir salvage-audit --repo-root .
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          report = json.load(open('salvage-audit/report.json', encoding='utf-8'))
+          print('required=' + ('true' if report['audit_required'] else 'false'))
+          print('reason=' + report['audit_reason'])
+          PY
+          cat salvage-audit/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Проверить машинный контракт отчёта
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from jsonschema import Draft202012Validator
+          schema = json.load(open('schemas/v1/GraveyardPrSalvageAudit.json', encoding='utf-8'))
+          report = json.load(open('salvage-audit/report.json', encoding='utf-8'))
+          errors = sorted(Draft202012Validator(schema).iter_errors(report), key=lambda e: list(e.path))
+          if errors:
+              raise SystemExit(errors[0].message)
+          for field in ('actionable', 'control', 'canonical', 'auto_promotion'):
+              if report[field] is not False:
+                  raise SystemExit(f'{field} обязан оставаться false')
+          PY
+
+      - name: Сохранить полный salvage report как DATA artifact
+        if: steps.audit.outputs.required == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: graveyard-pr-${{ steps.meta.outputs.pr_number }}-salvage
+          path: salvage-audit/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Оставить идемпотентную DATA-only отметку в закрытом PR
+        if: steps.audit.outputs.required == 'true'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = Number(process.env.PR_NUMBER);
+            const marker = '<!-- graveyard-pr-salvage-audit -->';
+            let report = fs.readFileSync('salvage-audit/report.md', 'utf8');
+            if (report.length > 9000) report = report.slice(0, 9000) + '\n\n…полный отчёт сохранён в Actions artifact.';
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = `${marker}\n${report}\n\n**Evidence:** [workflow run](${runUrl})\n\n> Эта автоматическая запись — DATA, не backlog и не разрешение на восстановление PR.`;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            const previous = comments.find(c => (c.body || '').includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: previous.id, body});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body});
+            }
