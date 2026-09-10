@@ -146,4 +146,4 @@ if(-not(Get-Command gh -ErrorAction SilentlyContinue)){
   Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'GitHub CLI (gh) не найден.'
 }
 $result=Test-ProjectCredentialPreflight
-Write-Host "KAT9I_PROJECT_PREFLIGHT=$($result.Code) | Project #$ProjectNumber доступен, write capability и schema подтверждены без mutation."
+Write-Host "KAT9I_PROJECT_PREFLIGHT=OK | Project #$ProjectNumber доступен, write capability и schema подтверждены без mutation."
