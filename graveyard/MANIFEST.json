@@ -155,6 +155,17 @@
       "actionable": false,
       "control": false,
       "canonical": false
+    },
+    {
+      "archive_id": "GY-20260910-section2-final-crosscheck-v1.0.0",
+      "path": "graveyard/GY-20260910-section2-final-crosscheck_v1.0.0.md",
+      "archive_date": "2026-09-10",
+      "byte_size": 10812,
+      "sha256": "f41a23af64b20ee053cf4cd989fa4554d777a0763fe7ef3ac9828d4058e80685",
+      "git_blob_sha1": "32b9821ac1298aff101691706c8be4504fc07a5b",
+      "actionable": false,
+      "control": false,
+      "canonical": false
     }
   ]
 }
