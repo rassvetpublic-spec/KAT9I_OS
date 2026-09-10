@@ -272,11 +272,17 @@ function EnsureItems{
 
   $j=& gh issue list --repo $repo --state open --limit 1000 --json url
   if($LASTEXITCODE -ne 0){throw 'Не удалось получить полный список открытых Issues. Project не изменён дальше.'}
-  if($j){$urls+=@((($j -join "`n")|ConvertFrom-Json).url)}
+  if($j){
+    $items=@(($j -join "`n")|ConvertFrom-Json)
+    $urls+=@($items|ForEach-Object{$_.url}|Where-Object{-not [string]::IsNullOrWhiteSpace([string]$_)})
+  }
 
   $j=& gh pr list --repo $repo --state open --limit 1000 --json url
   if($LASTEXITCODE -ne 0){throw 'Не удалось получить полный список открытых PR. Project не изменён дальше.'}
-  if($j){$urls+=@((($j -join "`n")|ConvertFrom-Json).url)}
+  if($j){
+    $items=@(($j -join "`n")|ConvertFrom-Json)
+    $urls+=@($items|ForEach-Object{$_.url}|Where-Object{-not [string]::IsNullOrWhiteSpace([string]$_)})
+  }
 
   $urls+="https://github.com/$repo/issues/62"
 
