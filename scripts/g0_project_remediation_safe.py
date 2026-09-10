@@ -8,7 +8,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-import g0_project_remediation as core
+try:
+    from scripts import g0_project_remediation as core
+except ModuleNotFoundError:  # Direct `python scripts/...` execution.
+    import g0_project_remediation as core
 
 
 def _canonical_identity(value: str | None) -> str:
