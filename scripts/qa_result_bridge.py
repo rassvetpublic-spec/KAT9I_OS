@@ -18,7 +18,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 COMMAND_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{5,127}$")
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
-COMMAND_REQUIRED = {
+COMMAND_FIELDS = {
     "command_id",
     "target_pr",
     "controller",
@@ -33,7 +33,7 @@ COMMAND_REQUIRED = {
     "allow_code_mutation",
     "project_lifecycle_mutation",
 }
-RESULT_REQUIRED = {
+RESULT_FIELDS = {
     "command_id",
     "target_pr",
     "controller",
@@ -86,7 +86,7 @@ def _nonnegative_int(value: str, field: str) -> int:
     return int(value)
 
 
-def parse_envelope(body: str, marker: str, required: set[str]) -> dict[str, str]:
+def parse_envelope(body: str, marker: str, fields: set[str]) -> dict[str, str]:
     lines = (body or "").splitlines()
     if not lines or lines[0].strip() != marker:
         raise BridgeError(f"first line must be exact marker: {marker}")
@@ -102,12 +102,14 @@ def parse_envelope(body: str, marker: str, required: set[str]) -> dict[str, str]
         value = value.strip()
         if not KEY_RE.fullmatch(key):
             raise BridgeError(f"invalid envelope key: {key}")
+        if key not in fields:
+            raise BridgeError(f"unknown envelope key: {key}")
         if not value:
             raise BridgeError(f"empty envelope value: {key}")
         if key in meta:
             raise BridgeError(f"duplicate envelope key: {key}")
         meta[key] = value
-    missing = sorted(required - meta.keys())
+    missing = sorted(fields - meta.keys())
     if missing:
         raise BridgeError(f"missing envelope keys: {', '.join(missing)}")
     return meta
@@ -223,7 +225,7 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any, current_pr: dic
     if not body.startswith(RESULT_MARKER):
         return {"decision": "IGNORE", "reason": "review is not a QA result envelope"}
 
-    result = validate_result(parse_envelope(body, RESULT_MARKER, RESULT_REQUIRED))
+    result = validate_result(parse_envelope(body, RESULT_MARKER, RESULT_FIELDS))
     pr_number = pr.get("number") or event.get("number")
     if not isinstance(pr_number, int) or pr_number <= 0:
         raise BridgeError("event does not contain a valid PR number")
@@ -268,7 +270,7 @@ def resolve_bridge(event: dict[str, Any], comments_payload: Any, current_pr: dic
         if not comment_body.startswith(COMMAND_MARKER):
             continue
         try:
-            command = validate_command(parse_envelope(comment_body, COMMAND_MARKER, COMMAND_REQUIRED))
+            command = validate_command(parse_envelope(comment_body, COMMAND_MARKER, COMMAND_FIELDS))
         except BridgeError:
             continue
         if command["target_pr"] != pr_number:
