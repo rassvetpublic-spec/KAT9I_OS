@@ -108,10 +108,11 @@ function Assert-ProjectAccess{
 
 function Resolve-ProjectItemId{
   $data=Invoke-GhJson -Arguments @('project','item-list',"$ProjectNumber",'--owner',$Owner,'--limit','1000','--format','json') -Purpose 'Чтение Project items'
-  $items=Get-PropertyValue $data 'items'
-  if($null -eq $items){throw 'Project item-list не вернул items; lifecycle не синхронизирован.'}
+  $itemsProperty=$data.PSObject.Properties['items']
+  if($null -eq $itemsProperty){throw 'Project item-list не вернул items; lifecycle не синхронизирован.'}
+  $items=@($itemsProperty.Value)
   $matches=@()
-  foreach($item in @($items)){
+  foreach($item in $items){
     $content=Get-PropertyValue $item 'content'
     $itemUrl=[string](Get-PropertyValue $content 'url')
     if($itemUrl -ceq $Url){$matches+=,$item}
@@ -146,9 +147,9 @@ query($id:ID!){
   $errors=Get-PropertyValue $data 'errors'
   if($null -ne $errors){throw 'GitHub GraphQL вернул errors при чтении Project fields.'}
   $root=Get-PropertyValue (Get-PropertyValue $data 'data') 'node'
-  $fields=Get-PropertyValue (Get-PropertyValue $root 'fields') 'nodes'
-  if($null -eq $fields){throw 'Project GraphQL не вернул fields.'}
-  return @($fields)
+  $fieldsProperty=(Get-PropertyValue $root 'fields').PSObject.Properties['nodes']
+  if($null -eq $fieldsProperty){throw 'Project GraphQL не вернул fields.'}
+  return @($fieldsProperty.Value)
 }
 
 function Resolve-SelectBinding($Fields,[string]$Field,[string]$Value){
