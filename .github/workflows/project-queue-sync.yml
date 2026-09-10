@@ -6,7 +6,7 @@ on:
   issue_comment:
     types: [created]
   pull_request:
-    types: [closed]
+    types: [closed, synchronize]
   workflow_dispatch:
     inputs:
       url:
@@ -55,6 +55,8 @@ jobs:
             fi
             printf 'url=%s\n' "$DISPATCH_URL" >> "$GITHUB_OUTPUT"
             printf 'state=%s\n' "$DISPATCH_STATE" >> "$GITHUB_OUTPUT"
+            printf 'worker=\n' >> "$GITHUB_OUTPUT"
+            printf 'qa=\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           python scripts/project_queue_event.py --event-name "$EVENT_NAME" --action "$EVENT_ACTION" --event-path "$GITHUB_EVENT_PATH" --output queue-event.json
@@ -65,6 +67,8 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as out:
               out.write(f"url={data.get('url','')}\n")
               out.write(f"state={data.get('state','')}\n")
+              out.write(f"worker={data.get('worker','')}\n")
+              out.write(f"qa={data.get('qa','')}\n")
           PY
 
       - name: Нет управляющего перехода
@@ -93,4 +97,6 @@ jobs:
         env:
           ITEM_URL: ${{ steps.resolve.outputs.url }}
           ITEM_STATE: ${{ steps.resolve.outputs.state }}
-        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker 'ChatGPT' -QaWorker 'AGY'
+          ITEM_WORKER: ${{ steps.resolve.outputs.worker }}
+          ITEM_QA: ${{ steps.resolve.outputs.qa }}
+        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA"
