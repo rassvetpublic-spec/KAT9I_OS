@@ -4,9 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from graveyard_pr_salvage import build_audit, render_markdown
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class GraveyardPrSalvageTests(unittest.TestCase):
@@ -126,6 +130,15 @@ class GraveyardPrSalvageTests(unittest.TestCase):
             serialized = json.dumps(report, ensure_ascii=False)
             self.assertNotIn("github_pat_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", serialized)
             self.assertIn("УДАЛЁН_СЕКРЕТ", serialized)
+
+    def test_report_validates_against_canonical_schema(self):
+        temp, root = self._root()
+        with temp:
+            report = build_audit(self._payload(), root=root)
+            schema = json.loads((REPO_ROOT / "schemas" / "v1" / "GraveyardPrSalvageAudit.json").read_text(encoding="utf-8"))
+            Draft202012Validator.check_schema(schema)
+            errors = list(Draft202012Validator(schema).iter_errors(report))
+            self.assertEqual(errors, [])
 
     def test_markdown_repeats_data_only_boundary(self):
         temp, root = self._root()
