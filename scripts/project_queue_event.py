@@ -11,6 +11,7 @@ CONTROL_MARKERS = {
     "FAST-BLOCKED": "BLOCKED",
     "FAST-RELEASE": "DONE",
 }
+IDENTITY_KEYS = {"worker", "qa"}
 
 
 def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
@@ -23,13 +24,23 @@ def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
         return None, {}
     meta: dict[str, str] = {}
     for part in parts[1:]:
+        if not part:
+            continue
         if "=" not in part:
+            if part.lower() in IDENTITY_KEYS:
+                raise ValueError(f"FAST identity metadata '{part}' должна иметь форму key=value")
             continue
         key, value = part.split("=", 1)
         key = key.strip().lower()
         value = value.strip()
-        if key in {"worker", "qa"} and value:
+        if key in IDENTITY_KEYS:
+            if not value:
+                raise ValueError(f"FAST identity metadata '{key}' не может быть пустой")
+            if key in meta:
+                raise ValueError(f"FAST identity metadata '{key}' указана более одного раза")
             meta[key] = value
+        elif key.startswith("worker") or key.startswith("qa"):
+            raise ValueError(f"Неподдерживаемый FAST identity key '{key}'")
     return state, meta
 
 
