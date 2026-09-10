@@ -75,16 +75,15 @@ jobs:
         if: steps.resolve.outputs.state == ''
         run: echo "Событие не содержит доверенного перехода Project queue; изменений нет."
 
-      - name: Проверить Project credential
+      - name: Диагностический preflight Project credential
         if: steps.resolve.outputs.state != ''
-        shell: bash
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Не настроен secret KAT9I_PROJECT_TOKEN с правом записи в GitHub Project #2. Карточка не объявляется синхронизированной."
-            exit 1
-          fi
-          gh auth status
-          gh project view 2 --owner rassvetpublic-spec --format json >/dev/null
+        shell: pwsh
+        env:
+          ITEM_URL: ${{ steps.resolve.outputs.url }}
+          ITEM_STATE: ${{ steps.resolve.outputs.state }}
+          ITEM_WORKER: ${{ steps.resolve.outputs.worker }}
+          ITEM_QA: ${{ steps.resolve.outputs.qa }}
+        run: ./scripts/project_credential_preflight.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA"
 
       - name: Синхронизировать lifecycle карточки
         if: steps.resolve.outputs.state != ''

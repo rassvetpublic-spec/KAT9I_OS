@@ -214,6 +214,7 @@
 <a href="#spec-16_domains" data-target-id="spec-16_domains">Спецификация: 16_DOMAINS</a>
 <a href="#spec-23_testing_qa_and_readiness" data-target-id="spec-23_testing_qa_and_readiness">Спецификация: 23_TESTING_QA_AND_READINESS</a>
 <a href="#spec-24_github_project_management" data-target-id="spec-24_github_project_management">Спецификация: 24_GITHUB_PROJECT_MANAGEMENT</a>
+<a href="#spec-25_tz_requirements_prioritization_pipeline" data-target-id="spec-25_tz_requirements_prioritization_pipeline">Спецификация: 25_TZ_REQUIREMENTS_PRIORITIZATION_PIPELINE</a>
 <a href="#arch-03_task_contract" data-target-id="arch-03_task_contract">Архитектура: 03_TASK_CONTRACT</a>
 <a href="#arch-04_rules_and_execution_priorities" data-target-id="arch-04_rules_and_execution_priorities">Архитектура: 04_RULES_AND_EXECUTION_PRIORITIES</a>
 <a href="#arch-06_learning_self_improvement" data-target-id="arch-06_learning_self_improvement">Архитектура: 06_LEARNING_SELF_IMPROVEMENT</a>
@@ -3556,6 +3557,306 @@ QA Pass Rate упал ниже минимального уровня</code></pre
 <p>Команда <code>мерж</code> означает постановку/продолжение PromotionRequest, а не немедленный merge. GitHub PR является ChangeRef первой вертикали, <code>main</code> — target_ref, а final CI выполняется на synthetic candidate current target + checked ChangeSet.</p>
 <p>GitHub Project остаётся control plane и представлением. Runtime FIFO/Promotion state хранится только в authoritative PromotionStore. Native GitHub Merge Queue и Actions concurrency не являются обязательным SSoT.</p>
 <p>SAFE auto-promotion возможен только по детерминированной policy §36; архитектурные, workflow, schema, Security, QA/Gate и неопределённые изменения всегда STRICT.</p>
+    </section>
+        
+
+    <section id="spec-25_tz_requirements_prioritization_pipeline" data-section-level="tech">
+      <div class="badge">Каноническая спецификация</div>
+      <h1 id="25-полный-реестр-тз-и-abc-xyz-приоритизация">25. Полный реестр ТЗ и ABC/XYZ-приоритизация</h1>
+<h2 id="25-1-назначение">25.1. Назначение</h2>
+<p>Этот раздел задаёт обязательный инженерный процесс перехода от набора канонических документов KAT9I_OS к управляемому полному ТЗ, приоритетной архитектурной проработке и только затем к реализации.</p>
+<p>Каноническая последовательность:</p>
+<p><code>T0 Requirements Inventory → T1 ABC → T2 XYZ → T3 ABC×XYZ + Coverage/Contradiction → T4 Architecture Convergence → T5 Architecture Baseline → G2/G3 implementation</code>.</p>
+<p>Процесс относится к engineering/control plane разработки KAT9I_OS и не является runtime-модулем операционной системы.</p>
+<p>Главная цель:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Сначала понять полный набор требований и их риск, затем тратить архитектурное время и только потом кодировать.</strong></div>
+<h2 id="25-2-почему-нужен-отдельный-requirements-registry">25.2. Почему нужен отдельный Requirements Registry</h2>
+<p>Фактическое ТЗ KAT9I_OS распределено между <code>docs/tz</code>, <code>docs/architecture</code>, <code>docs/spec</code>, ADR/OQ, machine schemas и связанными Issues/PR.</p>
+<p>Само наличие большого количества качественных документов не гарантирует, что:</p>
+<ul>
+<li>все требования вообще учтены;</li>
+<li>у каждого требования есть один canonical owner;</li>
+<li>существует однозначный SSoT;</li>
+<li>machine contract соответствует текстовой архитектуре;</li>
+<li>нет противоречащего описания в соседнем разделе;</li>
+<li>приоритет анализа определяется архитектурным риском, а не порядком появления Issue.</li>
+</ul>
+<p>Поэтому вводится Requirements Registry как слой traceability и классификации.</p>
+<p>Requirements Registry не становится вторым SSoT содержания требований.</p>
+<p>Он хранит ссылку на канонический источник и метаданные анализа.</p>
+<h2 id="25-3-инвариант-registry">25.3. Инвариант Registry</h2>
+<p>Для каждого требования действует модель:</p>
+<p><code>Requirement ID → canonical SSoT → canonical owner → status → dependencies → evidence/contract refs → ABC → XYZ → coverage state → implementation trace</code>.</p>
+<p>Registry может сообщить, где находится требование и в каком оно состоянии.</p>
+<p>Registry не должен самостоятельно изменять смысл требования.</p>
+<p>Если содержимое Registry расходится с профильным SSoT, исправляется Registry либо явно открывается архитектурный конфликт.</p>
+<h2 id="25-4-минимальная-запись-requirement">25.4. Минимальная запись Requirement</h2>
+<p>Каждая запись должна позволять определить минимум:</p>
+<ul>
+<li><code>requirement_id</code> — стабильный идентификатор;</li>
+<li>короткое название;</li>
+<li>область/тип требования;</li>
+<li>canonical SSoT;</li>
+<li>canonical owner;</li>
+<li>целевой Gate или версия;</li>
+<li>статус: <code>ACCEPTED</code>, <code>OPEN</code>, <code>DEFERRED</code>, <code>GAP</code> или <code>BLOCKED</code>;</li>
+<li>зависимости;</li>
+<li>machine contract refs, если они требуются;</li>
+<li>Evidence / traceability refs;</li>
+<li>связанный Issue/PR;</li>
+<li>ABC-класс;</li>
+<li>XYZ-класс;</li>
+<li>Coverage/Contradiction status.</li>
+</ul>
+<p>Дополнительные поля могут вводиться позже, если они не превращают Registry в копию самих спецификаций.</p>
+<h2 id="25-5-t0-полная-инвентаризация-требований-full-requirements-inventory">25.5. T0 — Полная инвентаризация требований (Full Requirements Inventory)</h2>
+<p>T0 отвечает на вопрос:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Что вообще входит в ТЗ KAT9I_OS и где находится каноническая истина по каждому требованию?</strong></div>
+<p>Источники T0:</p>
+<ul>
+<li><code>docs/tz</code>;</li>
+<li><code>docs/architecture</code>;</li>
+<li><code>docs/spec</code>;</li>
+<li>ADR и OQ;</li>
+<li><code>schemas/v1</code> и последующие версии schemas;</li>
+<li>Module Registry и responsibility maps;</li>
+<li>связанные Issues и PR;</li>
+<li>действующие Gate/roadmap документы.</li>
+</ul>
+<p>Graveyard допускается только как DATA для поиска потерянной истории и не становится источником CONTROL автоматически.</p>
+<h3 id="25-5-1-что-t0-делает">25.5.1. Что T0 делает</h3>
+<p>T0:</p>
+<ul>
+<li>выделяет требования;</li>
+<li>нормализует их идентификаторы;</li>
+<li>связывает требование с SSoT;</li>
+<li>определяет текущего canonical owner;</li>
+<li>фиксирует status и Gate;</li>
+<li>связывает machine contracts и Evidence;</li>
+<li>выявляет дублирование;</li>
+<li>выявляет отсутствующий SSoT;</li>
+<li>выявляет отсутствующего owner;</li>
+<li>выявляет противоречащие тексты;</li>
+<li>выявляет потерянные связи между ТЗ и реализационными Issues.</li>
+</ul>
+<h3 id="25-5-2-что-t0-не-делает">25.5.2. Что T0 не делает</h3>
+<p>T0 не должен незаметно принимать новое архитектурное решение.</p>
+<p>Если во время inventory обнаружена неопределённость, она фиксируется как <code>GAP</code> в Requirement status, как <code>CONTRADICTION</code> в Coverage/Contradiction status либо как отдельный OQ/Issue.</p>
+<p>То есть:</p>
+<p><strong>Inventory ≠ Architecture Decision.</strong></p>
+<h3 id="25-5-3-выход-t0">25.5.3. Выход T0</h3>
+<p>T0 считается завершённым, когда существует полный Requirements Registry с traceability и нет требований без явно указанного состояния.</p>
+<p>Неизвестность разрешена только как явно зарегистрированный <code>GAP</code>, <code>OPEN</code>, <code>BLOCKED</code> или <code>DEFERRED</code>.</p>
+<h2 id="25-6-t1-abc-анализ">25.6. T1 — ABC-анализ</h2>
+<p>ABC классифицирует критичность требования для текущей архитектуры и целевого Gate.</p>
+<h3 id="a-критичные-требования-critical">A — Критичные требования (Critical)</h3>
+<p>Класс <code>A</code> используется, если отсутствие или неверная реализация требования приводит хотя бы к одному из последствий:</p>
+<ul>
+<li>нарушается обязательная корректность;</li>
+<li>нарушается Security;</li>
+<li>нарушается Recovery;</li>
+<li>становится недостижим ключевой пользовательский результат текущего Gate;</li>
+<li>нарушается canonical ownership или создаётся второй SSoT;</li>
+<li>ломается обязательный системный контракт;</li>
+<li>возникает неприемлемый риск потери/искажения канонического состояния.</li>
+</ul>
+<p><code>A</code> означает высокий архитектурный приоритет.</p>
+<p><code>A</code> не означает автоматическую немедленную реализацию вне текущего Gate.</p>
+<h3 id="b-важные-требования-important">B — Важные требования (Important)</h3>
+<p>Класс <code>B</code> используется для важной функциональности, отсутствие которой заметно ухудшает продукт, но не разрушает фундаментальные инварианты текущего Gate.</p>
+<h3 id="c-опциональные-требования-и-оптимизация-optional-optimization">C — Опциональные требования и оптимизация (Optional / Optimization)</h3>
+<p>Класс <code>C</code> используется для:</p>
+<ul>
+<li>удобства;</li>
+<li>косметики;</li>
+<li>оптимизации без обязательного benchmark Evidence;</li>
+<li>расширений будущих версий;</li>
+<li>возможностей, которые можно безопасно добавить позже без нарушения текущего Gate.</li>
+</ul>
+<p>ABC должен оцениваться относительно текущего Gate/версии, а не как вечная характеристика требования.</p>
+<h2 id="25-7-t2-xyz-анализ">25.7. T2 — XYZ-анализ</h2>
+<p>XYZ классифицирует не важность, а степень архитектурной определённости и риск переделки.</p>
+<h3 id="x-стабильные-требования-stable">X — Стабильные требования (Stable)</h3>
+<p><code>X</code> означает, что:</p>
+<ul>
+<li>canonical SSoT известен;</li>
+<li>canonical owner известен;</li>
+<li>основные границы стабильны;</li>
+<li>обязательные зависимости понятны;</li>
+<li>необходимый machine contract определён либо явно не требуется;</li>
+<li>вероятность крупной архитектурной переделки низкая.</li>
+</ul>
+<h3 id="y-умеренная-неопределённость-moderate-uncertainty">Y — Умеренная неопределённость (Moderate uncertainty)</h3>
+<p><code>Y</code> означает умеренную неопределённость:</p>
+<ul>
+<li>часть деталей ещё открыта;</li>
+<li>есть значимые зависимости;</li>
+<li>возможны локальные изменения контрактов;</li>
+<li>требуется дополнительный convergence или Evidence;</li>
+<li>фундаментальная роль модуля при этом уже понятна.</li>
+</ul>
+<h3 id="z-высокая-неопределённость-high-uncertainty">Z — Высокая неопределённость (High uncertainty)</h3>
+<p><code>Z</code> означает высокий риск архитектурной переделки или отсутствие критически важной определённости.</p>
+<p>Типовые признаки:</p>
+<ul>
+<li>неизвестен canonical owner;</li>
+<li>нет SSoT;</li>
+<li>конкурируют несколько SSoT;</li>
+<li>отсутствует обязательный machine contract;</li>
+<li>существует серьёзный открытый OQ;</li>
+<li>решение зависит от непроверенного внешнего ограничения;</li>
+<li>нет достаточного Evidence для фундаментального выбора;</li>
+<li>изменение может затронуть Core, Security, Recovery, ownership или несколько системных контрактов.</li>
+</ul>
+<p><code>Z</code> не означает низкое качество требования.</p>
+<p>Это означает высокую неопределённость, которую нужно управляемо снять.</p>
+<h2 id="25-8-t3-матрица-abc-xyz">25.8. T3 — матрица ABC×XYZ</h2>
+<p>ABC и XYZ анализируются независимо.</p>
+<p>Критичность не должна автоматически повышать или понижать оценку неопределённости.</p>
+<p>Приоритет архитектурной проработки:</p>
+<ol>
+<li><code>AZ</code>;</li>
+<li><code>AY</code>;</li>
+<li><code>AX</code>;</li>
+<li><code>BZ</code>;</li>
+<li><code>BY</code>;</li>
+<li><code>BX</code>;</li>
+<li><code>CZ</code>;</li>
+<li><code>CY</code>;</li>
+<li><code>CX</code>.</li>
+</ol>
+<p>Главная группа риска — <code>AZ</code>:</p>
+<div class="note"><strong>Примечание:</strong> критично для системы и одновременно архитектурно плохо определено.</div>
+<p>Такие требования анализируются до массовой реализации зависимых компонентов.</p>
+<p><code>AX</code> обычно не требует повторного максимального исследования только из-за высокого класса A: если границы действительно стабильны, его можно быстрее переводить в контракт, тест и реализацию.</p>
+<h2 id="25-9-проверка-покрытия-и-противоречий-coverage-contradiction-pass">25.9. Проверка покрытия и противоречий (Coverage / Contradiction Pass)</h2>
+<p>После ABC/XYZ каждое требование проходит отдельную проверку покрытия и непротиворечивости.</p>
+<p>Минимальные вопросы:</p>
+<ol>
+<li>Есть ли один canonical SSoT?</li>
+<li>Есть ли один canonical owner?</li>
+<li>Есть ли machine contract, если архитектура его требует?</li>
+<li>Есть ли достаточная traceability/Evidence?</li>
+<li>Нет ли конкурирующего SSoT?</li>
+<li>Нет ли соседнего канонического документа с противоположной семантикой?</li>
+<li>Совпадает ли status в подробном SSoT и сводных реестрах?</li>
+<li>Не используется ли <code>DEFERRED</code> для маскировки обязательного GAP текущего Gate?</li>
+<li>Не используется ли DATA как CONTROL?</li>
+<li>Не объявляется ли Capability как Permission или Result как Evidence?</li>
+</ol>
+<p>Типовые результаты проверки:</p>
+<ul>
+<li><code>COVERED</code>;</li>
+<li><code>GAP</code>;</li>
+<li><code>CONTRADICTION</code>;</li>
+<li><code>TRACEABILITY_GAP</code>;</li>
+<li><code>CONTRACT_GAP</code>;</li>
+<li><code>OWNER_GAP</code>;</li>
+<li><code>BLOCKED</code>.</li>
+</ul>
+<p>Классификация Coverage не заменяет ABC/XYZ.</p>
+<p>Например <code>AZ + OWNER_GAP</code> является более срочным архитектурным риском, чем <code>CX + COVERED</code>.</p>
+<h2 id="25-10-t4-архитектурная-сходимость-architecture-convergence">25.10. T4 — Архитектурная сходимость (Architecture Convergence)</h2>
+<p>Architecture Convergence выполняется по каноническому §35.</p>
+<p>Этот раздел не создаёт второй Convergence Loop.</p>
+<p>Он определяет только порядок выбора объектов для §35.</p>
+<p>В первую очередь анализируются требования с наиболее высоким риском из T3, особенно <code>AZ</code> и <code>AY</code>.</p>
+<p>Внутри каждого объекта сохраняется полный §35:</p>
+<p><code>исходные законы → Minimal Baseline → Maximal Brainstorm → классификация идей → Deletion Test → Complexity Guillotine → возврат к законам → blast-radius → independent Critic → финальное решение</code>.</p>
+<h3 id="25-10-1-запрет-бессмысленного-одинакового-анализа">25.10.1. Запрет бессмысленного одинакового анализа</h3>
+<p>Все разделы не обязаны получать одинаковую глубину Convergence.</p>
+<p>Если требование классифицировано как <code>AX</code>, полностью покрыто и уже имеет устойчивый контракт, повторное максималистское исследование допускается сократить, если нет нового Evidence риска.</p>
+<p>Если требование <code>AZ</code>, сокращённый review недостаточен.</p>
+<h2 id="25-11-t5-архитектурная-базовая-линия-architecture-baseline">25.11. T5 — Архитектурная базовая линия (Architecture Baseline)</h2>
+<p>T5 отвечает на вопрос:</p>
+<div class="note"><strong>Примечание:</strong> <strong>Можно ли считать архитектуру достаточно определённой для перехода к следующему реализационному Gate?</strong></div>
+<p>Architecture Baseline допускается только если:</p>
+<ul>
+<li>все требования класса <code>A</code> зарегистрированы;</li>
+<li>у всех <code>A</code> есть canonical owner;</li>
+<li>у всех <code>A</code> есть canonical SSoT;</li>
+<li>нет незакрытых <code>AZ</code> для текущего Gate;</li>
+<li>обязательные machine contracts определены либо их отсутствие явно обосновано;</li>
+<li>критические <code>CONTRADICTION</code>, <code>OWNER_GAP</code> и <code>CONTRACT_GAP</code> устранены либо имеют явный <code>BLOCKED</code> с владельцем решения;</li>
+<li><code>DEFERRED</code> не скрывает требование, обязательное для текущего Gate;</li>
+<li>blast-radius значимых архитектурных решений синхронизирован;</li>
+<li>независимый Critic/QA выполнен там, где этого требует §35 или release process.</li>
+</ul>
+<p>T5 не означает, что реализованы все будущие функции.</p>
+<p>T5 означает, что текущий Gate имеет достаточно полную и непротиворечивую архитектурную основу.</p>
+<h2 id="25-12-связь-t0-t5-с-g0-g1-g2-g3">25.12. Связь T0–T5 с G0/G1/G2/G3</h2>
+<p>T0–T5 не заменяют существующие project Gates.</p>
+<p>Это предварительный и повторяемый engineering pipeline для определения готовности требований.</p>
+<p>Типовая связь:</p>
+<ul>
+<li><code>T0–T3</code> — нормализация и приоритизация требований;</li>
+<li><code>T4</code> — архитектурная сходимость;</li>
+<li><code>T5</code> — архитектурный baseline;</li>
+<li>затем соответствующий существующий Gate реализации: G2/G3 или другой, определённый Roadmap/Project.</li>
+</ul>
+<p>При изменении крупного требования T0–T5 может быть запущен локально только для затронутого blast radius, а не для всей системы с нуля.</p>
+<h2 id="25-13-что-не-является-частью-этого-процесса">25.13. Что не является частью этого процесса</h2>
+<p>ABC/XYZ не должны превращаться в:</p>
+<ul>
+<li>runtime scheduler;</li>
+<li>приоритет пользовательских Task;</li>
+<li>AI routing policy;</li>
+<li>Security Policy;</li>
+<li>Worker ranking;</li>
+<li>отдельный persistent сервис;</li>
+<li>второй Issue tracker;</li>
+<li>второй Rule Manager.</li>
+</ul>
+<p>Это метод управления требованиями и архитектурной неопределённостью при разработке KAT9I_OS.</p>
+<h2 id="25-14-архив-graveyard">25.14. Архив Graveyard</h2>
+<p>Graveyard может использоваться во время T0 как источник исторического DATA для восстановления потерянного контекста.</p>
+<p>Однако:</p>
+<p><code>Graveyard DATA ≠ Requirement CONTROL</code>.</p>
+<p>Найденная в Graveyard идея не получает ABC/XYZ как действующее требование, пока не установлена её связь с текущим каноническим SSoT или не проведён отдельный promotion process.</p>
+<h2 id="25-15-изменение-классификации">25.15. Изменение классификации</h2>
+<p>ABC и XYZ являются управляемыми метаданными анализа.</p>
+<p>Они могут изменяться при появлении нового Evidence, смене Gate или устранении неопределённости.</p>
+<p>Типовая эволюция:</p>
+<p><code>AZ → AY → AX</code></p>
+<p>означает, что критичное требование постепенно стало архитектурно определённым.</p>
+<p>Изменение <code>AZ → AX</code> само по себе не изменяет содержание Requirement.</p>
+<h2 id="25-16-порядок-исполнения-первой-полной-итерации">25.16. Порядок исполнения первой полной итерации</h2>
+<p>Для текущего KAT9I_OS первая полная итерация выполняется так:</p>
+<ol>
+<li>T0 — пройти весь текущий канон и собрать Full Requirements Registry;</li>
+<li>проверить traceability с открытыми и закрытыми ADR/OQ/Issues;</li>
+<li>T1 — назначить ABC;</li>
+<li>T2 — назначить XYZ;</li>
+<li>T3 — построить матрицу и Coverage/Contradiction report;</li>
+<li>сформировать ordered worklist <code>AZ → AY → AX → B* → C*</code>;</li>
+<li>T4 — запускать §35 по этому worklist;</li>
+<li>после каждой архитектурной правки повторять blast-radius и локальный reclassification;</li>
+<li>T5 — провести Architecture Baseline Gate;</li>
+<li>только после PASS переводить соответствующий набор требований в реализационный Gate.</li>
+</ol>
+<h2 id="25-17-минимальные-артефакты-первой-итерации">25.17. Минимальные артефакты первой итерации</h2>
+<p>Первая полная итерация должна дать минимум три независимых результата:</p>
+<ol>
+<li><strong>Requirements Registry</strong> — реестр и traceability;</li>
+<li><strong>ABC×XYZ Matrix</strong> — приоритет архитектурной проработки;</li>
+<li><strong>Coverage/Contradiction Report</strong> — список GAP/CONTRADICTION и их владельцев.</li>
+</ol>
+<p>Архитектурные решения, появившиеся в T4, продолжают храниться у своих профильных SSoT/ADR, а не внутри этих отчётов.</p>
+<h2 id="25-18-definition-of-done-первой-итерации">25.18. Definition of Done первой итерации</h2>
+<p>Первая итерация T0–T5 считается завершённой, когда:</p>
+<ul>
+<li>весь актуальный канон охвачен Registry;</li>
+<li>каждый активный Requirement имеет status;</li>
+<li>каждому активному Requirement назначены ABC и XYZ;</li>
+<li>сформирована полная ABC×XYZ Matrix;</li>
+<li>выполнен Coverage/Contradiction pass;</li>
+<li>для всех <code>AZ</code> определено действие: исправить, исследовать, BLOCKED или доказанно DEFERRED вне текущего Gate;</li>
+<li>выполнен требуемый Architecture Convergence;</li>
+<li>Architecture Baseline прошёл независимую проверку;</li>
+<li>дальнейшая реализационная очередь строится из Registry/Matrix, а не из случайного порядка появления задач.</li>
+</ul>
+<h2 id="25-19-главный-принцип">25.19. Главный принцип</h2>
+<div class="note"><strong>Примечание:</strong> <strong>Полное ТЗ сначала становится видимым и измеримым. Критичность и неопределённость оцениваются раздельно. Architecture Convergence применяется туда, где риск максимален. Только после этого требования переходят в массовую реализацию.</strong></div>
     </section>
         
 
@@ -7369,7 +7670,6 @@ Learning (самообучение)
 <li><code>DEGRADED</code> — часть возможностей недоступна;</li>
 <li><code>OFFLINE</code> — внешняя сеть недоступна;</li>
 <li><code>RECOVERING</code> — выполняется восстановление;</li>
-<li><code>DRAINING</code> — система прекращает приём новых изменяющих задач и приводит активную работу к безопасному сохраняемому состоянию перед остановкой или обслуживанием;</li>
 <li><code>MAINTENANCE</code> — обслуживание;</li>
 <li><code>SAFE_MODE</code> — безопасный режим;</li>
 <li><code>FAILED</code> — критическое состояние.</li>
@@ -7613,62 +7913,9 @@ Learning (самообучение)
 <li><strong>Несколько узлов могут обновляться постепенно.</strong></li>
 <li><strong>Самообучение может адаптировать операционные параметры только в безопасных границах и минимальном Scope.</strong></li>
 <li><strong>Любое значимое изменение конфигурации имеет происхождение и возможность отката.</strong></li>
-<li><strong>Жизненный цикл UI не равен жизненному циклу Core: закрытие интерфейса не уничтожает активные задачи и не является завершением KAT9I_OS.</strong></li>
 </ol>
 <h2 id="22-61-главный-принцип">22.61. Главный принцип</h2>
 <div class="note"><strong>Примечание:</strong> <strong>KAT9I_OS должна устанавливаться и запускаться как управляемая локальная система: сама обнаруживать доступные возможности, спрашивать человека только о действительно необходимых решениях, сохранять критическое состояние перед изменениями и обновляться так, чтобы любой неудачный шаг можно было диагностировать, восстановить или откатить.</strong></div>
-<h2 id="22-62-жизненный-цикл-electron-ui-не-равен-жизненному-циклу-core">22.62. Жизненный цикл Electron UI не равен жизненному циклу Core</h2>
-<p>Закрытие окна, выход из интерфейса, завершение всей KAT9I_OS и завершение Windows являются разными событиями.</p>
-<p>Канонический инвариант:</p>
-<div class="note"><strong>Примечание:</strong> <strong>UI lifecycle ≠ Core lifecycle.</strong></div>
-<p>Electron является интерфейсом к состоянию Core. Само закрытие или аварийный сбой UI не переводит активные Task в завершённое состояние, не отзывает их автоматически и не уничтожает <code>TaskRuntimeState</code>.</p>
-<h2 id="22-63-закрытие-главного-окна">22.63. Закрытие главного окна</h2>
-<p>Обычное закрытие главного окна (<code>X</code>) скрывает окно и оставляет Electron доступным через системный Tray. Rust Core продолжает работать.</p>
-<p>Это действие не является командой остановки Core и не требует изменения состояния активных задач только из-за исчезновения окна.</p>
-<h2 id="22-64-отдельный-выход-из-electron-ui">22.64. Отдельный выход из Electron UI</h2>
-<p>Пользователь может отдельно завершить процесс Electron UI. Core продолжает headless/background работу, если не получена отдельная разрешённая команда завершения KAT9I_OS.</p>
-<p>При повторном запуске Electron интерфейс восстанавливает представление через gap-free IPC reconnect. Snapshot и последующая подписка должны иметь одну логическую границу, чтобы события между ними не терялись.</p>
-<p>Базовый контракт для Electron P0: <code>core.get_system_state</code> возвращает snapshot вместе с <code>last_sequence_number</code> Event Journal, после чего <code>core.subscribe_events(after_sequence=...)</code> обязан выдать все события после этого sequence, включая накопившиеся между snapshot и подпиской. Эквивалентная реализация допустима только если она даёт ту же гарантию отсутствия окна потери событий.</p>
-<p>Каноническое состояние не реконструируется из памяти UI. Интерфейс перечитывает snapshot у Core и продолжает поток событий с подтверждённого sequence cursor. Два независимых вызова без cursor/replay или другой атомарной границы не считаются корректным reconnect.</p>
-<h2 id="22-65-явная-команда-завершить-kat9i_os">22.65. Явная команда «Завершить KAT9I_OS»</h2>
-<p>Завершение всей KAT9I_OS является отдельной CONTROL-операцией. Закрытие окна не подменяет эту команду.</p>
-<p>Перед штатной остановкой Core:</p>
-<ol>
-<li>проверяет допустимость shutdown согласно Rules и Security;</li>
-<li>переходит в <code>DRAINING</code>;</li>
-<li>прекращает приём новых изменяющих Task;</li>
-<li>активную работу по возможности доводит до безопасного Checkpoint, переводит в предусмотренное состояние паузы или сохраняет достаточно данных для Resume/Recovery;</li>
-<li>фиксирует необходимые события Event Journal и подтверждённое состояние;</li>
-<li>корректно завершает или отзывает runtime-владение и Workers согласно Lease/fencing semantics;</li>
-<li>только затем завершает Core.</li>
-</ol>
-<p>Новый Shutdown Manager и отдельная параллельная state machine для этого не создаются: используются существующие Core lifecycle, Recovery, Event Journal, Checkpoint и Lease/fencing.</p>
-<h2 id="22-66-если-активную-операцию-нельзя-безопасно-остановить">22.66. Если активную операцию нельзя безопасно остановить</h2>
-<p>Нельзя объявлять успешное завершение только потому, что пользователь запросил shutdown.</p>
-<p>Если активный side effect нельзя безопасно прервать или его фактический результат неизвестен, система использует предусмотренное политикой действие: ожидание (<code>WAIT</code>), разрешённый <code>FORCE STOP</code> либо <code>BLOCKED</code>/Recovery.</p>
-<p>Неизвестное состояние внешнего side effect не преобразуется в false success.</p>
-<h2 id="22-67-windows-shutdown-и-reboot">22.67. Windows shutdown и reboot</h2>
-<p>Сигнал завершения или перезагрузки Windows рассматривается как ограниченный по времени системный сигнал, а не как гарантия полного штатного DRAINING.</p>
-<p>При наличии времени KAT9I_OS должна:</p>
-<ul>
-<li>прекратить приём новых изменяющих Task;</li>
-<li>сохранить максимально достижимое подтверждённое состояние;</li>
-<li>зафиксировать доступные Journal/Checkpoint данные;</li>
-<li>завершить процессы настолько безопасно, насколько позволяет окно завершения ОС.</li>
-</ul>
-<p>Архитектура не должна полагаться на то, что Windows всегда предоставит время для полного завершения всех Task.</p>
-<h2 id="22-68-следующий-запуск-после-аварийной-или-системной-остановки">22.68. Следующий запуск после аварийной или системной остановки</h2>
-<p>После следующего запуска действует §22.25:</p>
-<div class="note"><strong>Примечание:</strong> <strong>Recovery раньше новых изменяющих задач.</strong></div>
-<p>Recovery сверяет сохранённые State, Checkpoint, Event Journal, Lease/fencing и фактическое внешнее состояние. Только после восстановления подтверждённой картины Core принимает новую изменяющую работу.</p>
-<h2 id="22-69-четыре-разных-пользовательских-сценария">22.69. Четыре разных пользовательских сценария</h2>
-<p>Для Electron P0 должны быть различимы четыре действия:</p>
-<ol>
-<li><code>Закрыть окно</code> → окно скрыто / Tray, Electron и Core продолжают работу.</li>
-<li><code>Выйти из интерфейса</code> → Electron завершается, Core продолжает headless/background работу.</li>
-<li><code>Завершить KAT9I_OS</code> → отдельная CONTROL-операция с <code>DRAINING</code> и recovery-safe shutdown Core.</li>
-<li><code>Windows shutdown/reboot</code> → best-effort фиксация подтверждённого состояния в ограниченное ОС время, затем обязательный Recovery при следующем запуске.</li>
-</ol>
     </section>
         
 
@@ -7728,7 +7975,7 @@ Learning (самообучение)
 <li>управление тайм-аутами;</li>
 <li>контроль ресурсов;</li>
 <li>восстановление после сбоев;</li>
-<li>headless/background режим Core, независимый от Electron; конкретная форма локального daemon/service остаётся выбором реализации;</li>
+<li>локальный daemon/service (фоновую системную службу), если такой режим потребуется;</li>
 <li>сбор системного Evidence;</li>
 <li>безопасную передачу заданий специализированным Worker.</li>
 </ul>
@@ -7790,16 +8037,6 @@ Learning (самообучение)
 <li>возвращает состояние или событие интерфейсу.</li>
 </ul>
 <p>Это позволяет отделить пользовательский интерфейс от системной логики и в дальнейшем иметь дополнительные интерфейсы без дублирования Core.</p>
-<h3 id="23-7a-жизненный-цикл-electron-и-core">23.7a. Жизненный цикл Electron и Core</h3>
-<p>Жизненный цикл Electron UI не является жизненным циклом Rust Core.</p>
-<ul>
-<li>закрытие главного окна переводит UI в скрытое/Tray-состояние и не завершает Core;</li>
-<li>отдельный выход из Electron может завершить UI, сохранив headless/background Core;</li>
-<li>повторный запуск Electron выполняет gap-free reconnect: получает snapshot с подтверждённым Event Journal sequence cursor и возобновляет <code>core.subscribe_events</code> после этого cursor (или использует эквивалентную атомарную snapshot/subscription границу), поэтому событие между snapshot и подпиской не теряется;</li>
-<li>завершение всей KAT9I_OS является отдельной CONTROL-операцией Core и выполняется по канонической shutdown-семантике §22;</li>
-<li>Windows shutdown/reboot не считается доказательством штатного завершения активной работы: после следующего запуска Recovery подтверждает состояние до приёма новой изменяющей работы.</li>
-</ul>
-<p>Конкретная реализация Tray, Windows service/daemon и обработчиков OS signals относится к Runtime/UI реализации и не меняет этот архитектурный инвариант.</p>
 <h2 id="23-8-что-является-основным-стеком">23.8. Что является основным стеком</h2>
 <p>Для первой полноценной реализации KAT9I_OS принимается следующий базовый набор:</p>
 <div class="table-container"><table class="doc-table"><thead><tr><th>Слой</th><th>Основная технология</th><th>Роль</th></tr></thead><tbody><tr><td>Desktop / UI</td><td>Electron + TypeScript</td><td>пользовательский интерфейс и настольная оболочка</td></tr><tr><td>Core / Runtime</td><td>Rust</td><td>системное ядро, оркестрация, безопасность и управление исполнением</td></tr><tr><td>AI/ML Workers</td><td>Python</td><td>специализированные интеллектуальные и вычислительные задачи</td></tr><tr><td>External Intelligence</td><td>локальные или удалённые модели через разрешённые интеграции</td><td>инференс и внешние интеллектуальные сервисы</td></tr></tbody></table></div>
@@ -11975,7 +12212,7 @@ Learning (самообучение)
 <li><strong>OQ-002</strong> — физическая граница Electron Main и отдельного Rust Core Runtime (отдельный сервис + безопасный IPC) (Issue #41) — <strong>ACCEPTED</strong> (ADR-038).</li>
 <li><strong>OQ-004</strong> — минимальный безопасный внутренний API между Electron и Core (Issue #41) — <strong>ACCEPTED</strong> (ADR-038, <code>schemas/v1/CoreIpcMessage.json</code>).</li>
 <li><strong>OQ-008</strong> — минимальный Windows Secret Store (DPAPI / Credential Manager) (Issue #45) — <strong>ACCEPTED</strong> (ADR-039, <code>schemas/v1/SecretRef.json</code>).</li>
-<li><strong>OQ-010</strong> — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill) — <strong>ACCEPTED</strong> (ADR-047).</li>
+<li><strong>OQ-010</strong> — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).</li>
 </ul>
 <p>Остальные вопросы не входят в список <code>OPEN BEFORE v0.1</code> выше и откладываются строго по своим детальным статусам: OQ-011 — <code>DEFERRED UNTIL PRE-RELEASE</code>, OQ-012 и OQ-013 — <code>DEFERRED UNTIL v0.2</code>; будущие OQ получают собственный явный этап. Они не должны считаться закрытыми или переноситься на другой срок только из-за этой сводки.</p>
 <h2 id="32-52-oq-001-основной-язык-стек-core">32.52. OQ-001 — основной язык/стек Core</h2>
@@ -12123,22 +12360,16 @@ Learning (самообучение)
 <li>Защита от дублирующих побочных действий (<code>SKIP_ALREADY_EXECUTED</code>);</li>
 <li>Retention: минимум 30 суток для аудита.</li>
 </ul>
-<h2 id="32-62-oq-010-adr-047-жизненный-цикл-electron-ui-и-core">32.62. OQ-010 / ADR-047 — жизненный цикл Electron UI и Core</h2>
-<div class="note"><strong>Примечание:</strong> <strong>Статус:</strong> <code>ACCEPTED</code> (ADR-047; канонические источники: <a href="22_CONFIGURATION_STARTUP_AND_UPDATES.md">§22</a>, <a href="23_TECHNOLOGY_STACK_AND_RUNTIME.md">§23</a>, Issue #122).</div>
-<p>Принят основной инвариант:</p>
-<div class="note"><strong>Примечание:</strong> <strong>UI lifecycle ≠ Core lifecycle.</strong></div>
-<p>Решение:</p>
-<ol>
-<li>Закрытие главного окна (<code>X</code>) скрывает окно / переводит UI в Tray; Core и активные задачи продолжают работу.</li>
-<li>Отдельный выход из Electron UI может завершить UI, но Core остаётся в headless/background режиме.</li>
-<li>Повторный Electron выполняет gap-free reconnect: snapshot связывается с Event Journal sequence cursor, а подписка/replay продолжается после этого cursor; независимые <code>get_system_state</code> и <code>subscribe_events</code> без cursor/replay или эквивалентной атомарной границы запрещены, потому что могут потерять событие.</li>
-<li><code>Завершить KAT9I_OS</code> является отдельной CONTROL-операцией: <code>DRAINING → безопасный Checkpoint/пауза → Journal/State → Lease/fencing cleanup → shutdown</code>.</li>
-<li>Неизвестный результат активного side effect не считается успехом; используется WAIT, разрешённый policy <code>FORCE STOP</code> либо BLOCKED/Recovery.</li>
-<li>Windows shutdown/reboot допускает только best-effort фиксацию подтверждённого состояния в доступное ОС время; система не рассчитывает на полное завершение всех Task.</li>
-<li>При следующем запуске Recovery выполняется до приёма новых изменяющих задач.</li>
-<li>Отдельный Shutdown Manager не создаётся: используются существующие Core lifecycle, Recovery, Event Journal, Checkpoint и Lease/fencing.</li>
-</ol>
-<p>Конкретная реализация Tray, Windows service/daemon, таймаутов OS shutdown и UI-команд относится к Electron/Runtime реализации и не изменяет принятую архитектурную границу.</p>
+<h2 id="32-62-oq-010-правила-завершения-core-при-закрытии-electron">32.62. OQ-010 — правила завершения Core при закрытии Electron</h2>
+<p>Нужно определить пользовательский UX:</p>
+<ul>
+<li>закрытие окна → Tray;</li>
+<li>отдельная команда «Завершить KAT9I_OS»;</li>
+<li>поведение активных задач;</li>
+<li>Windows shutdown.</li>
+</ul>
+<p>Статус:</p>
+<p><code>OPEN BEFORE Electron P0</code>.</p>
 <h2 id="32-63-oq-011-система-обновления-electron-runtime">32.63. OQ-011 — система обновления Electron/Runtime</h2>
 <p>Архитектура обновлений принята.</p>
 <p>Но конкретный механизм доставки:</p>
