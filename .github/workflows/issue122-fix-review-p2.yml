@@ -1,0 +1,57 @@
+name: Issue 122 fix review P2
+
+on:
+  push:
+    branches:
+      - docs/issue-122-close-oq010-ui-core-lifecycle
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply review fixes and regenerate HTML
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              s = p.read_text(encoding='utf-8')
+              if s.count(old) != 1:
+                  raise SystemExit(f'{path}: expected one match, got {s.count(old)}')
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'docs/architecture/22_CONFIGURATION_STARTUP_AND_UPDATES.md',
+              "При повторном запуске Electron интерфейс восстанавливает представление через существующий IPC-контракт:\n\n`connect/authenticate → core.get_system_state → core.subscribe_events`.\n\nКаноническое состояние не реконструируется из памяти UI. Интерфейс перечитывает его у Core.",
+              "При повторном запуске Electron интерфейс восстанавливает представление через gap-free IPC reconnect. Snapshot и последующая подписка должны иметь одну логическую границу, чтобы события между ними не терялись.\n\nБазовый контракт для Electron P0: `core.get_system_state` возвращает snapshot вместе с `last_sequence_number` Event Journal, после чего `core.subscribe_events(after_sequence=...)` обязан выдать все события после этого sequence, включая накопившиеся между snapshot и подпиской. Эквивалентная реализация допустима только если она даёт ту же гарантию отсутствия окна потери событий.\n\nКаноническое состояние не реконструируется из памяти UI. Интерфейс перечитывает snapshot у Core и продолжает поток событий с подтверждённого sequence cursor. Два независимых вызова без cursor/replay или другой атомарной границы не считаются корректным reconnect."
+          )
+          replace_once(
+              'docs/architecture/23_TECHNOLOGY_STACK_AND_RUNTIME.md',
+              "- повторный запуск Electron перечитывает каноническое состояние у Core через `core.get_system_state` и возобновляет события через `core.subscribe_events`;",
+              "- повторный запуск Electron выполняет gap-free reconnect: получает snapshot с подтверждённым Event Journal sequence cursor и возобновляет `core.subscribe_events` после этого cursor (или использует эквивалентную атомарную snapshot/subscription границу), поэтому событие между snapshot и подпиской не теряется;"
+          )
+          replace_once(
+              'docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md',
+              "- **OQ-010** — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill).",
+              "- **OQ-010** — правила завершения Core при закрытии окна Electron (System Tray vs Process Tree Kill) — **ACCEPTED** (ADR-047)."
+          )
+          replace_once(
+              'docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md',
+              "3. Повторный Electron подключается к существующему Core и перечитывает каноническое состояние через `core.get_system_state`, затем возобновляет события через `core.subscribe_events`.",
+              "3. Повторный Electron выполняет gap-free reconnect: snapshot связывается с Event Journal sequence cursor, а подписка/replay продолжается после этого cursor; независимые `get_system_state` и `subscribe_events` без cursor/replay или эквивалентной атомарной границы запрещены, потому что могут потерять событие."
+          )
+          PY
+          python scripts/generate_html_docs.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/architecture/22_CONFIGURATION_STARTUP_AND_UPDATES.md docs/architecture/23_TECHNOLOGY_STACK_AND_RUNTIME.md docs/architecture/32_ARCHITECTURAL_DECISIONS_AND_OPEN_QUESTIONS.md index.html
+          git commit -m "fix: close OQ-010 review findings (#122)"
+          git push
