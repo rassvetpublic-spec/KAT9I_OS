@@ -3,6 +3,9 @@ import unittest
 from scripts.project_queue_event import marker_from_body, resolve
 
 
+HEAD = "a" * 40
+
+
 class ProjectQueueEventTests(unittest.TestCase):
     def test_owner_fast_claim_is_control_and_preserves_worker(self):
         event = {
@@ -32,18 +35,38 @@ class ProjectQueueEventTests(unittest.TestCase):
             resolve("issue_comment", "created", event),
         )
 
-    def test_owner_qa_pass_enters_queue_not_merge_and_preserves_qa(self):
+    def test_owner_qa_pass_requires_and_preserves_exact_head(self):
         event = {
             "comment": {
                 "author_association": "OWNER",
-                "body": "FAST-QA-PASS | qa=Antigravity (AGY) | head=abc",
+                "body": f"FAST-QA-PASS | qa=Antigravity (AGY) | head={HEAD}",
             },
             "issue": {"html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/113"},
         }
         resolved = resolve("issue_comment", "created", event)
         self.assertEqual("QUEUED", resolved["state"])
         self.assertEqual("Antigravity (AGY)", resolved["qa"])
+        self.assertEqual(HEAD, resolved["expected_head"])
         self.assertNotIn("worker", resolved)
+
+    def test_qa_pass_without_exact_head_fails_closed(self):
+        event = {
+            "comment": {"author_association": "OWNER", "body": "FAST-QA-PASS | qa=AGY"},
+            "issue": {"html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/113"},
+        }
+        with self.assertRaisesRegex(ValueError, "exact head"):
+            resolve("issue_comment", "created", event)
+
+    def test_qa_pass_with_malformed_head_fails_closed(self):
+        for value in ("abc", "A" * 40, "", "a" * 39, "a" * 41):
+            body = f"FAST-QA-PASS | qa=AGY | head={value}"
+            event = {
+                "comment": {"author_association": "OWNER", "body": body},
+                "issue": {"html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/113"},
+            }
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    resolve("issue_comment", "created", event)
 
     def test_non_owner_fast_marker_is_data(self):
         event = {
@@ -57,7 +80,7 @@ class ProjectQueueEventTests(unittest.TestCase):
         self.assertIsNone(marker_from_body("FAST-CLAIM-NOW | worker=x"))
         self.assertEqual("QA", marker_from_body("FAST-QA | qa=Antigravity\nnotes"))
 
-    def test_malformed_identity_metadata_fails_closed(self):
+    def test_malformed_identity_and_head_metadata_fails_closed(self):
         bad_bodies = (
             "FAST-CLAIM | worker",
             "FAST-QA | qa=",
@@ -69,6 +92,8 @@ class ProjectQueueEventTests(unittest.TestCase):
             "FAST-QA | qa_worker",
             "FAST-CLAIM | worker:Codex",
             "FAST-QA | qa:AGY",
+            "FAST-QA | head-id=abc",
+            "FAST-QA | head-id",
         )
         for body in bad_bodies:
             event = {
@@ -79,18 +104,18 @@ class ProjectQueueEventTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     resolve("issue_comment", "created", event)
 
-    def test_non_identity_metadata_remains_compatible(self):
+    def test_non_control_metadata_remains_compatible(self):
         event = {
             "comment": {
                 "author_association": "OWNER",
-                "body": "FAST-QA-PASS | qa=AGY | head=abc | quality=123 | state=QUEUED",
+                "body": f"FAST-QA-PASS | qa=AGY | head={HEAD} | quality=123 | state=QUEUED",
             },
-            "issue": {"html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/issues/117"},
+            "issue": {"html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/117"},
         }
         resolved = resolve("issue_comment", "created", event)
         self.assertEqual("QUEUED", resolved["state"])
         self.assertEqual("AGY", resolved["qa"])
-        self.assertNotIn("head", resolved)
+        self.assertEqual(HEAD, resolved["expected_head"])
         self.assertNotIn("quality", resolved)
 
     def test_issue_open_does_not_skip_triage(self):

@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -12,6 +13,7 @@ CONTROL_MARKERS = {
     "FAST-RELEASE": "DONE",
 }
 IDENTITY_KEYS = {"worker", "qa"}
+HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
@@ -28,20 +30,24 @@ def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
             continue
         if "=" not in part:
             lowered = part.lower()
-            if lowered in IDENTITY_KEYS or lowered.startswith("worker") or lowered.startswith("qa"):
-                raise ValueError(f"FAST identity metadata '{part}' должна иметь форму key=value")
+            if lowered in IDENTITY_KEYS or lowered.startswith("worker") or lowered.startswith("qa") or lowered.startswith("head"):
+                raise ValueError(f"FAST metadata '{part}' должна иметь форму key=value")
             continue
         key, value = part.split("=", 1)
         key = key.strip().lower()
         value = value.strip()
-        if key in IDENTITY_KEYS:
+        if key in IDENTITY_KEYS or key == "head":
             if not value:
-                raise ValueError(f"FAST identity metadata '{key}' не может быть пустой")
+                raise ValueError(f"FAST metadata '{key}' не может быть пустой")
             if key in meta:
-                raise ValueError(f"FAST identity metadata '{key}' указана более одного раза")
+                raise ValueError(f"FAST metadata '{key}' указана более одного раза")
+            if key == "head" and not HEAD_RE.fullmatch(value):
+                raise ValueError("FAST metadata 'head' должна быть точным 40-символьным lowercase SHA")
             meta[key] = value
-        elif key.startswith("worker") or key.startswith("qa"):
-            raise ValueError(f"Неподдерживаемый FAST identity key '{key}'")
+        elif key.startswith("worker") or key.startswith("qa") or key.startswith("head"):
+            raise ValueError(f"Неподдерживаемый FAST key '{key}'")
+    if state == "QUEUED" and "head" not in meta:
+        raise ValueError("FAST-QA-PASS обязан содержать exact head=<40 lowercase SHA>")
     return state, meta
 
 
@@ -63,6 +69,8 @@ def resolve(event_name: str, action: str, event: dict) -> dict | None:
         if not url:
             raise ValueError("trusted FAST marker не содержит issue/pr html_url")
         result = {"url": url, "state": state}
+        if "head" in meta:
+            result["expected_head"] = meta.pop("head")
         result.update(meta)
         return result
 
