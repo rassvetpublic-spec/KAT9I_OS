@@ -56,6 +56,17 @@
       "actionable": false,
       "control": false,
       "canonical": false
+    },
+    {
+      "archive_id": "GY-20260910-pr86-cacheengine-audit",
+      "path": "graveyard/GY-20260910-pr86-cacheengine-audit.md",
+      "archive_date": "2026-09-10",
+      "byte_size": 16574,
+      "sha256": "509f8e4c18891e5a6d5f774e1f739595b719458bfa059205e9370798941d321f",
+      "git_blob_sha1": "875435ad1d558a98fb041ac19fcb6c0d9d80eec2",
+      "actionable": false,
+      "control": false,
+      "canonical": false
     }
   ]
 }
