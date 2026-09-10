@@ -50,6 +50,7 @@ OQ-010 уже закрыт в current main как **ACCEPTED / ADR-047** пос�
 - `REQ-TASKGRAPH-001` сохраняет принятый Requirement status, а отсутствие схемы отражается только через `CONTRACT_GAP`;
 - coverage↔gap-kind проверяется детерминированно;
 - полнота canonical source→Requirement linkage проверяется тестом.
+- Graveyard DATA-only: `schemas/README.md#5` является canonical SSoT, а `graveyard/README.md` оставлен только supporting provenance.
 
 ## DoD T0
 

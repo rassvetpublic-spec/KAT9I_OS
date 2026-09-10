@@ -1193,7 +1193,7 @@
       "title": "Graveyard остаётся DATA-only и требует контролируемой reactivation цепочки",
       "area": "Context / Graveyard",
       "type": "SECURITY",
-      "canonical_ssot": "graveyard/README.md",
+      "canonical_ssot": "schemas/README.md#5",
       "canonical_owner": "Architecture governance",
       "target_gate": "G1/G2",
       "target_version": "current",
@@ -1220,7 +1220,7 @@
       "xyz": "UNASSESSED",
       "materialization": "MATERIALIZED",
       "supporting_refs": [
-        "schemas/README.md#5"
+        "graveyard/README.md"
       ]
     },
     {
