@@ -72,6 +72,10 @@ jobs:
             echo "::error::MALFORMED_EVIDENCE: check-run inventory is incomplete."
             exit 1
           fi
+          if [ "$(jq -r '.total_count // (.statuses | length)' commit-status.json)" -gt "$(jq '.statuses | length' commit-status.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: commit-status inventory is incomplete."
+            exit 1
+          fi
 
       - name: Проверить QA-COMMAND → AGY result → Controller attestation
         id: validate
@@ -246,6 +250,10 @@ jobs:
             echo "::error::MALFORMED_EVIDENCE: final check-run inventory is incomplete."
             exit 1
           fi
+          if [ "$(jq -r '.total_count // (.statuses | length)' commit-status-final.json)" -gt "$(jq '.statuses | length' commit-status-final.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: final commit-status inventory is incomplete."
+            exit 1
+          fi
 
           python - <<'PY'
           import json, os
@@ -303,4 +311,9 @@ jobs:
             --root . \
             --output evidence-epoch-final.json
 
+          FINAL_LIVE_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          if [ "$FINAL_LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::HEAD_DRIFT: PR HEAD изменился непосредственно перед FAST publication; marker не публикуется."
+            exit 1
+          fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$(cat bridge-comment.md)" >/dev/null
