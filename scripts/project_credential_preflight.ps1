@@ -3,7 +3,7 @@ param(
   [string]$Repository='KAT9I_OS',
   [int]$ProjectNumber=2,
   [Parameter(Mandatory=$true)][string]$Url,
-  [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','QA','QUEUED','BLOCKED','DONE')][string]$State,
+  [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','WAITING_FOR_REQUIRED_CHECK','QA','QUEUED','BLOCKED','DONE')][string]$State,
   [string]$Worker='',
   [string]$QaWorker='',
   [switch]$LibraryMode

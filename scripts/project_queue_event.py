@@ -90,8 +90,8 @@ def resolve(event_name: str, action: str, event: dict) -> dict | None:
         url = pr.get("html_url")
         if not url:
             raise ValueError("pull_request event не содержит html_url")
-        if action == "synchronize":
-            return {"url": url, "state": "ACTIVE"}
+        if action in {"opened", "reopened", "ready_for_review", "synchronize"}:
+            return {"url": url, "state": "WAITING_FOR_REQUIRED_CHECK"}
         if action == "closed":
             return {"url": url, "state": "DONE" if pr.get("merged") is True else "BLOCKED"}
         return None

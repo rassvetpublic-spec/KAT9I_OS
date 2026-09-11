@@ -9,6 +9,7 @@ from scripts.pre_qa_barrier import (
     parse_barrier_section,
     render_barrier_section,
 )
+from scripts.required_check_state import QUALITY_WORKFLOW_NAME, QUALITY_WORKFLOW_PATH
 
 HEAD = "a" * 40
 
@@ -17,11 +18,19 @@ def current_pr(*, head: str = HEAD, state: str = "open", draft: bool = False, nu
     return {"number": number, "state": state, "draft": draft, "head": {"sha": head}}
 
 
-def quality_run(*, head: str = HEAD, conclusion: str = "success", status: str = "completed", number: int = 137) -> dict:
+def quality_run(
+    *,
+    head: str = HEAD,
+    conclusion: str = "success",
+    status: str = "completed",
+    number: int = 137,
+    name: str = QUALITY_WORKFLOW_NAME,
+    path: str = QUALITY_WORKFLOW_PATH,
+) -> dict:
     return {
         "id": 12345,
-        "name": "Контроль качества репозитория",
-        "path": ".github/workflows/quality.yml",
+        "name": name,
+        "path": path,
         "head_sha": head,
         "status": status,
         "conclusion": conclusion,
@@ -83,6 +92,24 @@ class PreQaBarrierTests(unittest.TestCase):
             evaluate(current_pr(), review_threads(), quality_run(conclusion="failure"), "ChatGPT", "AGY")
         with self.assertRaisesRegex(PreQaBarrierError, "another PR"):
             evaluate(current_pr(), review_threads(), quality_run(number=999), "ChatGPT", "AGY")
+
+    def test_quality_requires_both_canonical_path_and_name(self) -> None:
+        with self.assertRaisesRegex(PreQaBarrierError, "QUALITY_MISMATCH"):
+            evaluate(
+                current_pr(),
+                review_threads(),
+                quality_run(path=".github/workflows/not-quality.yml"),
+                "ChatGPT",
+                "AGY",
+            )
+        with self.assertRaisesRegex(PreQaBarrierError, "QUALITY_MISMATCH"):
+            evaluate(
+                current_pr(),
+                review_threads(),
+                quality_run(name="Другой workflow"),
+                "ChatGPT",
+                "AGY",
+            )
 
     def test_worker_and_qa_must_be_separate(self) -> None:
         with self.assertRaisesRegex(PreQaBarrierError, "ROLE_COLLISION"):

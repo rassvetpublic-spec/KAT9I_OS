@@ -1,0 +1,10 @@
+{
+  "schema": "KAT9I_REQUIRED_CHECK_POLICY/1",
+  "required_check": {
+    "workflow_path": ".github/workflows/quality.yml",
+    "workflow_name": "Контроль качества репозитория",
+    "check_name": "Базовые проверки качества и целостности",
+    "applies_to_pull_requests": true,
+    "docs_only_exempt": false
+  }
+}

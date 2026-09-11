@@ -3,7 +3,7 @@ param(
   [string]$Repository='KAT9I_OS',
   [int]$ProjectNumber=2,
   [Parameter(Mandatory=$true)][string]$Url,
-  [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','QA','QUEUED','BLOCKED','DONE')][string]$State,
+  [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','WAITING_FOR_REQUIRED_CHECK','QA','QUEUED','BLOCKED','DONE')][string]$State,
   [string]$Worker='',
   [string]$QaWorker='',
   [switch]$LibraryMode
@@ -43,6 +43,15 @@ function QueueProfile([string]$Name,[string]$WorkerName,[string]$QaName){
     'ACTIVE' {
       if(-not [string]::IsNullOrWhiteSpace($WorkerName)){$profile['Исполнитель']=$WorkerName.Trim()}
       if(-not [string]::IsNullOrWhiteSpace($qaCanonical)){$profile['Проверяющий']=$qaCanonical}
+      $profile['Доказательство']='Частично'
+      $profile['Исполнение']='Активно'
+      $profile['Статус']='В работе'
+    }
+    'WAITING_FOR_REQUIRED_CHECK' {
+      if(-not [string]::IsNullOrWhiteSpace($WorkerName)){$profile['Исполнитель']=$WorkerName.Trim()}
+      if(-not [string]::IsNullOrWhiteSpace($qaCanonical)){$profile['Проверяющий']=$qaCanonical}
+      # Machine-state отдельный, Project projection намеренно использует существующие option ID.
+      # Это не выдаёт Quality PASS и не требует destructive migration single-select значений.
       $profile['Доказательство']='Частично'
       $profile['Исполнение']='Активно'
       $profile['Статус']='В работе'
