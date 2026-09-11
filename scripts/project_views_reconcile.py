@@ -10,6 +10,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / "config" / "project_views.json"
+STAGING_PREFIX = "__KAT9I_VIEWS_APPLY__ "
 
 HISTORICAL_LEGACY_VIEWS = {
     "00 — Центр управления",
@@ -143,6 +144,10 @@ def canonical_views(policy: dict[str, Any], actual_status_name: str) -> list[dic
     ]
 
 
+def staged_name(canonical_name: str) -> str:
+    return f"{STAGING_PREFIX}{canonical_name}"
+
+
 def legacy_names(policy: dict[str, Any]) -> set[str]:
     return {str(name) for name in policy.get("legacy_views", [])} | HISTORICAL_LEGACY_VIEWS
 
@@ -168,9 +173,10 @@ def preflight(
     actual_views: list[dict[str, Any]],
     expected_views: list[dict[str, str]],
     allowed_legacy: set[str],
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     expected_by_name = {view["name"]: view for view in expected_views}
-    known_names = set(expected_by_name) | allowed_legacy
+    staged_by_name = {staged_name(name): expected for name, expected in expected_by_name.items()}
+    known_names = set(expected_by_name) | set(staged_by_name) | allowed_legacy
     unexpected = sorted({str(view.get("name")) for view in actual_views if str(view.get("name")) not in known_names})
     if unexpected:
         raise RuntimeError(
@@ -182,24 +188,46 @@ def preflight(
     if duplicates:
         raise RuntimeError("Project содержит дубли представлений: " + ", ".join(duplicates))
 
-    missing: list[dict[str, str]] = []
+    pending: list[dict[str, Any]] = []
     for name, expected in expected_by_name.items():
-        matches = mapped.get(name, [])
-        if not matches:
-            missing.append(expected)
+        canonical_matches = mapped.get(name, [])
+        staged_matches = mapped.get(staged_name(name), [])
+        if canonical_matches and staged_matches:
+            raise RuntimeError(f"Одновременно существуют canonical и staging представления для '{name}'")
+        if canonical_matches:
+            actual = canonical_matches[0]
+            if actual.get("layout") != expected["layout"] or str(actual.get("filter") or "") != expected["filter"]:
+                raise RuntimeError(
+                    f"Представление '{name}' нарушает контракт layout/filter; автоматическое исправление остановлено"
+                )
             continue
-        actual = matches[0]
-        if actual.get("layout") != expected["layout"] or str(actual.get("filter") or "") != expected["filter"]:
-            raise RuntimeError(
-                f"Представление '{name}' нарушает контракт layout/filter; автоматическое исправление остановлено"
-            )
-    return missing
+        if staged_matches:
+            actual = staged_matches[0]
+            actual_filter = str(actual.get("filter") or "")
+            if actual.get("layout") != expected["layout"] or actual_filter not in {"", expected["filter"]}:
+                raise RuntimeError(
+                    f"Staging-представление для '{name}' нарушает recoverable контракт; автоматическое исправление остановлено"
+                )
+            work = dict(expected)
+            work["_staged_id"] = str(actual.get("id") or "")
+            if not work["_staged_id"]:
+                raise RuntimeError(f"Staging-представление для '{name}' не содержит id")
+            pending.append(work)
+            continue
+        pending.append(dict(expected))
+    return pending
 
 
-def build_create_input(project_id: str, view: dict[str, str], field_ids: list[str]) -> dict[str, Any]:
+def build_create_input(
+    project_id: str,
+    view: dict[str, str],
+    field_ids: list[str],
+    *,
+    name: str | None = None,
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         "projectId": project_id,
-        "name": view["name"],
+        "name": name or view["name"],
         "layout": view["layout"],
     }
     if view["layout"] != "ROADMAP_LAYOUT":
@@ -207,8 +235,16 @@ def build_create_input(project_id: str, view: dict[str, str], field_ids: list[st
     return result
 
 
-def build_update_input(view_id: str, view: dict[str, str], field_ids: list[str]) -> dict[str, Any]:
+def build_update_input(
+    view_id: str,
+    view: dict[str, str],
+    field_ids: list[str],
+    *,
+    finalize_name: str | None = None,
+) -> dict[str, Any]:
     result: dict[str, Any] = {"viewId": view_id, "filter": view["filter"]}
+    if finalize_name:
+        result["name"] = finalize_name
     if view["layout"] != "ROADMAP_LAYOUT":
         result["configuration"] = {"visibleFieldIds": field_ids}
     return result
@@ -225,6 +261,9 @@ def assert_canonical_complete(actual_views: list[dict[str, Any]], expected_views
         actual = matches[0]
         if actual.get("layout") != expected["layout"] or str(actual.get("filter") or "") != expected["filter"]:
             raise RuntimeError(f"После создания представление '{expected['name']}' не соответствует контракту")
+    staging = sorted(str(view.get("name")) for view in actual_views if str(view.get("name")).startswith(STAGING_PREFIX))
+    if staging:
+        raise RuntimeError("После создания остались staging-представления: " + ", ".join(staging))
 
 
 def wait_for_complete(owner: str, project_number: int, expected_views: list[dict[str, str]]) -> dict[str, Any]:
@@ -247,24 +286,27 @@ def reconcile(owner: str, project_number: int) -> None:
     expected = canonical_views(policy, status_name(project))
     allowed_legacy = legacy_names(policy)
     actual_views = list(project["views"]["nodes"])
-    missing = preflight(actual_views, expected, allowed_legacy)
+    pending = preflight(actual_views, expected, allowed_legacy)
     fields = visible_field_ids(project)
 
-    for view in missing:
-        created = run_graphql(
-            CREATE_VIEW_MUTATION,
-            {"input": build_create_input(str(project["id"]), view, fields)},
-        )
-        view_id = (
-            (((created.get("data") or {}).get("createProjectV2View") or {}).get("projectV2View") or {}).get("id")
-        )
+    for view in pending:
+        view_id = str(view.get("_staged_id") or "")
         if not view_id:
-            raise RuntimeError(f"GitHub не вернул id созданного представления '{view['name']}'")
+            created = run_graphql(
+                CREATE_VIEW_MUTATION,
+                {"input": build_create_input(str(project["id"]), view, fields, name=staged_name(view["name"]))},
+            )
+            view_id = str(
+                (((created.get("data") or {}).get("createProjectV2View") or {}).get("projectV2View") or {}).get("id")
+                or ""
+            )
+            if not view_id:
+                raise RuntimeError(f"GitHub не вернул id созданного staging-представления '{view['name']}'")
         run_graphql(
             UPDATE_VIEW_MUTATION,
-            {"input": build_update_input(str(view_id), view, fields)},
+            {"input": build_update_input(view_id, view, fields, finalize_name=view["name"])},
         )
-        print(f"Создано представление: {view['name']}")
+        print(f"Создано или восстановлено представление: {view['name']}")
 
     project = wait_for_complete(owner, project_number, expected)
     actual_views = list(project["views"]["nodes"])
@@ -282,7 +324,7 @@ def reconcile(owner: str, project_number: int) -> None:
         raise RuntimeError(
             f"После очистки Project содержит {len(final_views)} Views вместо {len(expected)}; лишние: {', '.join(extras)}"
         )
-    print("PASS: Project содержит ровно 8 канонических Views; Roadmap создан без неподдерживаемых visibleFieldIds.")
+    print("PASS: Project содержит ровно 8 канонических Views; прерванные staging-операции восстанавливаются идемпотентно.")
 
 
 def main() -> int:
