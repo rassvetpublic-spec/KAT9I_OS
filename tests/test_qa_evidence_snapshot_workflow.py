@@ -59,6 +59,10 @@ class QaEvidenceSnapshotWorkflowTests(unittest.TestCase):
         self.assertIn("jq -Rs '{body: .}' snapshot-comment.md", self.text)
         self.assertNotIn('gh issue comment', self.text)
 
+    def test_snapshot_can_publish_to_pr_conversation(self) -> None:
+        self.assertIn('pull-requests: write', self.text)
+        self.assertIn('issues: write', self.text)
+
 
 if __name__ == '__main__':
     unittest.main()
