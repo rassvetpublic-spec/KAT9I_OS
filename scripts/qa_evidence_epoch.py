@@ -357,12 +357,18 @@ def validate_current_epoch(
     if command_epoch != result_epoch or command_epoch != attest_epoch:
         raise EvidenceEpochError("MALFORMED_EVIDENCE: command/result/attestation epoch mismatch")
 
+    live_head = current_head.lower()
+    if not SHA40_RE.fullmatch(live_head):
+        raise EvidenceEpochError("MALFORMED_EVIDENCE: live HEAD must be a 40-char lowercase SHA")
+    if command_epoch["snapshot_head"] != live_head:
+        raise EvidenceEpochError("HEAD_DRIFT: Evidence Epoch HEAD differs from live PR HEAD")
+
     verdict = _parse_machine_field(result_body, "verdict")
     if verdict != "QA PASS":
         return {**command_epoch, "decision": "BLOCKING_VERDICT_SAFE"}
 
     current = build_snapshot(
-        head=current_head,
+        head=live_head,
         threads_payload=threads_payload,
         reviews_payload=reviews_payload,
         checks_payload=checks_payload,
