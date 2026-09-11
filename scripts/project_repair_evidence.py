@@ -35,7 +35,7 @@ def build_summary(
     if apply_outcome not in {"success", "failure", "cancelled", "skipped"}:
         raise ValueError(f"Unsupported apply_outcome: {apply_outcome}")
 
-    before = audit_from_snapshot(before_snapshot)
+    before = _enriched_audit(audit_from_snapshot(before_snapshot))
     after = _enriched_audit(after_audit)
     before_counts = {domain: int(before["domain_counts"].get(domain, 0)) for domain in DOMAIN_ORDER}
     after_counts = {domain: int(after["domain_counts"].get(domain, 0)) for domain in DOMAIN_ORDER}
