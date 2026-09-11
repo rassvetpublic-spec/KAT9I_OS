@@ -1,0 +1,32 @@
+{
+  "schema": "KAT9I_G0_AUDIT_DOMAINS/1",
+  "domain_order": [
+    "views",
+    "cards",
+    "schema",
+    "governance",
+    "other"
+  ],
+  "exact": {
+    "GATE_62": "cards",
+    "PROJECT_TITLE": "schema",
+    "PROJECT_LINK": "schema",
+    "MILESTONE": "governance",
+    "AUDIT_ERROR": "governance",
+    "AUDIT_OUTPUT_MISSING": "governance"
+  },
+  "prefixes": [
+    {"prefix": "VIEW_", "domain": "views"},
+    {"prefix": "PROJECT_ITEM_", "domain": "cards"},
+    {"prefix": "OPEN_WORK_", "domain": "cards"},
+    {"prefix": "OPEN_P01_", "domain": "cards"},
+    {"prefix": "CONTROLLED_", "domain": "cards"},
+    {"prefix": "FIELD_", "domain": "schema"},
+    {"prefix": "ITERATION_", "domain": "schema"},
+    {"prefix": "RULESET_", "domain": "governance"}
+  ],
+  "fallback": {
+    "domain": "other",
+    "policy": "UNREGISTERED_ONLY"
+  }
+}
