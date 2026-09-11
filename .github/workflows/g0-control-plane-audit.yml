@@ -46,6 +46,16 @@ jobs:
           set -uo pipefail
           python scripts/g0_control_plane_audit.py --output g0-audit.json
 
+      - name: Разложить findings по независимым доменам
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s g0-audit.json ]; then
+            printf '%s\n' '{"schema":"KAT9I_G0_AUDIT/1","verdict":"ERROR","finding_count":1,"findings":[{"code":"AUDIT_OUTPUT_MISSING","message":"audit output missing"}]}' > g0-audit.json
+          fi
+          python scripts/project_audit_domains.py g0-audit.json
+
       - name: Опубликовать Evidence в Issue #1
         if: always()
         shell: bash
