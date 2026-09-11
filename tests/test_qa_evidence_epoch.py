@@ -9,6 +9,7 @@ from scripts.qa_evidence_epoch import (
     POLICY_FILES,
     RESULT_MARKER,
     EvidenceEpochError,
+    aggregate_digest,
     build_snapshot,
     canonical_gate_state,
     canonical_review_state,
@@ -273,6 +274,15 @@ class QaEvidenceEpochTests(unittest.TestCase):
                 statuses_payload=statuses(),
                 root=self.root,
             )
+
+    def test_blocking_verdict_rejects_stale_snapshot_head(self):
+        snapshot = self.snapshot()
+        stale = {**snapshot, "snapshot_head": "b" * 40}
+        stale["evidence_digest"] = aggregate_digest(
+            stale["snapshot_head"], stale["review_digest"], stale["gate_digest"], stale["policy_digest"]
+        )
+        with self.assertRaisesRegex(EvidenceEpochError, "HEAD_DRIFT"):
+            self.validate(stale, verdict="CHANGES REQUESTED")
 
     def test_blocking_verdict_can_publish_block_even_when_review_state_changed(self):
         snapshot = self.snapshot()
