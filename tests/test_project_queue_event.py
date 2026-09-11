@@ -141,12 +141,15 @@ class ProjectQueueEventTests(unittest.TestCase):
         self.assertIsNone(resolve("issues", "closed", not_planned))
         self.assertIsNone(resolve("issues", "closed", missing_reason))
 
-    def test_pr_synchronize_invalidates_queued_qa_without_overwriting_assignments(self):
-        event = {"pull_request": {"html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/113"}}
-        self.assertEqual(
-            {"url": event["pull_request"]["html_url"], "state": "ACTIVE"},
-            resolve("pull_request", "synchronize", event),
-        )
+    def test_pr_revision_enters_required_check_waiting(self):
+        url = "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/113"
+        event = {"pull_request": {"html_url": url}}
+        for action in ("opened", "reopened", "ready_for_review", "synchronize"):
+            with self.subTest(action=action):
+                self.assertEqual(
+                    {"url": url, "state": "WAITING_FOR_REQUIRED_CHECK"},
+                    resolve("pull_request", action, event),
+                )
 
     def test_pr_close_is_done_or_blocked(self):
         merged = {
@@ -165,7 +168,7 @@ class ProjectQueueEventTests(unittest.TestCase):
         self.assertEqual("BLOCKED", resolve("pull_request", "closed", closed)["state"])
 
     def test_unrecognized_events_are_noop(self):
-        self.assertIsNone(resolve("pull_request", "opened", {"pull_request": {"html_url": "x"}}))
+        self.assertIsNone(resolve("pull_request", "converted_to_draft", {"pull_request": {"html_url": "x"}}))
         self.assertIsNone(resolve("issue_comment", "edited", {}))
 
 
