@@ -30,6 +30,36 @@ class PreQaBarrierWorkflowTests(unittest.TestCase):
         self.assertIn("actions/workflows/quality.yml/runs", self.text)
         self.assertIn("QUALITY_MISSING", self.text)
 
+    def test_quality_definition_is_bound_to_trusted_default_branch(self) -> None:
+        self.assertIn("contents/.github/workflows/quality.yml?ref=${EXPECTED_HEAD}", self.text)
+        self.assertIn("contents/.github/workflows/quality.yml?ref=${DEFAULT_BRANCH}", self.text)
+        self.assertIn("QUALITY_POLICY_DRIFT", self.text)
+        self.assertIn("HEAD_QUALITY_SHA", self.text)
+        self.assertIn("TRUSTED_QUALITY_SHA", self.text)
+
+    def test_project_sync_is_required_on_exact_head(self) -> None:
+        self.assertIn("actions/workflows/project-queue-sync.yml/runs", self.text)
+        self.assertIn("PROJECT_SYNC_MISSING", self.text)
+        self.assertIn("PROJECT_SYNC_FAIL", self.text)
+        self.assertIn("PROJECT_SYNC_DRIFT", self.text)
+        self.assertIn("Project — синхронизация очереди", self.text)
+
+    def test_review_inventory_is_rechecked_before_publication(self) -> None:
+        self.assertIn("review-threads-final.json", self.text)
+        self.assertIn("FINAL_LIVE_HEAD", self.text)
+        self.assertIn("PRE_QA_REVIEW_DRIFT", self.text)
+        self.assertIn("PRE_QA_EVIDENCE_DRIFT", self.text)
+        final_read = self.text.index("review-threads-final.json")
+        publication = self.text.index('pulls/${PR_NUMBER}/reviews\" \\\n            -f event=COMMENT')
+        self.assertLess(final_read, publication)
+
+    def test_duplicate_detection_parses_structured_receipt(self) -> None:
+        self.assertIn("parse_barrier_section", self.text)
+        self.assertIn("PreQaBarrierError", self.text)
+        self.assertIn("PRE_QA_DUPLICATE", self.text)
+        self.assertIn("receipt.get('exact_head') == expected_head", self.text)
+        self.assertNotIn("contains($digest)", self.text)
+
     def test_receipt_is_a_comment_review_anchored_to_exact_commit(self) -> None:
         self.assertIn("KAT9I-PRE-QA-BARRIER/1", self.text)
         self.assertIn("-f event=COMMENT", self.text)
