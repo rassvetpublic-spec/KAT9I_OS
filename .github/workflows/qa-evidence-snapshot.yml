@@ -153,7 +153,8 @@ jobs:
             echo
             echo 'Trusted read-only Evidence Epoch snapshot. Не имеет QA/FAST/merge/Project authority.'
           } > snapshot-comment.md
-          gh issue comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file snapshot-comment.md
+          jq -Rs '{body: .}' snapshot-comment.md | \
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --input - >/dev/null
 
       - name: Snapshot summary
         run: |
