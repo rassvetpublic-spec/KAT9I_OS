@@ -71,8 +71,7 @@ jobs:
         id: apply
         env:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
-        shell: pwsh
-        run: ./scripts/configure_project.ps1
+        run: python scripts/project_views_reconcile.py
 
       - name: Проверить фактический результат
         if: always() && steps.snapshot.outcome == 'success'
