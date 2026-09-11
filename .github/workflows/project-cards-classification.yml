@@ -84,6 +84,14 @@ jobs:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
         run: python scripts/g0_control_plane_audit.py --output project-after-audit.json
 
+      - name: Разложить post-audit findings по доменам
+        if: always() && steps.snapshot.outcome == 'success'
+        run: |
+          set -euo pipefail
+          if [ -s project-after-audit.json ]; then
+            python scripts/project_audit_domains.py project-after-audit.json
+          fi
+
       - name: Сохранить Evidence классификации карточек
         if: always() && steps.snapshot.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -104,9 +112,12 @@ jobs:
           python - <<'PY'
           import json, os
           from pathlib import Path
-          path = Path('project-cards-apply.json')
-          result = json.loads(path.read_text()) if path.exists() else {'verdict':'ERROR','remaining_count':'unknown'}
+          apply_path = Path('project-cards-apply.json')
+          audit_path = Path('project-after-audit.json')
+          result = json.loads(apply_path.read_text()) if apply_path.exists() else {'verdict':'ERROR','remaining_count':'unknown'}
+          audit = json.loads(audit_path.read_text()) if audit_path.exists() else {}
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
               out.write(f"Применение: {os.environ['APPLY_OUTCOME']}; card-domain: {result.get('verdict')}; remaining: {result.get('remaining_count')}.\n")
+              out.write(f"Post-audit домены: {audit.get('domain_counts', {})}.\n")
               out.write('Workflow не меняет Статус/Исполнение/Worker/QA/Views и не создаёт merge authority.\n')
           PY

@@ -79,6 +79,14 @@ jobs:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
         run: python scripts/g0_control_plane_audit.py --output project-after-audit.json
 
+      - name: Разложить post-audit findings по доменам
+        if: always() && steps.snapshot.outcome == 'success'
+        run: |
+          set -euo pipefail
+          if [ -s project-after-audit.json ]; then
+            python scripts/project_audit_domains.py project-after-audit.json
+          fi
+
       - name: Сохранить Evidence миграции
         if: always() && steps.snapshot.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -101,5 +109,6 @@ jobs:
           result = json.loads(path.read_text()) if path.exists() else {'verdict':'ERROR','finding_count':'unknown'}
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
               out.write(f"Применение: {os.environ['APPLY_OUTCOME']}; аудит: {result['verdict']}; отклонений: {result['finding_count']}.\n")
+              out.write(f"Домены: {result.get('domain_counts', {})}.\n")
               out.write('Независимый QA, merge и завершение всей #150 этим запуском не подтверждаются.\n')
           PY
