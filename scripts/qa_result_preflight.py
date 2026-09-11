@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from scripts.qa_evidence_epoch import EvidenceEpochError, _matching_command_body, parse_epoch_section
 from scripts.qa_result_bridge import (
     FOLLOW_UP_HEADER,
     RESULT_FIELDS,
@@ -22,6 +23,26 @@ from scripts.qa_result_bridge import (
 
 SCHEMA = "KAT9I_QA_RESULT_PREFLIGHT/1"
 _FUTURE = datetime.max.replace(tzinfo=timezone.utc)
+
+
+def _validate_evidence_epoch(
+    body: str,
+    comments_payload: Any,
+    command_id: str,
+    live_head: str,
+) -> dict[str, str]:
+    try:
+        command_body = _matching_command_body(comments_payload, command_id)
+        command_epoch = parse_epoch_section(command_body)
+        result_epoch = parse_epoch_section(body)
+    except EvidenceEpochError as exc:
+        raise BridgeError(str(exc)) from exc
+
+    if command_epoch != result_epoch:
+        raise BridgeError("REVIEW_DRIFT: QA-RESULT Evidence Epoch does not match authoritative QA-COMMAND")
+    if result_epoch["snapshot_head"] != live_head:
+        raise BridgeError("HEAD_DRIFT: Evidence Epoch snapshot_head does not match live PR HEAD")
+    return result_epoch
 
 
 def preflight(body: str, comments_payload: Any, current_pr: dict[str, Any]) -> dict[str, Any]:
@@ -59,6 +80,13 @@ def preflight(body: str, comments_payload: Any, current_pr: dict[str, Any]) -> d
     if command["exact_head"] != live_head:
         raise BridgeError("QA-COMMAND exact_head is stale against live PR HEAD")
 
+    epoch = _validate_evidence_epoch(
+        body=body,
+        comments_payload=comments_payload,
+        command_id=result["command_id"],
+        live_head=live_head,
+    )
+
     return {
         "schema": SCHEMA,
         "authority": "VALIDATION_ONLY",
@@ -68,6 +96,7 @@ def preflight(body: str, comments_payload: Any, current_pr: dict[str, Any]) -> d
         "command_id": result["command_id"],
         "target_pr": result["target_pr"],
         "exact_head": live_head,
+        "evidence_digest": epoch["evidence_digest"],
         "qa_mode": result["qa_mode"],
         "qa_verdict": result["verdict"],
         "blocking_findings": result["blocking_findings"],
