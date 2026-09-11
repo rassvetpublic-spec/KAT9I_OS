@@ -39,11 +39,14 @@ function New-View([string]$Name,[string]$Id,[string]$Layout,[string]$Filter){
 
 function New-CanonicalViews {
   @(
-    (New-View '00 — Все задачи' 'C0' 'TABLE_LAYOUT' 'is:open'),
-    (New-View '01 — Готово к работе' 'C1' 'TABLE_LAYOUT' 'is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"'),
-    (New-View '02 — В работе' 'C2' 'BOARD_LAYOUT' 'is:open Статус:"В работе"'),
-    (New-View '03 — Проверка' 'C3' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'),
-    (New-View '04 — Заблокировано' 'C4' 'TABLE_LAYOUT' 'is:open Статус:"Заблокировано"')
+    (New-View '00 — Dashboard' 'C0' 'TABLE_LAYOUT' ''),
+    (New-View '01 — Queue' 'C1' 'BOARD_LAYOUT' 'is:open'),
+    (New-View '02 — Active Work' 'C2' 'BOARD_LAYOUT' 'is:open Статус:"В работе"'),
+    (New-View '03 — QA Gate' 'C3' 'TABLE_LAYOUT' 'is:open Статус:"Проверка QA"'),
+    (New-View '04 — Release Flow' 'C4' 'BOARD_LAYOUT' 'is:pr'),
+    (New-View '05 — Roadmap' 'C5' 'ROADMAP_LAYOUT' 'is:open'),
+    (New-View '06 — Blocked / Parking' 'C6' 'TABLE_LAYOUT' 'is:open Статус:"Заблокировано"'),
+    (New-View '07 — Agent KPI' 'C7' 'TABLE_LAYOUT' 'has:Исполнитель')
   )
 }
 

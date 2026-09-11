@@ -1,0 +1,98 @@
+name: Project — миграция восьми представлений
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_head:
+        description: Полный проверенный SHA main для применения
+        required: true
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g0-project-remediation
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: >-
+      github.repository == 'rassvetpublic-spec/KAT9I_OS' &&
+      github.actor == 'rassvetpublic-spec' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.issue.number == 150 &&
+        startsWith(github.event.comment.body, 'KAT9I-CONTROL/1 | PROJECT-VIEWS-APPLY')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Получить точную revision main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Проверить управляющую команду
+        run: python scripts/project_view_authorization.py
+
+      - name: Проверить актуальность main перед доступом к Project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          live_head="$(gh api repos/rassvetpublic-spec/KAT9I_OS/git/ref/heads/main --jq .object.sha)"
+          test "$live_head" = "$GITHUB_SHA"
+
+      - name: Сохранить снимок до миграции
+        id: snapshot
+        env:
+          GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from scripts.g0_control_plane_audit import collect_live
+          data = collect_live('rassvetpublic-spec', 'KAT9I_OS', 2)
+          Path('project-before.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+          PY
+
+      - name: Применить согласованную схему представлений
+        id: apply
+        env:
+          GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
+        shell: pwsh
+        run: ./scripts/configure_project.ps1
+
+      - name: Проверить фактический результат
+        if: always() && steps.snapshot.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
+        run: python scripts/g0_control_plane_audit.py --output project-after-audit.json
+
+      - name: Сохранить Evidence миграции
+        if: always() && steps.snapshot.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-views-evidence-${{ github.run_id }}
+          path: |
+            project-before.json
+            project-after-audit.json
+          if-no-files-found: error
+
+      - name: Показать итог без подмены QA
+        if: always() && steps.snapshot.outcome == 'success'
+        env:
+          APPLY_OUTCOME: ${{ steps.apply.outcome }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path('project-after-audit.json')
+          result = json.loads(path.read_text()) if path.exists() else {'verdict':'ERROR','finding_count':'unknown'}
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write(f"Применение: {os.environ['APPLY_OUTCOME']}; аудит: {result['verdict']}; отклонений: {result['finding_count']}.\n")
+              out.write('Независимый QA, merge и завершение всей #150 этим запуском не подтверждаются.\n')
+          PY

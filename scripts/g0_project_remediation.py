@@ -57,6 +57,11 @@ REMOVABLE_UNUSED_WORKER_OPTIONS = {"Kat9i_OS"}
 
 CANONICAL_VIEWS = set(EXPECTED_VIEWS)
 LEGACY_VIEWS = {
+    "00 — Все задачи",
+    "01 — Готово к работе",
+    "02 — В работе",
+    "03 — Проверка",
+    "04 — Заблокировано",
     "00 — Центр управления",
     "01 — Архитектура G1",
     "02 — Готово к работе",
@@ -532,3 +537,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

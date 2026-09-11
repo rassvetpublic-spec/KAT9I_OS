@@ -13,13 +13,8 @@ from pathlib import Path
 from typing import Any
 
 EXPECTED_PROJECT_TITLE = "KAT9I_OS — разработка"
-EXPECTED_VIEWS = {
-    "00 — Все задачи": ("TABLE_LAYOUT", "is:open"),
-    "01 — Готово к работе": ("TABLE_LAYOUT", None),
-    "02 — В работе": ("BOARD_LAYOUT", None),
-    "03 — Проверка": ("BOARD_LAYOUT", None),
-    "04 — Заблокировано": ("TABLE_LAYOUT", None),
-}
+VIEW_POLICY = json.loads((Path(__file__).resolve().parents[1] / "config/project_views.json").read_text(encoding="utf-8"))
+EXPECTED_VIEWS = {v["name"]: (v["layout"], v["filter"]) for v in VIEW_POLICY["views"]}
 EXPECTED_SELECTS = {
     "Статус": ["Входящие", "Нужно разобрать", "Готово к работе", "В работе", "Проверка QA", "Заблокировано", "Готово"],
     "Этап": ["G0 — Порядок проекта и задач", "G1 — ТЗ и базовая архитектура", "G2 — Машинные контракты", "G3 — Основа исполняемой системы", "G4 — Сквозная версия v0.1", "G5 — После v0.1"],
@@ -227,19 +222,13 @@ def validate(snapshot: dict[str, Any]) -> list[Finding]:
             findings.append(Finding("ITERATION_DURATION", f"Итерация duration={(iteration.get('configuration') or {}).get('duration')}"))
 
     views = p.get("views", {}).get("nodes", [])
-    if len(views) != 5:
-        findings.append(Finding("VIEW_COUNT", f"Project has {len(views)} views, expected 5"))
+    if len(views) != len(EXPECTED_VIEWS):
+        findings.append(Finding("VIEW_COUNT", f"Project has {len(views)} views, expected {len(EXPECTED_VIEWS)}"))
     view_by_name: dict[str, list[dict[str, Any]]] = {}
     for view in views:
         view_by_name.setdefault(str(view.get("name")), []).append(view)
     status_name = status_field.get("name") if status_field else "Status"
-    expected_filters = {
-        "00 — Все задачи": "is:open",
-        "01 — Готово к работе": f'is:open {status_name}:"Готово к работе" -Исполнение:"Заблокировано"',
-        "02 — В работе": f'is:open {status_name}:"В работе"',
-        "03 — Проверка": f'is:open {status_name}:"Проверка QA"',
-        "04 — Заблокировано": f'is:open {status_name}:"Заблокировано"',
-    }
+    expected_filters = {name: template.replace("{status}", status_name) for name, (_, template) in EXPECTED_VIEWS.items()}
     for name, (layout, _) in EXPECTED_VIEWS.items():
         matches = view_by_name.get(name, [])
         if not matches:
@@ -402,3 +391,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
