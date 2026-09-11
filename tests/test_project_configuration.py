@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "configure_project.ps1"
 WORKFLOW_DOC = ROOT / "docs" / "GITHUB_WORKFLOW.md"
 BEHAVIOR_TEST = ROOT / "tests" / "test_project_views.ps1"
+MIGRATION_WORKFLOW = ROOT / ".github" / "workflows" / "project-views-migrate.yml"
 
 CANONICAL_VIEWS = ['00 — Dashboard', '01 — Queue', '02 — Active Work', '03 — QA Gate', '04 — Release Flow', '05 — Roadmap', '06 — Blocked / Parking', '07 — Agent KPI']
 
@@ -48,7 +49,15 @@ class ProjectConfigurationTests(unittest.TestCase):
         )
         self.assertIn("PASS: Project policy запускает фактическое production-тело entrypoint", result.stdout)
 
+    def test_migration_rechecks_main_immediately_before_apply(self):
+        text = MIGRATION_WORKFLOW.read_text(encoding="utf-8")
+        snapshot = text.index("- name: Сохранить снимок до миграции")
+        recheck = text.index("- name: Повторно проверить актуальность main перед изменениями Project")
+        apply = text.index("- name: Применить согласованную схему представлений")
+        self.assertLess(snapshot, recheck)
+        self.assertLess(recheck, apply)
+        self.assertIn('test "$live_head" = "$GITHUB_SHA"', text[recheck:apply])
+
 
 if __name__ == "__main__":
     unittest.main()
-

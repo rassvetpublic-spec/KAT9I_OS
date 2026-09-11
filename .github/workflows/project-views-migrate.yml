@@ -59,6 +59,14 @@ jobs:
           Path('project-before.json').write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
           PY
 
+      - name: Повторно проверить актуальность main перед изменениями Project
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          live_head="$(gh api repos/rassvetpublic-spec/KAT9I_OS/git/ref/heads/main --jq .object.sha)"
+          test "$live_head" = "$GITHUB_SHA"
+
       - name: Применить согласованную схему представлений
         id: apply
         env:
