@@ -27,6 +27,7 @@ class ProjectQueueSyncTests(unittest.TestCase):
         ):
             self.assertIn(alias, sync)
         self.assertIn("'INBOX'", sync)
+        self.assertIn("'WAITING_FOR_REQUIRED_CHECK'", sync)
         self.assertIn("'QUEUED'", sync)
         self.assertIn("'Проверка качества пройдена'", sync)
         self.assertIn("'В очереди'", sync)
@@ -37,13 +38,22 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertNotIn("gh pr merge", sync)
         self.assertNotIn("merge_pull_request", sync)
 
+    def test_waiting_state_uses_existing_project_options(self):
+        sync = SYNC.read_text(encoding="utf-8")
+        waiting = sync.split("'WAITING_FOR_REQUIRED_CHECK' {", 1)[1].split("    'QA' {", 1)[0]
+        self.assertIn("$profile['Доказательство']='Частично'", waiting)
+        self.assertIn("$profile['Исполнение']='Активно'", waiting)
+        self.assertIn("$profile['Статус']='В работе'", waiting)
+        self.assertNotIn("Ожидание", waiting)
+
     def test_workflow_is_trusted_and_never_merges(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("KAT9I_PROJECT_TOKEN", text)
         self.assertIn("project_queue_event.py", text)
         self.assertIn("project_queue_sync.ps1", text)
         self.assertNotIn("configure_project.ps1", text)
-        self.assertIn("types: [closed, synchronize]", text)
+        self.assertIn("types: [opened, reopened, ready_for_review, closed, synchronize]", text)
+        self.assertIn("WAITING_FOR_REQUIRED_CHECK", text)
         self.assertIn("ITEM_WORKER", text)
         self.assertIn("ITEM_QA", text)
         self.assertIn("github.actor", text)
