@@ -1,0 +1,164 @@
+name: QA — trusted Evidence Epoch snapshot
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  checks: read
+  statuses: read
+
+concurrency:
+  group: qa-evidence-snapshot-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    if: >-
+      github.event.issue.pull_request != null &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.user.login == github.repository_owner &&
+      startsWith(github.event.comment.body, 'KAT9I-CONTROL/1 | EVIDENCE-SNAPSHOT')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить trusted default-branch code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Fail-closed разобрать snapshot request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+          marker = 'KAT9I-CONTROL/1 | EVIDENCE-SNAPSHOT'
+          allowed = {'target_pr', 'expected_head'}
+          body = str((event.get('comment') or {}).get('body') or '')
+          lines = body.splitlines()
+          if not lines or lines[0].strip() != marker:
+              raise SystemExit('SNAPSHOT_REQUEST_REJECT: first line marker mismatch')
+          meta = {}
+          for raw in lines[1:]:
+              line = raw.strip()
+              if not line:
+                  break
+              if '=' not in line:
+                  raise SystemExit('SNAPSHOT_REQUEST_REJECT: malformed machine line')
+              key, value = (part.strip() for part in line.split('=', 1))
+              if key not in allowed:
+                  raise SystemExit(f'SNAPSHOT_REQUEST_REJECT: unknown key {key}')
+              if key in meta:
+                  raise SystemExit(f'SNAPSHOT_REQUEST_REJECT: duplicate key {key}')
+              if not value:
+                  raise SystemExit(f'SNAPSHOT_REQUEST_REJECT: empty value {key}')
+              meta[key] = value
+          missing = sorted(allowed - meta.keys())
+          if missing:
+              raise SystemExit('SNAPSHOT_REQUEST_REJECT: missing keys ' + ','.join(missing))
+          number = int((event.get('issue') or {}).get('number') or 0)
+          if not re.fullmatch(r'[1-9][0-9]*', meta['target_pr']) or int(meta['target_pr']) != number:
+              raise SystemExit('SNAPSHOT_REQUEST_REJECT: target_pr mismatch')
+          if not re.fullmatch(r'[0-9a-f]{40}', meta['expected_head']):
+              raise SystemExit('SNAPSHOT_REQUEST_REJECT: expected_head must be lowercase 40-char SHA')
+          out = Path(os.environ['GITHUB_OUTPUT'])
+          with out.open('a', encoding='utf-8') as stream:
+              stream.write(f"target_pr={meta['target_pr']}\n")
+              stream.write(f"expected_head={meta['expected_head']}\n")
+          PY
+
+      - name: Собрать raw Evidence тем же контрактом, что bridge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.request.outputs.target_pr }}
+          EXPECTED_HEAD: ${{ steps.request.outputs.expected_head }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
+          LIVE_HEAD="$(jq -r '.head.sha' current-pr.json)"
+          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::HEAD_DRIFT: snapshot request HEAD is stale."
+            exit 1
+          fi
+
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" | jq 'add // []' > reviews.json
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/check-runs?per_page=100" > check-runs.json
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/status?per_page=100" > commit-status.json
+
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated} pageInfo{hasNextPage endCursor}}} pageInfo{hasNextPage endCursor}}}}}' \
+            -f owner="$OWNER" \
+            -f repo="$REPO" \
+            -F number="$PR_NUMBER" > review-threads.json
+
+          if [ "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' review-threads.json)" != "false" ]; then
+            echo "::error::MALFORMED_EVIDENCE: review thread inventory is incomplete."
+            exit 1
+          fi
+          if jq -e '[.data.repository.pullRequest.reviewThreads.nodes[].comments.pageInfo.hasNextPage] | any' review-threads.json >/dev/null; then
+            echo "::error::MALFORMED_EVIDENCE: review comment inventory is incomplete."
+            exit 1
+          fi
+          if [ "$(jq -r '.total_count // 0' check-runs.json)" -gt "$(jq '.check_runs | length' check-runs.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: check-run inventory is incomplete."
+            exit 1
+          fi
+          if [ "$(jq -r '.total_count // (.statuses | length)' commit-status.json)" -gt "$(jq '.statuses | length' commit-status.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: commit-status inventory is incomplete."
+            exit 1
+          fi
+
+          python scripts/qa_evidence_epoch.py snapshot \
+            --head "$LIVE_HEAD" \
+            --review-threads-path review-threads.json \
+            --reviews-path reviews.json \
+            --check-runs-path check-runs.json \
+            --status-path commit-status.json \
+            --root . \
+            --output evidence-epoch.json \
+            --section-output evidence-epoch.txt
+
+      - name: Проверить live HEAD и опубликовать DATA-only snapshot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.request.outputs.target_pr }}
+          EXPECTED_HEAD: ${{ steps.request.outputs.expected_head }}
+        run: |
+          set -euo pipefail
+          LIVE_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::HEAD_DRIFT: PR HEAD changed before snapshot publication."
+            exit 1
+          fi
+          {
+            echo 'KAT9I-EVIDENCE-SNAPSHOT/1'
+            echo "target_pr=${PR_NUMBER}"
+            echo "exact_head=${LIVE_HEAD}"
+            echo 'controller=ChatGPT'
+            echo 'authority=DATA_ONLY'
+            echo
+            cat evidence-epoch.txt
+            echo
+            echo 'Trusted read-only Evidence Epoch snapshot. Не имеет QA/FAST/merge/Project authority.'
+          } > snapshot-comment.md
+          gh issue comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file snapshot-comment.md
+
+      - name: Snapshot summary
+        run: |
+          echo "### Trusted Evidence Epoch snapshot" >> "$GITHUB_STEP_SUMMARY"
+          echo "- target PR: ${{ steps.request.outputs.target_pr }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- exact HEAD: ${{ steps.request.outputs.expected_head }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- evidence digest: $(jq -r '.evidence_digest' evidence-epoch.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- authority: DATA_ONLY" >> "$GITHUB_STEP_SUMMARY"
