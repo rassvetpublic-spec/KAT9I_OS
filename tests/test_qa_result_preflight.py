@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from scripts.qa_evidence_epoch import aggregate_digest, render_epoch_section
 from scripts.qa_result_bridge import BridgeError, COMMAND_MARKER, RESULT_FIELDS, RESULT_MARKER
 from scripts.qa_result_preflight import preflight
 
@@ -10,7 +11,32 @@ OTHER_HEAD = "b" * 40
 COMMAND_ID = "QAC-145-AAAAAAAA-001"
 
 
-def command_body(command_id: str = COMMAND_ID, head: str = HEAD, **overrides: str) -> str:
+def epoch_section(
+    head: str = HEAD,
+    *,
+    review_digest: str = "1" * 64,
+    gate_digest: str = "2" * 64,
+    policy_digest: str = "3" * 64,
+) -> str:
+    snapshot = {
+        "epoch_version": "1",
+        "snapshot_head": head,
+        "review_digest": review_digest,
+        "gate_digest": gate_digest,
+        "policy_digest": policy_digest,
+        "evidence_digest": aggregate_digest(head, review_digest, gate_digest, policy_digest),
+    }
+    return render_epoch_section(snapshot)
+
+
+def command_body(
+    command_id: str = COMMAND_ID,
+    head: str = HEAD,
+    *,
+    epoch: str | None = None,
+    include_epoch: bool = True,
+    **overrides: str,
+) -> str:
     values = {
         "command_id": command_id,
         "target_pr": "161",
@@ -27,10 +53,20 @@ def command_body(command_id: str = COMMAND_ID, head: str = HEAD, **overrides: st
         "project_lifecycle_mutation": "false",
     }
     values.update(overrides)
-    return COMMAND_MARKER + "\n" + "\n".join(f"{key}={value}" for key, value in values.items()) + "\n\nSCOPE: test"
+    body = COMMAND_MARKER + "\n" + "\n".join(f"{key}={value}" for key, value in values.items())
+    if include_epoch:
+        body += "\n\n" + (epoch or epoch_section(head))
+    return body + "\n\nSCOPE: test"
 
 
-def result_body(command_id: str = COMMAND_ID, head: str = HEAD, **overrides: str) -> str:
+def result_body(
+    command_id: str = COMMAND_ID,
+    head: str = HEAD,
+    *,
+    epoch: str | None = None,
+    include_epoch: bool = True,
+    **overrides: str,
+) -> str:
     values = {
         "command_id": command_id,
         "target_pr": "161",
@@ -45,7 +81,10 @@ def result_body(command_id: str = COMMAND_ID, head: str = HEAD, **overrides: str
         "follow_up_candidates": "0",
     }
     values.update(overrides)
-    return RESULT_MARKER + "\n" + "\n".join(f"{key}={value}" for key, value in values.items()) + "\n\nFOLLOW_UP_CANDIDATES\n"
+    body = RESULT_MARKER + "\n" + "\n".join(f"{key}={value}" for key, value in values.items())
+    if include_epoch:
+        body += "\n\n" + (epoch or epoch_section(head))
+    return body + "\n\nFOLLOW_UP_CANDIDATES\n"
 
 
 def comment(body: str | None = None, *, created_at: str = "2026-09-11T12:00:00Z", comment_id: int = 1, association: str = "OWNER") -> dict:
@@ -69,6 +108,7 @@ class QaResultPreflightTests(unittest.TestCase):
         self.assertEqual(result["contract_fields"], sorted(RESULT_FIELDS))
         self.assertEqual(result["command_id"], COMMAND_ID)
         self.assertEqual(result["exact_head"], HEAD)
+        self.assertEqual(result["evidence_digest"], aggregate_digest(HEAD, "1" * 64, "2" * 64, "3" * 64))
 
     def test_pr131_missing_result_sink_fails_before_review_publication(self) -> None:
         malformed = result_body().replace("result_sink=PR_REVIEW\n", "")
@@ -136,6 +176,27 @@ class QaResultPreflightTests(unittest.TestCase):
     def test_command_result_binding_uses_same_executor_normalization(self) -> None:
         bound = preflight(result_body(executor="Антигравити"), [comment(body=command_body(executor="AGY"))], live_pr())
         self.assertEqual(bound["verdict"], "PASS")
+
+    def test_missing_or_malformed_epoch_fails_before_review_publication(self) -> None:
+        with self.assertRaisesRegex(BridgeError, "exactly one EVIDENCE_EPOCH"):
+            preflight(result_body(include_epoch=False), [comment()], live_pr())
+        malformed = epoch_section().replace("evidence_digest=", "evidence_digest=" + "0" * 64 + "#")
+        with self.assertRaisesRegex(BridgeError, "invalid evidence_digest"):
+            preflight(result_body(epoch=malformed), [comment()], live_pr())
+
+    def test_result_epoch_must_equal_authoritative_command_epoch(self) -> None:
+        changed = epoch_section(review_digest="4" * 64)
+        with self.assertRaisesRegex(BridgeError, "REVIEW_DRIFT"):
+            preflight(result_body(epoch=changed), [comment()], live_pr())
+
+    def test_epoch_snapshot_head_is_bound_to_live_head(self) -> None:
+        stale_epoch = epoch_section(OTHER_HEAD)
+        with self.assertRaisesRegex(BridgeError, "HEAD_DRIFT"):
+            preflight(
+                result_body(epoch=stale_epoch),
+                [comment(body=command_body(epoch=stale_epoch))],
+                live_pr(),
+            )
 
 
 if __name__ == "__main__":
