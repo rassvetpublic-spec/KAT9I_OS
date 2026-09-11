@@ -1,0 +1,156 @@
+name: PRE-QA — deterministic barrier
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: pre-qa-barrier-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  barrier:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, 'KAT9I-CONTROL/1 | PRE-QA-CHECK')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить trusted default-branch code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Fail-closed разобрать PRE-QA request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
+          marker = 'KAT9I-CONTROL/1 | PRE-QA-CHECK'
+          allowed = {'target_pr', 'expected_head', 'worker', 'qa'}
+          body = str((event.get('comment') or {}).get('body') or '')
+          lines = body.splitlines()
+          if not lines or lines[0].strip() != marker:
+              raise SystemExit('PRE_QA_REQUEST_REJECT: first line marker mismatch')
+          meta = {}
+          for raw in lines[1:]:
+              line = raw.strip()
+              if not line:
+                  break
+              if '=' not in line:
+                  raise SystemExit('PRE_QA_REQUEST_REJECT: malformed machine line')
+              key, value = (part.strip() for part in line.split('=', 1))
+              if key not in allowed:
+                  raise SystemExit(f'PRE_QA_REQUEST_REJECT: unknown key {key}')
+              if key in meta:
+                  raise SystemExit(f'PRE_QA_REQUEST_REJECT: duplicate key {key}')
+              if not value:
+                  raise SystemExit(f'PRE_QA_REQUEST_REJECT: empty value {key}')
+              meta[key] = value
+          missing = sorted(allowed - meta.keys())
+          if missing:
+              raise SystemExit('PRE_QA_REQUEST_REJECT: missing keys ' + ','.join(missing))
+          number = int((event.get('issue') or {}).get('number') or 0)
+          if not re.fullmatch(r'[1-9][0-9]*', meta['target_pr']) or int(meta['target_pr']) != number:
+              raise SystemExit('PRE_QA_REQUEST_REJECT: target_pr mismatch')
+          if not re.fullmatch(r'[0-9a-f]{40}', meta['expected_head']):
+              raise SystemExit('PRE_QA_REQUEST_REJECT: expected_head must be lowercase 40-char SHA')
+          out = Path(os.environ['GITHUB_OUTPUT'])
+          with out.open('a', encoding='utf-8') as stream:
+              for key in ('target_pr', 'expected_head', 'worker', 'qa'):
+                  stream.write(f'{key}={meta[key]}\n')
+          PY
+
+      - name: Получить live PR, review inventory и Quality evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.request.outputs.target_pr }}
+          EXPECTED_HEAD: ${{ steps.request.outputs.expected_head }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
+          LIVE_HEAD="$(jq -r '.head.sha' current-pr.json)"
+          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::HEAD_DRIFT: PRE-QA request HEAD is stale."
+            exit 1
+          fi
+
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){number reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id} pageInfo{hasNextPage endCursor}}} pageInfo{hasNextPage endCursor}}}}}' \
+            -f owner="$OWNER" \
+            -f repo="$REPO" \
+            -F number="$PR_NUMBER" > review-threads.json
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/quality.yml/runs?event=pull_request&per_page=100" > quality-runs.json
+          jq --arg head "$EXPECTED_HEAD" \
+            '[.workflow_runs[] | select(.head_sha == $head)] | sort_by(.id) | last // empty' \
+            quality-runs.json > quality-run.json
+          if [ ! -s quality-run.json ] || [ "$(cat quality-run.json)" = "" ]; then
+            echo "::error::QUALITY_MISSING: no Quality run found for exact HEAD."
+            exit 1
+          fi
+
+      - name: Выполнить deterministic PRE-QA barrier
+        shell: bash
+        env:
+          WORKER: ${{ steps.request.outputs.worker }}
+          QA: ${{ steps.request.outputs.qa }}
+        run: |
+          set -euo pipefail
+          python scripts/pre_qa_barrier.py \
+            --current-pr current-pr.json \
+            --review-threads review-threads.json \
+            --quality-run quality-run.json \
+            --worker "$WORKER" \
+            --qa "$QA" \
+            --output pre-qa-receipt.json \
+            --section-output pre-qa-section.txt
+          {
+            echo 'KAT9I-PRE-QA-BARRIER/1'
+            echo
+            cat pre-qa-section.txt
+            echo
+            echo 'Этот review является DATA-only deterministic receipt и не имеет QA/FAST/merge/Project authority.'
+          } > pre-qa-review.md
+
+      - name: Идемпотентно опубликовать receipt как PR review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.request.outputs.target_pr }}
+          EXPECTED_HEAD: ${{ steps.request.outputs.expected_head }}
+        run: |
+          set -euo pipefail
+          DIGEST="$(jq -r '.receipt_digest' pre-qa-receipt.json)"
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" | jq 'add // []' > existing-reviews.json
+          COUNT="$(jq --arg head "$EXPECTED_HEAD" --arg digest "$DIGEST" '[.[] | select(.commit_id == $head and ((.body // "") | contains($digest)))] | length' existing-reviews.json)"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "PRE-QA receipt already exists for this exact evidence digest."
+            exit 0
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
+            -f event=COMMENT \
+            -f commit_id="$EXPECTED_HEAD" \
+            -f body="$(cat pre-qa-review.md)" >/dev/null
+
+      - name: PRE-QA summary
+        run: |
+          echo "### PRE-QA deterministic barrier" >> "$GITHUB_STEP_SUMMARY"
+          echo "- verdict: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- exact head: ${{ steps.request.outputs.expected_head }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- receipt digest: $(jq -r '.receipt_digest' pre-qa-receipt.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- authority: VALIDATION_ONLY" >> "$GITHUB_STEP_SUMMARY"
