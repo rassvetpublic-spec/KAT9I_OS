@@ -1,5 +1,5 @@
 from pathlib import Path
-import re
+import json
 import shutil
 import subprocess
 import unittest
@@ -9,37 +9,23 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "configure_project.ps1"
 WORKFLOW_DOC = ROOT / "docs" / "GITHUB_WORKFLOW.md"
 BEHAVIOR_TEST = ROOT / "tests" / "test_project_views.ps1"
+MIGRATION_WORKFLOW = ROOT / ".github" / "workflows" / "project-views-migrate.yml"
 
-CANONICAL_VIEWS = [
-    "00 — Все задачи",
-    "01 — Готово к работе",
-    "02 — В работе",
-    "03 — Проверка",
-    "04 — Заблокировано",
-]
+CANONICAL_VIEWS = ['00 — Dashboard', '01 — Queue', '02 — Active Work', '03 — QA Gate', '04 — Release Flow', '05 — Roadmap', '06 — Blocked / Parking', '07 — Agent KPI']
 
 
 class ProjectConfigurationTests(unittest.TestCase):
-    def test_configurator_has_exactly_five_canonical_views(self):
-        text = SCRIPT.read_text(encoding="utf-8")
-        match = re.search(
-            r"\$views=@\(\s*(.*?)\n\s*\)\s*\n\s*\$canonicalNames=",
-            text,
-            re.DOTALL,
-        )
-        self.assertIsNotNone(match, "Не найден канонический блок $views в configure_project.ps1")
-        active_block = match.group(1)
-        names = re.findall(r"@\{n='([^']+)'", active_block)
-        self.assertEqual(CANONICAL_VIEWS, names)
-        self.assertEqual(5, len(names))
-        self.assertIn("Проверка QA", active_block)
-        self.assertIn("@('Статус','Status')", text)
-        self.assertEqual(3, active_block.count("gl='TABLE_LAYOUT'"))
-        self.assertEqual(2, active_block.count("gl='BOARD_LAYOUT'"))
+    def test_configurator_and_audit_use_shared_eight_view_policy(self):
+        policy = json.loads((ROOT / "config/project_views.json").read_text(encoding="utf-8"))
+        self.assertEqual(CANONICAL_VIEWS, [v["name"] for v in policy["views"]])
+        self.assertEqual(8, len(policy["views"]))
+        self.assertEqual(["TABLE_LAYOUT", "BOARD_LAYOUT", "BOARD_LAYOUT", "TABLE_LAYOUT", "BOARD_LAYOUT", "ROADMAP_LAYOUT", "TABLE_LAYOUT", "TABLE_LAYOUT"], [v["layout"] for v in policy["views"]])
+        self.assertIn("CanonicalViews $statusName", SCRIPT.read_text(encoding="utf-8"))
+        self.assertIn("config/project_views.json", (ROOT / "scripts/g0_control_plane_audit.py").read_text(encoding="utf-8"))
 
     def test_documentation_matches_canonical_views_and_status(self):
         text = WORKFLOW_DOC.read_text(encoding="utf-8")
-        self.assertIn("ровно пять", text.lower())
+        self.assertIn("ровно восемь", text.lower())
         self.assertIn("`Проверка QA`", text)
         for name in CANONICAL_VIEWS:
             self.assertIn(f"`{name}`", text)
@@ -62,6 +48,15 @@ class ProjectConfigurationTests(unittest.TestCase):
             msg=f"PowerShell behavior test упал.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}",
         )
         self.assertIn("PASS: Project policy запускает фактическое production-тело entrypoint", result.stdout)
+
+    def test_migration_rechecks_main_immediately_before_apply(self):
+        text = MIGRATION_WORKFLOW.read_text(encoding="utf-8")
+        snapshot = text.index("- name: Сохранить снимок до миграции")
+        recheck = text.index("- name: Повторно проверить актуальность main перед изменениями Project")
+        apply = text.index("- name: Применить согласованную схему представлений")
+        self.assertLess(snapshot, recheck)
+        self.assertLess(recheck, apply)
+        self.assertIn('test "$live_head" = "$GITHUB_SHA"', text[recheck:apply])
 
 
 if __name__ == "__main__":

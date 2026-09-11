@@ -323,19 +323,25 @@ function Find-MapField($Map,[string[]]$Aliases){
   return $null
 }
 
+function CanonicalViews([string]$StatusName){
+  $policy=Get-Content (Join-Path $PSScriptRoot '../config/project_views.json') -Raw -Encoding utf8 | ConvertFrom-Json
+  foreach($v in $policy.views){
+    @{n=$v.name;l=$v.layout;gl=$v.layout;f=$v.filter.Replace('{status}',$StatusName)}
+  }
+}
+
 function PreflightViews{
   $project=(Snapshot).user.projectV2
   $statusField=Find-Field $project.fields.nodes @('Статус','Status')
   $statusName=if($statusField){$statusField.name}else{'Статус'}
-  $views=@(
-    @{n='00 — Все задачи';gl='TABLE_LAYOUT';f='is:open'},
-    @{n='01 — Готово к работе';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Готово к работе`" -Исполнение:`"Заблокировано`""},
-    @{n='02 — В работе';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"В работе`""},
-    @{n='03 — Проверка';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"Проверка QA`""},
-    @{n='04 — Заблокировано';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Заблокировано`""}
-  )
+  $views=@(CanonicalViews $statusName)
   $canonicalNames=@($views|ForEach-Object{$_.n})
   $legacyViewNames=@(
+    '00 — Все задачи',
+    '01 — Готово к работе',
+    '02 — В работе',
+    '03 — Проверка',
+    '04 — Заблокировано',
     '00 — Центр управления',
     '01 — Архитектура G1',
     '02 — Готово к работе',
@@ -418,16 +424,15 @@ function EnsureViews{
     if($field){$vid+=$field.id}
   }
 
-  $views=@(
-    @{n='00 — Все задачи';l='TABLE_LAYOUT';gl='TABLE_LAYOUT';f='is:open';s=@(@($id['Этап'],'asc'),@($id['Приоритет'],'asc'),@($id['Статус'],'asc'))},
-    @{n='01 — Готово к работе';l='TABLE_LAYOUT';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Готово к работе`" -Исполнение:`"Заблокировано`""},
-    @{n='02 — В работе';l='BOARD_LAYOUT';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"В работе`""},
-    @{n='03 — Проверка';l='BOARD_LAYOUT';gl='BOARD_LAYOUT';f="is:open ${statusName}:`"Проверка QA`""},
-    @{n='04 — Заблокировано';l='TABLE_LAYOUT';gl='TABLE_LAYOUT';f="is:open ${statusName}:`"Заблокировано`""}
-  )
+  $views=@(CanonicalViews $statusName)
 
   $canonicalNames=@($views|ForEach-Object{$_.n})
   $legacyViewNames=@(
+    '00 — Все задачи',
+    '01 — Готово к работе',
+    '02 — В работе',
+    '03 — Проверка',
+    '04 — Заблокировано',
     '00 — Центр управления',
     '01 — Архитектура G1',
     '02 — Готово к работе',
@@ -499,8 +504,8 @@ mutation($input:DeleteProjectV2ViewInput!){
   }
 
   $finalViews=@((Snapshot).user.projectV2.views.nodes)
-  if($finalViews.Count -ne 5){
-    throw "После очистки Project содержит $($finalViews.Count) представлений вместо 5. Автоматическая коррекция остановлена."
+  if($finalViews.Count -ne $views.Count){
+    throw "После очистки Project содержит $($finalViews.Count) представлений вместо $($views.Count). Автоматическая коррекция остановлена."
   }
 
   foreach($v in $views){
@@ -517,7 +522,7 @@ mutation($input:DeleteProjectV2ViewInput!){
     throw "Project содержит неизвестные дополнительные представления: $(($unexpected.name)-join ', '). Они не удалены автоматически; требуется ручной разбор."
   }
 
-  Write-Host 'Проверено: в Project ровно 5 канонических рабочих представлений; имя, layout и filter соответствуют контракту.'
+  Write-Host 'Проверено: в Project ровно 8 канонических рабочих представлений; имя, layout и filter соответствуют контракту.'
 }
 
 if($LibraryMode){return}
@@ -633,5 +638,5 @@ EnsureViews
 }
 
 Write-Host ''
-Write-Host 'Готово: Project #2 приведён к русской схеме, итерация = 3 дня, рабочих представлений = 5.'
+Write-Host 'Готово: Project #2 приведён к русской схеме, итерация = 3 дня, рабочих представлений = 8.'
 Write-Host 'Слияние, прохождение проверки качества и прохождение этапа автоматически не выполняются.'

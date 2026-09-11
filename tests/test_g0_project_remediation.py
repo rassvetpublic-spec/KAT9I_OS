@@ -84,13 +84,7 @@ def base_fields(worker_options=None):
 
 
 def snapshot(items=None, work=None, worker_options=None, extra_view="05 — Заблокировано"):
-    views = [{"id": f"VIEW_{i}", "name": name} for i, name in enumerate([
-        "00 — Все задачи",
-        "01 — Готово к работе",
-        "02 — В работе",
-        "03 — Проверка",
-        "04 — Заблокировано",
-    ])]
+    views = [{"id": f"VIEW_{i}", "name": name} for i, name in enumerate(['00 — Dashboard', '01 — Queue', '02 — Active Work', '03 — QA Gate', '04 — Release Flow', '05 — Roadmap', '06 — Blocked / Parking', '07 — Agent KPI'])]
     if extra_view:
         views.append({"id": "VIEW_EXTRA", "name": extra_view})
     return {
@@ -217,3 +211,4 @@ class G0ProjectRemediationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

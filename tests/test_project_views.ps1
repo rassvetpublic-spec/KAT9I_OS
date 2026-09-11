@@ -24,11 +24,14 @@ function New-View([string]$Name,[string]$Id,[string]$Layout,[string]$Filter){
 
 function New-CanonicalViews {
   @(
-    (New-View '00 — Все задачи' 'C0' 'TABLE_LAYOUT' 'is:open'),
-    (New-View '01 — Готово к работе' 'C1' 'TABLE_LAYOUT' 'is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"'),
-    (New-View '02 — В работе' 'C2' 'BOARD_LAYOUT' 'is:open Статус:"В работе"'),
-    (New-View '03 — Проверка' 'C3' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'),
-    (New-View '04 — Заблокировано' 'C4' 'TABLE_LAYOUT' 'is:open Статус:"Заблокировано"')
+    (New-View '00 — Dashboard' 'C0' 'TABLE_LAYOUT' ''),
+    (New-View '01 — Queue' 'C1' 'BOARD_LAYOUT' 'is:open'),
+    (New-View '02 — Active Work' 'C2' 'BOARD_LAYOUT' 'is:open Статус:"В работе"'),
+    (New-View '03 — QA Gate' 'C3' 'TABLE_LAYOUT' 'is:open Статус:"Проверка QA"'),
+    (New-View '04 — Release Flow' 'C4' 'BOARD_LAYOUT' 'is:pr'),
+    (New-View '05 — Roadmap' 'C5' 'ROADMAP_LAYOUT' 'is:open'),
+    (New-View '06 — Blocked / Parking' 'C6' 'TABLE_LAYOUT' 'is:open Статус:"Заблокировано"'),
+    (New-View '07 — Agent KPI' 'C7' 'TABLE_LAYOUT' 'has:Исполнитель')
   )
 }
 
@@ -194,7 +197,7 @@ function Gql {
   if($script:ViewCreationMode){
     if($Query -match 'createProjectV2View'){
       $script:CapturedCreateViewInput=$Variables.input
-      $newId='NEWVIEW'
+      $newId="NEWVIEW$($script:CreationViews.Count)"
       $script:CreationViews+=New-View $Variables.input.name $newId $Variables.input.layout ''
       return [pscustomobject]@{data=[pscustomobject]@{createProjectV2View=[pscustomobject]@{projectV2View=[pscustomobject]@{id=$newId}}}}
     }
@@ -209,6 +212,15 @@ function Gql {
       }
       $script:CreationViews=$updated
       return [pscustomobject]@{data=[pscustomobject]@{updateProjectV2View=[pscustomobject]@{projectV2View=[pscustomobject]@{id=$Variables.input.viewId}}}}
+    }
+    if($Query -match 'deleteProjectV2View'){
+      $canonical=@(New-CanonicalViews)
+      foreach($expected in $canonical){
+        $actual=@($script:CreationViews|Where-Object{$_.name -ceq $expected.name -and $_.layout -ceq $expected.layout -and $_.filter -ceq $expected.filter})
+        if($actual.Count -ne 1){throw 'Старое представление удаляется до проверки полного нового набора.'}
+      }
+      $script:CreationViews=@($script:CreationViews|Where-Object{$_.id -cne $Variables.input.viewId})
+      return [pscustomobject]@{data=[pscustomobject]@{deleteProjectV2View=[pscustomobject]@{projectV2View=[pscustomobject]@{id=$Variables.input.viewId}}}}
     }
   }
   throw 'GraphQL mutation не должна выполняться в fail-closed сценарии.'
@@ -267,22 +279,22 @@ function Assert-EntrypointFailClosed([object[]]$Views,[string]$ExpectedMessage){
   if($script:ItemAddCalls -ne 0){throw "Production entrypoint fail-closed нарушен: item-add calls = $($script:ItemAddCalls)"}
 }
 
-$caseVariant=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
-$caseVariant+=New-View '00 — все задачи' 'CASE' 'TABLE_LAYOUT' 'is:open'
+$caseVariant=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Dashboard'})
+$caseVariant+=New-View '00 — dashboard' 'CASE' 'TABLE_LAYOUT' 'is:open'
 Assert-ViewsFailClosed $caseVariant 'неизвестные или регистрово отличающиеся представления'
 Assert-EntrypointFailClosed $caseVariant 'неизвестные или регистрово отличающиеся представления'
 
 $oldQaFilter=@(New-CanonicalViews)
 $oldQaFilter=@($oldQaFilter|ForEach-Object{
-  if($_.name -ceq '03 — Проверка'){
+  if($_.name -ceq '03 — QA Gate'){
     New-View $_.name $_.id $_.layout 'is:open Статус:"Проверка качества"'
   } else {$_}
 })
 Assert-ViewsFailClosed $oldQaFilter 'нарушает контракт'
 Assert-EntrypointFailClosed $oldQaFilter 'нарушает контракт'
 
-$missingEarlyDuplicateLate=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
-$missingEarlyDuplicateLate+=New-View '03 — Проверка' 'DUP' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'
+$missingEarlyDuplicateLate=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Dashboard'})
+$missingEarlyDuplicateLate+=New-View '03 — QA Gate' 'DUP' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'
 Assert-ViewsFailClosed $missingEarlyDuplicateLate 'дубли представления'
 Assert-EntrypointFailClosed $missingEarlyDuplicateLate 'дубли представления'
 
@@ -382,14 +394,32 @@ $script:CustomFields=$null
 
 # Недостающий первый View должен создаваться через реальный projectId и GraphQL enum TABLE_LAYOUT.
 $script:ViewCreationMode=$true
-$script:CreationViews=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Все задачи'})
+$script:CreationViews=@(New-CanonicalViews | Where-Object{$_.name -cne '00 — Dashboard'})
 $script:CapturedCreateViewInput=$null
 $script:GqlCalls=0
 EnsureViews
 if($null -eq $script:CapturedCreateViewInput){throw 'EnsureViews не вызвал createProjectV2View для отсутствующего канонического View.'}
 if($script:CapturedCreateViewInput.projectId -cne 'PROJECT'){throw 'createProjectV2View получил неверный projectId.'}
 if($script:CapturedCreateViewInput.layout -cne 'TABLE_LAYOUT'){throw "createProjectV2View получил неверный layout: $($script:CapturedCreateViewInput.layout)"}
-if($script:CreationViews.Count -ne 5){throw "После создания ожидаются 5 Views, фактически $($script:CreationViews.Count)."}
+if($script:CreationViews.Count -ne 8){throw "После создания ожидаются 8 Views, фактически $($script:CreationViews.Count)."}
+$script:ViewCreationMode=$false
+
+# Полная миграция 5 -> 8: удаление только после создания и read-back всего набора.
+$script:ViewCreationMode=$true
+$script:CreationViews=@(
+  (New-View '00 — Все задачи' 'OLD0' 'TABLE_LAYOUT' 'is:open'),
+  (New-View '01 — Готово к работе' 'OLD1' 'TABLE_LAYOUT' 'is:open Статус:"Готово к работе" -Исполнение:"Заблокировано"'),
+  (New-View '02 — В работе' 'OLD2' 'BOARD_LAYOUT' 'is:open Статус:"В работе"'),
+  (New-View '03 — Проверка' 'OLD3' 'BOARD_LAYOUT' 'is:open Статус:"Проверка QA"'),
+  (New-View '04 — Заблокировано' 'OLD4' 'TABLE_LAYOUT' 'is:open Статус:"Заблокировано"')
+)
+$script:GqlCalls=0
+EnsureViews
+if($script:CreationViews.Count -ne 8){throw 'Миграция не дала ровно 8 представлений.'}
+if(@($script:CreationViews|Where-Object{$_.id -like 'OLD*'}).Count -ne 0){throw 'Старые представления не удалены.'}
+$calls=$script:GqlCalls
+EnsureViews
+if($script:GqlCalls -ne $calls){throw 'Повторный запуск должен давать 0 mutations.'}
 $script:ViewCreationMode=$false
 
 Write-Host 'PASS: Project policy запускает фактическое production-тело entrypoint под read-only preflight; alias-переименование не пишет в preflight; fail-closed сценарии дают 0 REST/GraphQL/item-add; недостающий View создаётся с projectId и TABLE_LAYOUT.'

@@ -36,11 +36,14 @@ def good_snapshot():
     fields.append({"__typename": "ProjectV2IterationField", "name": "Итерация", "configuration": {"duration": 3, "startDay": 1}})
     status_name = "Status"
     views = [
-        {"name": "00 — Все задачи", "layout": "TABLE_LAYOUT", "filter": "is:open"},
-        {"name": "01 — Готово к работе", "layout": "TABLE_LAYOUT", "filter": f'is:open {status_name}:"Готово к работе" -Исполнение:"Заблокировано"'},
-        {"name": "02 — В работе", "layout": "BOARD_LAYOUT", "filter": f'is:open {status_name}:"В работе"'},
-        {"name": "03 — Проверка", "layout": "BOARD_LAYOUT", "filter": f'is:open {status_name}:"Проверка QA"'},
-        {"name": "04 — Заблокировано", "layout": "TABLE_LAYOUT", "filter": f'is:open {status_name}:"Заблокировано"'},
+        {'name': '00 — Dashboard', 'layout': 'TABLE_LAYOUT', "filter": f''},
+        {'name': '01 — Queue', 'layout': 'BOARD_LAYOUT', "filter": f'is:open'},
+        {'name': '02 — Active Work', 'layout': 'BOARD_LAYOUT', "filter": f'is:open {status_name}:"В работе"'},
+        {'name': '03 — QA Gate', 'layout': 'TABLE_LAYOUT', "filter": f'is:open {status_name}:"Проверка QA"'},
+        {'name': '04 — Release Flow', 'layout': 'BOARD_LAYOUT', "filter": f'is:pr'},
+        {'name': '05 — Roadmap', 'layout': 'ROADMAP_LAYOUT', "filter": f'is:open'},
+        {'name': '06 — Blocked / Parking', 'layout': 'TABLE_LAYOUT', "filter": f'is:open {status_name}:"Заблокировано"'},
+        {'name': '07 — Agent KPI', 'layout': 'TABLE_LAYOUT', "filter": f'has:Исполнитель'},
     ]
     gate = "https://github.com/rassvetpublic-spec/KAT9I_OS/issues/62"
     p0 = "https://github.com/rassvetpublic-spec/KAT9I_OS/issues/1"
@@ -223,3 +226,4 @@ class AuditTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
