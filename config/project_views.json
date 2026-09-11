@@ -1,6 +1,20 @@
 {
-  "version": 2,
+  "version": 3,
   "issue": 150,
+  "layout_capabilities": {
+    "TABLE_LAYOUT": {
+      "visible_fields": true,
+      "filter": true
+    },
+    "BOARD_LAYOUT": {
+      "visible_fields": true,
+      "filter": true
+    },
+    "ROADMAP_LAYOUT": {
+      "visible_fields": false,
+      "filter": true
+    }
+  },
   "views": [
     {
       "name": "00 — Dashboard",
