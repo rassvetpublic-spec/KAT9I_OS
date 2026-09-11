@@ -75,7 +75,7 @@ def classify_required_check(
     payload: Any,
     required_name: str = REQUIRED_CHECK_NAME,
 ) -> dict[str, Any]:
-    head = str(current_head or "").strip().lower()
+    head = str(current_head or "").strip()
     if not SHA40_RE.fullmatch(head):
         raise ValueError("current_head must be exact 40-char lowercase SHA")
     receipts = _normalize_receipts(payload)
