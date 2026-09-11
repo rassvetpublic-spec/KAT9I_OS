@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from scripts.required_check_state import QUALITY_WORKFLOW_NAME, QUALITY_WORKFLOW_PATH
+
 SCHEMA = "KAT9I_PRE_QA_BARRIER/1"
 SECTION_HEADER = "PRE_QA_BARRIER"
 BARRIER_VERSION = "1"
@@ -114,7 +116,7 @@ def _validate_quality_run(payload: Any, target_pr: int, head: str) -> int:
     if not isinstance(payload, dict):
         raise PreQaBarrierError("QUALITY_MISSING: quality run payload must be an object")
     run_id = _positive_int(payload.get("id"), "quality_run_id")
-    if payload.get("path") != ".github/workflows/quality.yml" and payload.get("name") != "Контроль качества репозитория":
+    if payload.get("path") != QUALITY_WORKFLOW_PATH or payload.get("name") != QUALITY_WORKFLOW_NAME:
         raise PreQaBarrierError("QUALITY_MISMATCH: expected canonical quality workflow")
     if str(payload.get("head_sha") or "").lower() != head:
         raise PreQaBarrierError("QUALITY_STALE: quality run HEAD does not match live PR HEAD")
