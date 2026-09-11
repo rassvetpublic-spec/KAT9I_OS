@@ -6,7 +6,7 @@ on:
   issue_comment:
     types: [created]
   pull_request:
-    types: [closed, synchronize]
+    types: [opened, reopened, ready_for_review, closed, synchronize]
   workflow_dispatch:
     inputs:
       url:
@@ -17,7 +17,7 @@ on:
         description: Состояние очереди
         required: true
         type: choice
-        options: [INBOX, READY, ACTIVE, QA, QUEUED, BLOCKED, DONE]
+        options: [INBOX, READY, ACTIVE, WAITING_FOR_REQUIRED_CHECK, QA, QUEUED, BLOCKED, DONE]
 
 permissions:
   contents: read
