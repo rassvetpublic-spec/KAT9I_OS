@@ -61,7 +61,7 @@ class QaEvidenceSnapshotWorkflowTests(unittest.TestCase):
 
     def test_snapshot_can_publish_to_pr_conversation(self) -> None:
         self.assertIn('pull-requests: write', self.text)
-        self.assertIn('issues: write', self.text)
+        self.assertNotIn('issues: write', self.text)
 
 
 if __name__ == '__main__':
