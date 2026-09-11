@@ -7,21 +7,68 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[1]
+REGISTRY_PATH = ROOT / "config" / "g0_audit_domains.json"
 SCHEMA = "KAT9I_G0_AUDIT/1"
-DOMAIN_ORDER = ("views", "cards", "schema", "governance", "other")
+REGISTRY_SCHEMA = "KAT9I_G0_AUDIT_DOMAINS/1"
 
 
-def finding_domain(code: str) -> str:
+def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("schema") != REGISTRY_SCHEMA:
+        raise ValueError(f"Ожидалась schema registry {REGISTRY_SCHEMA}")
+    order = data.get("domain_order")
+    if not isinstance(order, list) or not order or len(order) != len(set(order)):
+        raise ValueError("domain_order должен быть непустым списком уникальных доменов")
+    domains = set(order)
+    exact = data.get("exact")
+    prefixes = data.get("prefixes")
+    fallback = data.get("fallback")
+    if not isinstance(exact, dict) or not isinstance(prefixes, list) or not isinstance(fallback, dict):
+        raise ValueError("registry должен содержать exact, prefixes и fallback")
+    if fallback.get("policy") != "UNREGISTERED_ONLY" or fallback.get("domain") not in domains:
+        raise ValueError("fallback policy должен быть UNREGISTERED_ONLY с известным domain")
+    for code, domain in exact.items():
+        if not isinstance(code, str) or not code or domain not in domains:
+            raise ValueError("Некорректное exact правило registry")
+    seen_prefixes: set[str] = set()
+    for rule in prefixes:
+        if not isinstance(rule, dict):
+            raise ValueError("Каждое prefix правило должно быть объектом")
+        prefix = rule.get("prefix")
+        domain = rule.get("domain")
+        if not isinstance(prefix, str) or not prefix or prefix in seen_prefixes or domain not in domains:
+            raise ValueError("Некорректное или дублирующее prefix правило registry")
+        seen_prefixes.add(prefix)
+    return data
+
+
+REGISTRY = load_registry()
+DOMAIN_ORDER = tuple(REGISTRY["domain_order"])
+
+
+def classify_finding(code: str) -> tuple[str, str]:
     value = str(code or "")
-    if value.startswith("VIEW_"):
-        return "views"
-    if value.startswith(("PROJECT_ITEM_", "OPEN_WORK_", "OPEN_P01_", "CONTROLLED_")) or value == "GATE_62":
-        return "cards"
-    if value.startswith(("FIELD_", "ITERATION_")) or value in {"PROJECT_TITLE", "PROJECT_LINK"}:
-        return "schema"
-    if value.startswith("RULESET_") or value in {"MILESTONE", "AUDIT_ERROR", "AUDIT_OUTPUT_MISSING"}:
-        return "governance"
-    return "other"
+    exact = REGISTRY["exact"]
+    if value in exact:
+        return str(exact[value]), f"exact:{value}"
+
+    matches = [rule for rule in REGISTRY["prefixes"] if value.startswith(str(rule["prefix"]))]
+    domains = {str(rule["domain"]) for rule in matches}
+    if len(domains) > 1:
+        raise ValueError(f"Finding {value!r} неоднозначно классифицируется по нескольким доменам")
+    if matches:
+        longest = max(matches, key=lambda rule: len(str(rule["prefix"])))
+        return str(longest["domain"]), f"prefix:{longest['prefix']}"
+
+    return str(REGISTRY["fallback"]["domain"]), "fallback:UNREGISTERED_ONLY"
+
+
+def finding_domain(code: str, *, require_registered: bool = False) -> str:
+    domain, source = classify_finding(code)
+    if require_registered and source.startswith("fallback:"):
+        raise ValueError(f"Finding code {code!r} отсутствует в registry доменов")
+    return domain
 
 
 def enrich(summary: dict[str, Any]) -> dict[str, Any]:
@@ -41,13 +88,14 @@ def enrich(summary: dict[str, Any]) -> dict[str, Any]:
         counts[domain] += 1
         grouped[domain].append({"code": finding["code"], "message": finding["message"]})
     result = dict(summary)
+    result["domain_registry_schema"] = REGISTRY_SCHEMA
     result["domain_counts"] = {domain: counts.get(domain, 0) for domain in DOMAIN_ORDER}
     result["findings_by_domain"] = grouped
     return result
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Добавить домены к Evidence G0-аудита без изменения исходных findings")
+    parser = argparse.ArgumentParser(description="Добавить домены к Evidence G0-аудита из machine-readable registry")
     parser.add_argument("input", type=Path)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

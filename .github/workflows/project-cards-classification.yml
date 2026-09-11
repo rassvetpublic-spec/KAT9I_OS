@@ -78,8 +78,10 @@ jobs:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
         run: python scripts/project_card_classification_reconcile.py --apply --output project-cards-apply.json
 
-      - name: Выполнить полный read-back аудит
+      - name: Выполнить полный read-back аудит после bounded repair
+        id: audit
         if: always() && steps.snapshot.outcome == 'success'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
         run: python scripts/g0_control_plane_audit.py --output project-after-audit.json
@@ -92,6 +94,18 @@ jobs:
             python scripts/project_audit_domains.py project-after-audit.json
           fi
 
+      - name: Построить раздельный repair/global-audit Evidence
+        if: always() && steps.snapshot.outcome == 'success'
+        env:
+          APPLY_OUTCOME: ${{ steps.apply.outcome }}
+        run: >-
+          python scripts/project_repair_evidence.py
+          --target-domain cards
+          --apply-outcome "$APPLY_OUTCOME"
+          --before project-cards-before.json
+          --after-audit project-after-audit.json
+          --output project-repair-summary.json
+
       - name: Сохранить Evidence классификации карточек
         if: always() && steps.snapshot.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -102,22 +116,26 @@ jobs:
             project-cards-plan.json
             project-cards-apply.json
             project-after-audit.json
+            project-repair-summary.json
           if-no-files-found: error
 
-      - name: Показать итог без подмены QA
+      - name: Показать bounded repair отдельно от глобального аудита
         if: always() && steps.snapshot.outcome == 'success'
-        env:
-          APPLY_OUTCOME: ${{ steps.apply.outcome }}
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          apply_path = Path('project-cards-apply.json')
-          audit_path = Path('project-after-audit.json')
-          result = json.loads(apply_path.read_text()) if apply_path.exists() else {'verdict':'ERROR','remaining_count':'unknown'}
-          audit = json.loads(audit_path.read_text()) if audit_path.exists() else {}
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
-              out.write(f"Применение: {os.environ['APPLY_OUTCOME']}; card-domain: {result.get('verdict')}; remaining: {result.get('remaining_count')}.\n")
-              out.write(f"Post-audit домены: {audit.get('domain_counts', {})}.\n")
+          repair = json.loads(Path('project-repair-summary.json').read_text(encoding='utf-8'))
+          apply = json.loads(Path('project-cards-apply.json').read_text(encoding='utf-8')) if Path('project-cards-apply.json').exists() else {}
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write(f"### Bounded repair Cards: {repair['repair_verdict']}\n")
+              out.write(f"Target cards: {repair['target_before']} → {repair['target_after']}; planned remaining: {apply.get('remaining_count', 'unknown')}.\n\n")
+              out.write(f"### Full G0 post-audit: {repair['global_audit_verdict']}\n")
+              out.write(f"Findings: {repair['global_finding_count']}; domains: {repair['after_domain_counts']}.\n\n")
+              out.write(f"Unrelated regressions: {repair['unrelated_regressions']}.\n\n")
               out.write('Workflow не меняет Статус/Исполнение/Worker/QA/Views и не создаёт merge authority.\n')
           PY
+
+      - name: Fail-closed только по bounded repair/regression contract
+        if: always() && steps.snapshot.outcome == 'success'
+        run: python scripts/project_repair_evidence.py --check-summary project-repair-summary.json

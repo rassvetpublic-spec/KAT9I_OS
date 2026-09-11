@@ -73,8 +73,10 @@ jobs:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
         run: python scripts/project_views_reconcile.py
 
-      - name: Проверить фактический результат
+      - name: Проверить полный control-plane после bounded repair
+        id: audit
         if: always() && steps.snapshot.outcome == 'success'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
         run: python scripts/g0_control_plane_audit.py --output project-after-audit.json
@@ -87,6 +89,18 @@ jobs:
             python scripts/project_audit_domains.py project-after-audit.json
           fi
 
+      - name: Построить раздельный repair/global-audit Evidence
+        if: always() && steps.snapshot.outcome == 'success'
+        env:
+          APPLY_OUTCOME: ${{ steps.apply.outcome }}
+        run: >-
+          python scripts/project_repair_evidence.py
+          --target-domain views
+          --apply-outcome "$APPLY_OUTCOME"
+          --before project-before.json
+          --after-audit project-after-audit.json
+          --output project-repair-summary.json
+
       - name: Сохранить Evidence миграции
         if: always() && steps.snapshot.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -95,20 +109,25 @@ jobs:
           path: |
             project-before.json
             project-after-audit.json
+            project-repair-summary.json
           if-no-files-found: error
 
-      - name: Показать итог без подмены QA
+      - name: Показать bounded repair отдельно от глобального аудита
         if: always() && steps.snapshot.outcome == 'success'
-        env:
-          APPLY_OUTCOME: ${{ steps.apply.outcome }}
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          path = Path('project-after-audit.json')
-          result = json.loads(path.read_text()) if path.exists() else {'verdict':'ERROR','finding_count':'unknown'}
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
-              out.write(f"Применение: {os.environ['APPLY_OUTCOME']}; аудит: {result['verdict']}; отклонений: {result['finding_count']}.\n")
-              out.write(f"Домены: {result.get('domain_counts', {})}.\n")
-              out.write('Независимый QA, merge и завершение всей #150 этим запуском не подтверждаются.\n')
+          summary = json.loads(Path('project-repair-summary.json').read_text(encoding='utf-8'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as out:
+              out.write(f"### Bounded repair Views: {summary['repair_verdict']}\n")
+              out.write(f"Target views: {summary['target_before']} → {summary['target_after']}.\n\n")
+              out.write(f"### Full G0 post-audit: {summary['global_audit_verdict']}\n")
+              out.write(f"Findings: {summary['global_finding_count']}; domains: {summary['after_domain_counts']}.\n\n")
+              out.write(f"Unrelated regressions: {summary['unrelated_regressions']}.\n\n")
+              out.write('Repair Evidence не является QA PASS, merge authority или завершением всей #150.\n')
           PY
+
+      - name: Fail-closed только по bounded repair/regression contract
+        if: always() && steps.snapshot.outcome == 'success'
+        run: python scripts/project_repair_evidence.py --check-summary project-repair-summary.json
