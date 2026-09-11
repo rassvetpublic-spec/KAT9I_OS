@@ -53,6 +53,12 @@ class QaEvidenceSnapshotWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(self.text.count('LIVE_HEAD'), 2)
         self.assertIn('PR HEAD changed before snapshot publication', self.text)
 
+    def test_snapshot_publication_uses_rest_issues_api(self) -> None:
+        self.assertIn('issues/${PR_NUMBER}/comments', self.text)
+        self.assertIn('gh api --method POST', self.text)
+        self.assertIn("jq -Rs '{body: .}' snapshot-comment.md", self.text)
+        self.assertNotIn('gh issue comment', self.text)
+
 
 if __name__ == '__main__':
     unittest.main()
