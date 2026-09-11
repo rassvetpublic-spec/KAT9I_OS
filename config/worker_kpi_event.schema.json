@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rassvetpublic-spec/KAT9I_OS/config/worker_kpi_event.schema.json",
+  "title": "KAT9I_OS Worker KPI Event",
+  "description": "DATA-only interval telemetry for GitHub control-plane. Never grants queue, QA, Project or merge authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "event_id",
+    "issue_number",
+    "pr_number",
+    "worker",
+    "qa",
+    "exact_head",
+    "phase",
+    "started_at",
+    "ended_at",
+    "authority"
+  ],
+  "properties": {
+    "schema": {"const": "KAT9I_WORKER_KPI_EVENT/1"},
+    "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{5,127}$"},
+    "issue_number": {"type": "integer", "minimum": 1},
+    "pr_number": {"type": "integer", "minimum": 1},
+    "worker": {"type": "string", "minLength": 1, "maxLength": 128},
+    "qa": {"type": "string", "minLength": 1, "maxLength": 128},
+    "exact_head": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "phase": {
+      "enum": ["EXECUTION", "REWORK", "QA_WAIT", "QA_ACTIVE", "QUEUE_WAIT", "OWNER_WAIT", "CI_WAIT", "BLOCKED_WAIT"]
+    },
+    "started_at": {"type": "string", "format": "date-time"},
+    "ended_at": {"type": "string", "format": "date-time"},
+    "wait_reason": {
+      "type": ["string", "null"],
+      "enum": [null, "PREDECESSOR", "QA", "REWORK", "CI", "OWNER_GATE", "BLOCKED_DEPENDENCY", "POLICY"]
+    },
+    "qa_mode": {"type": ["string", "null"], "enum": [null, "FULL", "DELTA", "REUSE"]},
+    "qa_invalidation_reason": {
+      "type": ["string", "null"],
+      "enum": [null, "HEAD_DRIFT", "REVIEW_DRIFT", "GATE_DRIFT", "POLICY_DRIFT", "MALFORMED_EVIDENCE", "COMMAND_SUPERSEDED", "PRE_QA_BLOCKED"]
+    },
+    "rework_cycle_id": {"type": ["integer", "null"], "minimum": 1},
+    "candidate_rebuild": {"type": "boolean", "default": false},
+    "first_pass_findings": {"type": ["integer", "null"], "minimum": 0},
+    "issued_qa_verdict": {"type": "boolean", "default": false},
+    "accepted_qa_verdict": {"type": "boolean", "default": false},
+    "stale_or_false_safe_verdict": {"type": "boolean", "default": false},
+    "promotion_id": {"type": ["string", "null"], "minLength": 1},
+    "authority": {"const": "DATA_ONLY"}
+  }
+}
