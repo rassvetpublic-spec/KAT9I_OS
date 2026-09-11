@@ -72,12 +72,13 @@ jobs:
                   stream.write(f'{key}={meta[key]}\n')
           PY
 
-      - name: Получить live PR, review inventory и Quality evidence
+      - name: Получить live PR и deterministic gate evidence
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.request.outputs.target_pr }}
           EXPECTED_HEAD: ${{ steps.request.outputs.expected_head }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
@@ -104,6 +105,31 @@ jobs:
             exit 1
           fi
 
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/quality.yml?ref=${EXPECTED_HEAD}" > quality-head.json
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/quality.yml?ref=${DEFAULT_BRANCH}" > quality-trusted.json
+          HEAD_QUALITY_SHA="$(jq -r '.sha // empty' quality-head.json)"
+          TRUSTED_QUALITY_SHA="$(jq -r '.sha // empty' quality-trusted.json)"
+          if [ -z "$HEAD_QUALITY_SHA" ] || [ -z "$TRUSTED_QUALITY_SHA" ] || [ "$HEAD_QUALITY_SHA" != "$TRUSTED_QUALITY_SHA" ]; then
+            echo "::error::QUALITY_POLICY_DRIFT: exact-head Quality workflow differs from trusted default branch."
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/project-queue-sync.yml/runs?event=pull_request&per_page=100" > project-runs.json
+          jq --arg head "$EXPECTED_HEAD" \
+            '[.workflow_runs[] | select(.head_sha == $head)] | sort_by(.id) | last // empty' \
+            project-runs.json > project-run.json
+          if [ ! -s project-run.json ] || [ "$(cat project-run.json)" = "" ]; then
+            echo "::error::PROJECT_SYNC_MISSING: no Project sync run found for exact HEAD."
+            exit 1
+          fi
+          if [ "$(jq -r '.path // empty' project-run.json)" != ".github/workflows/project-queue-sync.yml" ] || \
+             [ "$(jq -r '.name // empty' project-run.json)" != "Project — синхронизация очереди" ] || \
+             [ "$(jq -r '.status // empty' project-run.json)" != "completed" ] || \
+             [ "$(jq -r '.conclusion // empty' project-run.json)" != "success" ]; then
+            echo "::error::PROJECT_SYNC_FAIL: canonical Project sync is not successful on exact HEAD."
+            exit 1
+          fi
+
       - name: Выполнить deterministic PRE-QA barrier
         shell: bash
         env:
@@ -127,7 +153,74 @@ jobs:
             echo 'Этот review является DATA-only deterministic receipt и не имеет QA/FAST/merge/Project authority.'
           } > pre-qa-review.md
 
-      - name: Идемпотентно опубликовать receipt как PR review
+      - name: Финально перечитать HEAD, trusted gates и review inventory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.request.outputs.target_pr }}
+          EXPECTED_HEAD: ${{ steps.request.outputs.expected_head }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          WORKER: ${{ steps.request.outputs.worker }}
+          QA: ${{ steps.request.outputs.qa }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr-final.json
+          FINAL_LIVE_HEAD="$(jq -r '.head.sha' current-pr-final.json)"
+          if [ "$FINAL_LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::HEAD_DRIFT: live HEAD changed before PRE-QA publication."
+            exit 1
+          fi
+
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){number reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id} pageInfo{hasNextPage endCursor}}} pageInfo{hasNextPage endCursor}}}}}' \
+            -f owner="$OWNER" \
+            -f repo="$REPO" \
+            -F number="$PR_NUMBER" > review-threads-final.json
+          if [ "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' review-threads-final.json)" != "false" ]; then
+            echo "::error::INVENTORY_INCOMPLETE: final review thread pagination is incomplete."
+            exit 1
+          fi
+          if jq -e '[.data.repository.pullRequest.reviewThreads.nodes[].comments.pageInfo.hasNextPage] | any' review-threads-final.json >/dev/null; then
+            echo "::error::INVENTORY_INCOMPLETE: final review comment pagination is incomplete."
+            exit 1
+          fi
+          if jq -e '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved != true)] | length > 0' review-threads-final.json >/dev/null; then
+            echo "::error::PRE_QA_REVIEW_DRIFT: unresolved review thread appeared before publication."
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/quality.yml?ref=${EXPECTED_HEAD}" > quality-head-final.json
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/quality.yml?ref=${DEFAULT_BRANCH}" > quality-trusted-final.json
+          if [ "$(jq -r '.sha // empty' quality-head-final.json)" != "$(jq -r '.sha // empty' quality-trusted-final.json)" ]; then
+            echo "::error::QUALITY_POLICY_DRIFT: trusted Quality definition changed before publication."
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/project-queue-sync.yml/runs?event=pull_request&per_page=100" > project-runs-final.json
+          jq --arg head "$EXPECTED_HEAD" \
+            '[.workflow_runs[] | select(.head_sha == $head)] | sort_by(.id) | last // empty' \
+            project-runs-final.json > project-run-final.json
+          if [ "$(jq -r '.status // empty' project-run-final.json)" != "completed" ] || \
+             [ "$(jq -r '.conclusion // empty' project-run-final.json)" != "success" ]; then
+            echo "::error::PROJECT_SYNC_DRIFT: Project sync is no longer a successful exact-head receipt."
+            exit 1
+          fi
+
+          python scripts/pre_qa_barrier.py \
+            --current-pr current-pr-final.json \
+            --review-threads review-threads-final.json \
+            --quality-run quality-run.json \
+            --worker "$WORKER" \
+            --qa "$QA" \
+            --output pre-qa-receipt-final.json
+          if [ "$(jq -r '.receipt_digest' pre-qa-receipt.json)" != "$(jq -r '.receipt_digest' pre-qa-receipt-final.json)" ]; then
+            echo "::error::PRE_QA_EVIDENCE_DRIFT: deterministic receipt changed before publication."
+            exit 1
+          fi
+
+      - name: Идемпотентно опубликовать только валидный structured receipt
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -137,9 +230,38 @@ jobs:
           set -euo pipefail
           DIGEST="$(jq -r '.receipt_digest' pre-qa-receipt.json)"
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" | jq 'add // []' > existing-reviews.json
-          COUNT="$(jq --arg head "$EXPECTED_HEAD" --arg digest "$DIGEST" '[.[] | select(.commit_id == $head and ((.body // "") | contains($digest)))] | length' existing-reviews.json)"
-          if [ "$COUNT" -gt 0 ]; then
-            echo "PRE-QA receipt already exists for this exact evidence digest."
+          MATCHING_COUNT="$(EXPECTED_HEAD="$EXPECTED_HEAD" DIGEST="$DIGEST" python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from scripts.pre_qa_barrier import PreQaBarrierError, parse_barrier_section
+
+          marker = 'KAT9I-PRE-QA-BARRIER/1'
+          expected_head = os.environ['EXPECTED_HEAD']
+          digest = os.environ['DIGEST']
+          reviews = json.loads(Path('existing-reviews.json').read_text(encoding='utf-8'))
+          count = 0
+          for review in reviews:
+              if str(review.get('commit_id') or '').lower() != expected_head:
+                  continue
+              body = str(review.get('body') or '')
+              lines = body.splitlines()
+              if not lines or lines[0].strip() != marker:
+                  continue
+              try:
+                  receipt = parse_barrier_section(body)
+              except PreQaBarrierError:
+                  continue
+              if receipt.get('receipt_digest') == digest and receipt.get('exact_head') == expected_head:
+                  count += 1
+          print(count)
+          PY
+          )"
+          if [ "$MATCHING_COUNT" -gt 1 ]; then
+            echo "::error::PRE_QA_DUPLICATE: multiple valid structured receipts exist for the same evidence."
+            exit 1
+          fi
+          if [ "$MATCHING_COUNT" -eq 1 ]; then
+            echo "PRE-QA structured receipt already exists for this exact evidence digest."
             exit 0
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" \
@@ -153,4 +275,7 @@ jobs:
           echo "- verdict: PASS" >> "$GITHUB_STEP_SUMMARY"
           echo "- exact head: ${{ steps.request.outputs.expected_head }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- receipt digest: $(jq -r '.receipt_digest' pre-qa-receipt.json)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- trusted Quality definition: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Project sync: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- final review inventory: PASS" >> "$GITHUB_STEP_SUMMARY"
           echo "- authority: VALIDATION_ONLY" >> "$GITHUB_STEP_SUMMARY"
