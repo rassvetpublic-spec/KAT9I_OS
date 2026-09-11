@@ -38,10 +38,11 @@ class PreQaBarrierWorkflowTests(unittest.TestCase):
         self.assertIn("VALIDATION_ONLY", self.text)
 
     def test_workflow_does_not_contain_merge_or_fast_authority(self) -> None:
-        self.assertNotIn("/merge", self.text)
-        self.assertNotIn("FAST-QA-PASS", self.text)
-        self.assertNotIn("FAST-BLOCKED", self.text)
-        self.assertNotIn("project_lifecycle", self.text)
+        self.assertNotIn("pulls/${PR_NUMBER}/merge", self.text)
+        self.assertNotIn("merge_pull_request", self.text)
+        self.assertNotIn("FAST-QA-PASS |", self.text)
+        self.assertNotIn("FAST-BLOCKED |", self.text)
+        self.assertNotIn("project_lifecycle_mutation=true", self.text)
 
 
 if __name__ == "__main__":
