@@ -12,6 +12,7 @@ from scripts.qa_evidence_epoch import (
     build_snapshot,
     canonical_gate_state,
     canonical_review_state,
+    policy_digest,
     render_epoch_section,
     validate_current_epoch,
 )
@@ -313,6 +314,12 @@ class QaEvidenceEpochTests(unittest.TestCase):
             "completed_at": "2026-09-10T19:30:00Z",
         }
         self.assertEqual(canonical_gate_state(first, statuses()), canonical_gate_state(rerun, statuses()))
+
+    def test_policy_digest_machine_receipt(self):
+        root = Path(__file__).resolve().parents[1]
+        digest = policy_digest(root)
+        self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        print(f"KAT9I_POLICY_DIGEST={digest}")
 
     def test_workflow_revalidates_epoch_immediately_before_fast_publication(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "qa-result-bridge.yml").read_text(encoding="utf-8")
