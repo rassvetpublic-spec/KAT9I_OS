@@ -60,6 +60,30 @@ function Require-Tools {
   Add-Event 'GHB0' 'ПРОЙДЕНО' 'PowerShell 7, git и gh доступны; авторизация GitHub действительна.'
 }
 
+function Get-RepositorySecretNames {
+  $raw=& gh secret list --repo $RepoFull --json name 2>$null
+  if($LASTEXITCODE -ne 0){throw "ЗАБЛОКИРОВАНО: не удалось безопасно получить список имён секретов репозитория $RepoFull."}
+  if(-not $raw){return @()}
+  return @((($raw -join "`n")|ConvertFrom-Json)|ForEach-Object{[string]$_.name})
+}
+
+function Preflight-RequiredSecrets($Manifest){
+  $required=@($Manifest.capabilities.required_secret_names|ForEach-Object{[string]$_})
+  if($required.Count -eq 0){return}
+  $repo=$null
+  try {$repo=Rest "repos/$RepoFull"} catch {}
+  $existing=@()
+  if($repo){$existing=@(Get-RepositorySecretNames)}
+  foreach($name in $required){
+    if($existing -contains $name){continue}
+    $material=[Environment]::GetEnvironmentVariable($name)
+    if([string]::IsNullOrWhiteSpace($material)){
+      throw "ЗАБЛОКИРОВАНО: для постоянного добавления новых Issues/PR в Project нужен секрет '$name'. Он отсутствует в репозитории и не передан через одноимённую переменную окружения. Значение секрета bootstrap не запрашивает и не выводит."
+    }
+  }
+  Add-Event 'GHB0' 'ПРОЙДЕНО' 'Обязательные секретные capability доступны как существующие имена секретов или безопасный материал окружения; значения не выводились.'
+}
+
 function Get-RepoOrCreate {
   $repo=$null
   try {$repo=Rest "repos/$RepoFull"} catch {}
@@ -297,23 +321,71 @@ function Ensure-Ruleset($Manifest){
   Add-Event 'GHB5' 'ПРОЙДЕНО' "Набор правил '$($Manifest.ruleset.name)' проверен."
 }
 
-function Audit-Capabilities($Manifest){
-  $secretNames=@()
-  $secretAuditOk=$true
-  try {
-    $raw=& gh secret list --repo $RepoFull --json name
-    if($LASTEXITCODE -ne 0){$secretAuditOk=$false}
-    elseif($raw){$secretNames=@((($raw -join "`n")|ConvertFrom-Json)|ForEach-Object{$_.name})}
-  } catch {$secretAuditOk=$false}
-  if(-not $secretAuditOk){
-    Add-Event 'GHB6' 'НЕ_ПРОВЕРЕНО' 'Не удалось получить список имён секретов. Значения секретов не читались; необязательные возможности не считаются подтверждёнными.'
-  } else {
-    foreach($name in @($Manifest.capabilities.optional_secret_names)){
-      $status=if($secretNames -contains [string]$name){'ЕСТЬ'}else{'НЕОБЯЗАТЕЛЬНЫЙ_ОТСУТСТВУЕТ'}
-      Add-Event 'GHB6' $status "Секрет репозитория '$name': $status. Значение секрета не читалось."
-    }
-    Add-Event 'GHB6' 'ПРОЙДЕНО' 'Возможности проверены без чтения значений секретов.'
+function Get-ProjectUrl([int]$Number){
+  $raw=& gh project view $Number --owner $Owner --format json
+  if($LASTEXITCODE -ne 0 -or -not $raw){throw "ЗАБЛОКИРОВАНО: не удалось получить URL Project #$Number."}
+  $project=($raw -join "`n")|ConvertFrom-Json
+  if(-not $project.url){throw "ОШИБКА_ПРОВЕРКИ: GitHub не вернул URL Project #$Number."}
+  return [string]$project.url
+}
+
+function Set-SecretFromEnvironment([string]$Name,[string]$Value){
+  $gh=(Get-Command gh -ErrorAction Stop).Source
+  $psi=[Diagnostics.ProcessStartInfo]::new()
+  $psi.FileName=$gh
+  $psi.UseShellExecute=$false
+  $psi.RedirectStandardInput=$true
+  $psi.RedirectStandardOutput=$true
+  $psi.RedirectStandardError=$true
+  foreach($arg in @('secret','set',$Name,'--repo',$RepoFull)){$null=$psi.ArgumentList.Add($arg)}
+  $p=[Diagnostics.Process]::new()
+  $p.StartInfo=$psi
+  $null=$p.Start()
+  $p.StandardInput.Write($Value)
+  $p.StandardInput.Close()
+  $null=$p.StandardOutput.ReadToEnd()
+  $null=$p.StandardError.ReadToEnd()
+  $p.WaitForExit()
+  if($p.ExitCode -ne 0){throw "ЗАБЛОКИРОВАНО: не удалось установить обязательный секрет '$Name'. Значение секрета не выводилось."}
+}
+
+function Ensure-AutomationCapabilities($Manifest,[int]$Number){
+  $projectUrl=Get-ProjectUrl $Number
+  $requiredVariables=@($Manifest.capabilities.required_variable_names|ForEach-Object{[string]$_})
+  $variables=@()
+  $raw=& gh variable list --repo $RepoFull --json name,value 2>$null
+  if($LASTEXITCODE -ne 0){throw 'ЗАБЛОКИРОВАНО: не удалось прочитать переменные репозитория для Project auto-add.'}
+  if($raw){$variables=@(($raw -join "`n")|ConvertFrom-Json)}
+  foreach($name in $requiredVariables){
+    if($name -cne 'KAT9I_PROJECT_URL'){throw "ЗАБЛОКИРОВАНО: неизвестная обязательная переменная capability '$name'."}
+    $current=@($variables|Where-Object{$_.name -ceq $name})
+    if($current.Count -gt 1){throw "ЗАБЛОКИРОВАНО: переменная '$name' определена неоднозначно."}
+    if($current.Count -eq 1 -and [string]$current[0].value -ceq $projectUrl){continue}
+    if($ReadOnly){throw "РАСХОЖДЕНИЕ: переменная '$name' отсутствует или указывает не на канонический Project."}
+    $null=& gh variable set $name --repo $RepoFull --body $projectUrl 2>$null
+    if($LASTEXITCODE -ne 0){throw "ЗАБЛОКИРОВАНО: не удалось установить переменную '$name'."}
   }
+
+  $secretNames=@(Get-RepositorySecretNames)
+  foreach($name in @($Manifest.capabilities.required_secret_names|ForEach-Object{[string]$_})){
+    if($secretNames -contains $name){continue}
+    if($ReadOnly){throw "РАСХОЖДЕНИЕ: обязательный секрет '$name' отсутствует."}
+    $material=[Environment]::GetEnvironmentVariable($name)
+    if([string]::IsNullOrWhiteSpace($material)){throw "ЗАБЛОКИРОВАНО: обязательный секрет '$name' отсутствует; передайте его через одноимённую переменную окружения."}
+    Set-SecretFromEnvironment $name $material
+  }
+
+  $verifyVariables=@()
+  $raw=& gh variable list --repo $RepoFull --json name,value 2>$null
+  if($LASTEXITCODE -ne 0){throw 'ОШИБКА_ПРОВЕРКИ: не удалось повторно прочитать переменные репозитория.'}
+  if($raw){$verifyVariables=@(($raw -join "`n")|ConvertFrom-Json)}
+  $projectVariable=@($verifyVariables|Where-Object{$_.name -ceq 'KAT9I_PROJECT_URL'})
+  if($projectVariable.Count -ne 1 -or [string]$projectVariable[0].value -cne $projectUrl){throw 'ОШИБКА_ПРОВЕРКИ: KAT9I_PROJECT_URL не соответствует каноническому Project после применения.'}
+  $verifySecrets=@(Get-RepositorySecretNames)
+  foreach($name in @($Manifest.capabilities.required_secret_names|ForEach-Object{[string]$_})){
+    if($verifySecrets -notcontains $name){throw "ОШИБКА_ПРОВЕРКИ: обязательный секрет '$name' отсутствует после применения."}
+  }
+  Add-Event 'GHB6' 'ПРОЙДЕНО' 'Project auto-add capability проверена: URL Project настроен, обязательные секреты присутствуют; значения секретов не читались и не выводились.'
 }
 
 function Emit-Receipt([string]$Status,[int]$Number,[string]$ErrorMessage=''){
@@ -342,6 +414,7 @@ if($Manifest.schema -ne 'KAT9I_PROJECT_BOOTSTRAP/1'){throw "Неподдержи
 $resolvedProject=0
 try {
   Require-Tools
+  Preflight-RequiredSecrets $Manifest
   $repo=Get-RepoOrCreate
   Test-Admin $repo
   $repo=Rest "repos/$RepoFull"
@@ -350,8 +423,8 @@ try {
   Ensure-Templates $Manifest
   $resolvedProject=Ensure-Project $Manifest
   Ensure-Ruleset $Manifest
-  Audit-Capabilities $Manifest
-  Add-Event 'GHB7' 'ПРОЙДЕНО' 'Настройки репозитория, файлы, метки, Project и защита main прошли повторное чтение и проверку.'
+  Ensure-AutomationCapabilities $Manifest $resolvedProject
+  Add-Event 'GHB7' 'ПРОЙДЕНО' 'Настройки репозитория, файлы, метки, Project, постоянный auto-add и защита main прошли повторное чтение и проверку.'
   Emit-Receipt 'ПРОЙДЕНО' $resolvedProject
   exit 0
 } catch {
