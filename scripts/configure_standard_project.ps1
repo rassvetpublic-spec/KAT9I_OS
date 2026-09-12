@@ -197,7 +197,10 @@ function Ensure-Items {
   foreach($kind in @('issue','pr')){
     $raw=& gh $kind list --repo $repo --state open --limit 1000 --json url
     if($LASTEXITCODE -ne 0){throw "Cannot enumerate open $kind items."}
-    if($raw){$urls+=@((($raw -join "`n")|ConvertFrom-Json)|ForEach-Object{$_.url})}
+    if($raw){
+      $items=($raw -join "`n")|ConvertFrom-Json
+      $urls+=@($items|ForEach-Object{$_.url})
+    }
   }
   foreach($url in @($urls|Where-Object{$_}|Sort-Object -Unique)){
     $null=& gh project item-add $ProjectNumber --owner $Owner --url $url --format json 2>&1
