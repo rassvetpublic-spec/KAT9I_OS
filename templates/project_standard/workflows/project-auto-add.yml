@@ -1,0 +1,22 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
+name: Добавление новых задач и запросов на слияние в Project
+
+on:
+  issues:
+    types: [opened, transferred]
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  добавить-в-project:
+    name: Добавить элемент на доску проекта
+    runs-on: ubuntu-latest
+    steps:
+      - name: Добавить текущую задачу или запрос на слияние в Project
+        uses: actions/add-to-project@v2
+        with:
+          project-url: ${{ vars.KAT9I_PROJECT_URL }}
+          github-token: ${{ secrets.KAT9I_PROJECT_TOKEN }}
