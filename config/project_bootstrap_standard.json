@@ -31,12 +31,12 @@
     "bypass": "none"
   },
   "labels": [
-    {"name": "bug", "color": "d73a4a", "description": "Ошибка или дефект"},
-    {"name": "enhancement", "color": "a2eeef", "description": "Новая функция или улучшение"},
-    {"name": "documentation", "color": "0075ca", "description": "Документация"},
-    {"name": "question", "color": "d876e3", "description": "Нужно уточнение или решение"},
-    {"name": "security", "color": "b60205", "description": "Безопасность"},
-    {"name": "blocked", "color": "b60205", "description": "Работа заблокирована"}
+    {"name": "ошибка", "color": "d73a4a", "description": "Ошибка или дефект"},
+    {"name": "улучшение", "color": "a2eeef", "description": "Новая функция или улучшение"},
+    {"name": "документация", "color": "0075ca", "description": "Изменение документации"},
+    {"name": "вопрос", "color": "d876e3", "description": "Нужно уточнение или решение"},
+    {"name": "безопасность", "color": "b60205", "description": "Вопрос или изменение по безопасности"},
+    {"name": "заблокировано", "color": "b60205", "description": "Работа заблокирована"}
   ],
   "templates": [
     {"source": "templates/project_standard/AGENTS.md", "target": "AGENTS.md"},
@@ -55,10 +55,10 @@
   },
   "safety": {
     "status_read_only": true,
-    "unknown_custom_files": "BLOCKED",
-    "unknown_project_views": "BLOCKED",
-    "unknown_ruleset_drift": "BLOCKED",
-    "unknown_labels": "PRESERVE",
+    "unknown_custom_files": "ЗАБЛОКИРОВАНО",
+    "unknown_project_views": "ЗАБЛОКИРОВАНО",
+    "unknown_ruleset_drift": "ЗАБЛОКИРОВАНО",
+    "unknown_labels": "СОХРАНИТЬ",
     "owner_gate": "mtd",
     "auto_merge": false
   }
