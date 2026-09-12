@@ -1,0 +1,50 @@
+name: Ошибка
+description: Сообщить, что в {{PROJECT_NAME}} что-то работает неправильно
+title: "[Ошибка] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опишите проблему так, чтобы её можно было повторить и проверить. Не публикуйте токены, пароли, ключи и другие секреты.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что должно было произойти?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что произошло на самом деле?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Как повторить ошибку?
+      placeholder: |
+        1. Открыть...
+        2. Сделать...
+        3. Увидеть...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Контекст
+      description: Версия, ветка, ОС, экран, модуль или другая полезная информация.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Ссылки, безопасные логи или скриншоты без секретов.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Безопасность
+      options:
+        - label: Я не добавляю токены, пароли, приватные ключи и другие секреты.
+          required: true
