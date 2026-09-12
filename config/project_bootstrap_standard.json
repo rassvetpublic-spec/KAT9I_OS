@@ -1,0 +1,74 @@
+{
+  "schema": "KAT9I_PROJECT_BOOTSTRAP/1",
+  "profile": "standard-v1",
+  "repository": {
+    "default_branch": "main",
+    "has_issues": true,
+    "has_wiki": false,
+    "allow_auto_merge": false,
+    "allow_merge_commit": true,
+    "allow_rebase_merge": true,
+    "allow_squash_merge": true,
+    "allow_update_branch": false,
+    "delete_branch_on_merge": true
+  },
+  "project": {
+    "title_template": "{repo} — разработка",
+    "iteration_days": 3,
+    "views_policy": "config/project_bootstrap_views.json",
+    "default_worker": "ChatGPT",
+    "default_qa": "AGY"
+  },
+  "ruleset": {
+    "name": "main-protection",
+    "enforcement": "active",
+    "required_status_check": "Базовые проверки качества и целостности",
+    "strict_required_status_checks": true,
+    "require_pull_request": true,
+    "require_review_thread_resolution": true,
+    "block_deletion": true,
+    "block_non_fast_forward": true,
+    "bypass": "none"
+  },
+  "labels": [
+    {"name": "ошибка", "legacy_names": ["bug"], "color": "d73a4a", "description": "Ошибка или дефект"},
+    {"name": "улучшение", "legacy_names": ["enhancement"], "color": "a2eeef", "description": "Новая функция или улучшение"},
+    {"name": "документация", "legacy_names": ["documentation"], "color": "0075ca", "description": "Изменение документации"},
+    {"name": "вопрос", "legacy_names": ["question"], "color": "d876e3", "description": "Нужно уточнение или решение"},
+    {"name": "безопасность", "legacy_names": ["security"], "color": "b60205", "description": "Вопрос или изменение по безопасности"},
+    {"name": "заблокировано", "legacy_names": ["blocked"], "color": "b60205", "description": "Работа заблокирована"},
+    {"name": "дубликат", "legacy_names": ["duplicate"], "color": "cfd3d7", "description": "Такая задача или проблема уже существует"},
+    {"name": "первая задача", "legacy_names": ["good first issue"], "color": "7057ff", "description": "Подходит для первого знакомства с проектом"},
+    {"name": "нужна помощь", "legacy_names": ["help wanted"], "color": "008672", "description": "Нужна дополнительная помощь"},
+    {"name": "недействительно", "legacy_names": ["invalid"], "color": "e4e669", "description": "Задача или сообщение не требует дальнейшей работы"},
+    {"name": "не планируется", "legacy_names": ["wontfix"], "color": "ffffff", "description": "Работа по этой задаче сейчас не планируется"}
+  ],
+  "templates": [
+    {"source": "templates/project_standard/AGENTS.md", "target": "AGENTS.md"},
+    {"source": "templates/project_standard/CODEOWNERS", "target": ".github/CODEOWNERS"},
+    {"source": "templates/project_standard/PULL_REQUEST_TEMPLATE.md", "target": ".github/PULL_REQUEST_TEMPLATE.md"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/config.yml", "target": ".github/ISSUE_TEMPLATE/config.yml"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/bug.yml", "target": ".github/ISSUE_TEMPLATE/bug.yml"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/feature.yml", "target": ".github/ISSUE_TEMPLATE/feature.yml"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/improvement.yml", "target": ".github/ISSUE_TEMPLATE/improvement.yml"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/feedback.yml", "target": ".github/ISSUE_TEMPLATE/feedback.yml"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/technical_task.yml", "target": ".github/ISSUE_TEMPLATE/technical_task.yml"},
+    {"source": "templates/project_standard/workflows/baseline-quality.yml", "target": ".github/workflows/quality.yml"},
+    {"source": "templates/project_standard/workflows/project-auto-add.yml", "target": ".github/workflows/project-auto-add.yml"}
+  ],
+  "capabilities": {
+    "required_gh_scopes": ["repo", "project"],
+    "required_secret_names": ["KAT9I_PROJECT_TOKEN"],
+    "required_variable_names": ["KAT9I_PROJECT_URL"],
+    "never_log_secret_values": true
+  },
+  "safety": {
+    "status_read_only": true,
+    "unknown_custom_files": "ЗАБЛОКИРОВАНО",
+    "unknown_project_views": "ЗАБЛОКИРОВАНО",
+    "unknown_ruleset_drift": "ЗАБЛОКИРОВАНО",
+    "unknown_labels": "СОХРАНИТЬ",
+    "owner_gate": "mtd",
+    "auto_merge": false
+  }
+}

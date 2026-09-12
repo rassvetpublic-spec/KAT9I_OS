@@ -1,0 +1,6 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
+# Владелец standard bootstrap project.
+* @{{OWNER}}
+
+/.github/ @{{OWNER}}
+/AGENTS.md @{{OWNER}}

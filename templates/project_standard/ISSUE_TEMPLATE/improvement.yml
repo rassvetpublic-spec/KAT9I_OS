@@ -1,0 +1,48 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
+name: Улучшение
+description: Предложить улучшение существующего поведения {{PROJECT_NAME}}
+title: "[Улучшение] "
+labels: ["улучшение"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: Что сейчас неудобно или недостаточно хорошо?
+      description: Опишите текущее поведение и его недостаток.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Что предлагается изменить?
+      description: Опишите желаемое улучшение.
+    validations:
+      required: true
+  - type: textarea
+    id: benefit
+    attributes:
+      label: Какая будет польза?
+      description: Что станет быстрее, понятнее, безопаснее или дешевле.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Что не нужно менять?
+      description: Известные границы предложения. Если границ нет, напишите «не знаю».
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Как проверить результат?
+      description: Как понять, что улучшение действительно работает.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Безопасность
+      options:
+        - label: В предложении нет токенов, паролей, приватных ключей и других секретов.
+          required: true

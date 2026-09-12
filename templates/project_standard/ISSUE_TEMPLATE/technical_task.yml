@@ -1,0 +1,57 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
+name: Техническая задача
+description: Оформить конкретную техническую работу в {{PROJECT_NAME}}
+title: "[Задача] "
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Цель
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Границы работы
+      description: Что разрешено менять в рамках задачи.
+    validations:
+      required: true
+  - type: textarea
+    id: anti_scope
+    attributes:
+      label: Что не входит в задачу
+      description: Что сознательно не меняем.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерии готовности
+      description: Проверяемые условия завершения.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Проверки и доказательства
+      description: Какие проверки должны подтвердить результат.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Риск
+      options:
+        - Низкий
+        - Средний
+        - Высокий
+        - Критический
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Безопасность
+      options:
+        - label: В задаче нет токенов, паролей, приватных ключей и других секретов.
+          required: true
