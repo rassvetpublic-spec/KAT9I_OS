@@ -53,6 +53,9 @@ class StandardProjectBootstrapTests(unittest.TestCase):
         )
         for name in names:
             self.assertRegex(name, r"[А-Яа-яЁё]")
+        qa_view = next(view for view in data["views"] if view["name"] == "03 — Проверка качества")
+        self.assertIn("Проверка качества", qa_view["filter"])
+        self.assertNotIn("Проверка QA", qa_view["filter"])
 
     def test_bootstrap_has_read_only_status_and_no_merge_authority(self):
         text = BOOTSTRAP.read_text(encoding="utf-8")
@@ -88,6 +91,11 @@ class StandardProjectBootstrapTests(unittest.TestCase):
         self.assertIn("неизвестные представления Project", text)
         self.assertIn("не будет заменять идентификаторы вариантов поля", text)
         self.assertIn("duration=3", text)
+        self.assertIn("Opt 'Проверка качества'", text)
+        self.assertIn("Opt 'Антигравити'", text)
+        self.assertNotIn("Opt 'Проверка QA'", text)
+        self.assertNotIn("Opt 'AGY'", text)
+        self.assertIn("deleteProjectV2View(input:$input){projectV2View{id}}", text)
 
     def test_human_facing_templates_are_russian(self):
         data = json.loads(MANIFEST.read_text(encoding="utf-8"))
