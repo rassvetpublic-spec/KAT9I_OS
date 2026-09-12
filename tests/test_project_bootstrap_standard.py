@@ -22,7 +22,8 @@ class StandardProjectBootstrapTests(unittest.TestCase):
         self.assertFalse(data["safety"]["auto_merge"])
         self.assertEqual(data["safety"]["unknown_labels"], "СОХРАНИТЬ")
         self.assertTrue(data["capabilities"]["never_log_secret_values"])
-        self.assertIn("KAT9I_PROJECT_TOKEN", data["capabilities"]["optional_secret_names"])
+        self.assertIn("KAT9I_PROJECT_TOKEN", data["capabilities"]["required_secret_names"])
+        self.assertIn("KAT9I_PROJECT_URL", data["capabilities"]["required_variable_names"])
         for label in data["labels"]:
             self.assertRegex(label["name"], r"[А-Яа-яЁё]")
             self.assertRegex(label["description"], r"[А-Яа-яЁё]")
