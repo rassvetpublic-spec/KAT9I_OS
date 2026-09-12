@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Получить код репозитория
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Проверить пробелы и формат изменений Git
         shell: bash
