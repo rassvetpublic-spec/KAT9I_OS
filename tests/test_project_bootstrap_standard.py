@@ -10,6 +10,7 @@ MANIFEST = ROOT / "config" / "project_bootstrap_standard.json"
 BOOTSTRAP = ROOT / "scripts" / "bootstrap_project.ps1"
 PROJECT = ROOT / "scripts" / "configure_standard_project.ps1"
 VIEWS = ROOT / "config" / "project_bootstrap_views.json"
+BASELINE = ROOT / "templates" / "project_standard" / "workflows" / "baseline-quality.yml"
 
 
 class StandardProjectBootstrapTests(unittest.TestCase):
@@ -99,6 +100,19 @@ class StandardProjectBootstrapTests(unittest.TestCase):
         self.assertNotIn("enable-auto-merge", lowered)
         self.assertNotIn("merge_pull_request", lowered)
 
+    def test_mandatory_workflows_and_ruleset_drift_fail_closed(self):
+        text = BOOTSTRAP.read_text(encoding="utf-8")
+        self.assertIn(".github/workflows/quality.yml", text)
+        self.assertIn(".github/workflows/project-auto-add.yml", text)
+        self.assertIn("обязательный workflow", text)
+        self.assertIn("Автоматическая замена запрещена", text)
+        self.assertNotIn("rulesets/$($matches[0].id)\" 'PUT'", text)
+
+    def test_baseline_quality_fetches_parent_commit(self):
+        text = BASELINE.read_text(encoding="utf-8")
+        self.assertIn("fetch-depth: 2", text)
+        self.assertIn("git diff --check HEAD^", text)
+
     def test_project_configurator_keeps_core_fields_and_fail_closed_guards(self):
         text = PROJECT.read_text(encoding="utf-8")
         for name in (
@@ -125,6 +139,9 @@ class StandardProjectBootstrapTests(unittest.TestCase):
         self.assertNotIn("Opt 'Проверка QA'", text)
         self.assertNotIn("Opt 'AGY'", text)
         self.assertIn("deleteProjectV2View(input:$input){projectV2View{id}}", text)
+        self.assertIn("$createInput=@{projectId=$p.id;name=$v.name;layout=$v.layout}", text)
+        self.assertIn("if($v.layout -ne 'ROADMAP_LAYOUT'){$createInput.configuration", text)
+        self.assertNotIn("Ensure-AutoAddRuntime", text)
 
     def test_human_facing_templates_are_russian(self):
         data = json.loads(MANIFEST.read_text(encoding="utf-8"))
