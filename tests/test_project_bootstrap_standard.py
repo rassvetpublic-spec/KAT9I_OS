@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -18,9 +19,12 @@ class StandardProjectBootstrapTests(unittest.TestCase):
         self.assertFalse(data["repository"]["allow_auto_merge"])
         self.assertEqual(data["safety"]["owner_gate"], "mtd")
         self.assertFalse(data["safety"]["auto_merge"])
-        self.assertEqual(data["safety"]["unknown_labels"], "PRESERVE")
+        self.assertEqual(data["safety"]["unknown_labels"], "СОХРАНИТЬ")
         self.assertTrue(data["capabilities"]["never_log_secret_values"])
         self.assertIn("KAT9I_PROJECT_TOKEN", data["capabilities"]["optional_secret_names"])
+        for label in data["labels"]:
+            self.assertRegex(label["name"], r"[А-Яа-яЁё]")
+            self.assertRegex(label["description"], r"[А-Яа-яЁё]")
 
     def test_templates_are_unique_and_portable(self):
         data = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -32,29 +36,33 @@ class StandardProjectBootstrapTests(unittest.TestCase):
             text = source.read_text(encoding="utf-8")
             self.assertNotIn("C:\\GIT\\KAT9I_OS", text)
 
-    def test_eight_canonical_views_remain_the_standard(self):
+    def test_eight_russian_canonical_views_remain_the_standard(self):
         data = json.loads(VIEWS.read_text(encoding="utf-8"))
         names = [view["name"] for view in data["views"]]
         self.assertEqual(
             names,
             [
-                "00 — Dashboard",
-                "01 — Queue",
-                "02 — Active Work",
-                "03 — QA Gate",
-                "04 — Release Flow",
-                "05 — Roadmap",
-                "06 — Blocked / Parking",
-                "07 — Agent KPI",
+                "00 — Обзор",
+                "01 — Очередь",
+                "02 — Активная работа",
+                "03 — Проверка QA",
+                "04 — Поток релиза",
+                "05 — План развития",
+                "06 — Заблокировано / Парковка",
+                "07 — Показатели исполнителей",
             ],
         )
+        for name in names:
+            self.assertRegex(name, r"[А-Яа-яЁё]")
 
     def test_bootstrap_has_read_only_status_and_no_merge_authority(self):
         text = BOOTSTRAP.read_text(encoding="utf-8")
-        self.assertIn("ValidateSet('Install','Status','Repair')", text)
-        self.assertIn("$ReadOnly=($Mode -eq 'Status')", text)
+        self.assertIn("ValidateSet('Установка','Статус','Восстановление')", text)
+        self.assertIn("$ReadOnly=($Mode -eq 'Статус')", text)
         self.assertIn("secret_values_included=$false", text)
         self.assertIn("owner_gate='mtd'", text)
+        self.assertIn("ПРОЙДЕНО", text)
+        self.assertIn("ЗАБЛОКИРОВАНО", text)
         lowered = text.lower()
         self.assertNotIn("gh pr merge", lowered)
         self.assertNotIn("enable-auto-merge", lowered)
@@ -78,9 +86,22 @@ class StandardProjectBootstrapTests(unittest.TestCase):
             "Доказательство",
         ):
             self.assertIn(name, text)
-        self.assertIn("unknown Project views", text)
-        self.assertIn("will not replace option IDs", text)
+        self.assertIn("неизвестные представления Project", text)
+        self.assertIn("не будет заменять идентификаторы вариантов поля", text)
         self.assertIn("duration=3", text)
+
+    def test_human_facing_templates_are_russian(self):
+        data = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        checked = 0
+        for item in data["templates"]:
+            source = ROOT / item["source"]
+            text = source.read_text(encoding="utf-8")
+            if source.name == "config.yml":
+                continue
+            if source.suffix.lower() in {".md", ".yml", ".yaml"} or source.name == "CODEOWNERS":
+                self.assertRegex(text, r"[А-Яа-яЁё]", str(source))
+                checked += 1
+        self.assertGreaterEqual(checked, 6)
 
 
 if __name__ == "__main__":
