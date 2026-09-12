@@ -5,13 +5,13 @@ param(
   [Parameter(Mandatory=$true)][int]$ProjectNumber,
   [Parameter(Mandatory=$true)][string]$ProjectTitle,
   [string]$ViewsPolicyPath = (Join-Path $PSScriptRoot '../config/project_views.json'),
-  [ValidateSet('Install','Status','Repair')][string]$Mode='Install'
+  [ValidateSet('Установка','Статус','Восстановление')][string]$Mode='Установка'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $Utf8NoBom=[Text.UTF8Encoding]::new($false)
-$script:ReadOnly=($Mode -eq 'Status')
+$script:ReadOnly=($Mode -eq 'Статус')
 
 function Invoke-GhJson {
   param([string[]]$Arguments,$Payload=$null)
@@ -24,7 +24,7 @@ function Invoke-GhJson {
       $raw=& gh @Arguments --input $tmp
     } finally { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
   }
-  if($LASTEXITCODE -ne 0){throw "GitHub CLI error: gh $($Arguments -join ' ')"}
+  if($LASTEXITCODE -ne 0){throw "Ошибка GitHub CLI: gh $($Arguments -join ' ')"}
   $text=($raw -join "`n")
   if([string]::IsNullOrWhiteSpace($text)){return $null}
   return ($text|ConvertFrom-Json -Depth 50)
@@ -32,7 +32,7 @@ function Invoke-GhJson {
 
 function Gql([string]$Query,[hashtable]$Variables){
   $r=Invoke-GhJson @('api','graphql') @{query=$Query;variables=$Variables}
-  if($null -eq $r){throw 'GitHub GraphQL returned empty response.'}
+  if($null -eq $r){throw 'GitHub GraphQL вернул пустой ответ.'}
   if($r.PSObject.Properties['errors'] -and $r.errors){
     throw (($r.errors|ForEach-Object{$_.message}) -join '; ')
   }
@@ -51,7 +51,7 @@ query($login:String!,$number:Int!,$repo:String!){
   $p=$null
   if($d.user){$p=$d.user.projectV2}
   if(-not $p -and $d.organization){$p=$d.organization.projectV2}
-  if(-not $p){throw "Project #$ProjectNumber not found for $Owner."}
+  if(-not $p){throw "Project #$ProjectNumber не найден у владельца $Owner."}
   return [pscustomobject]@{project=$p;repository=$d.repository}
 }
 
@@ -62,7 +62,7 @@ function Opt([string]$Name,[string]$Color,[string]$Description,[string[]]$Aliase
 
 function Find-Field($Fields,[string[]]$Aliases){
   $m=@(@($Fields)|Where-Object{$Aliases -contains $_.name})
-  if($m.Count -gt 1){throw "Ambiguous Project fields: $(($m.name)-join ', ')"}
+  if($m.Count -gt 1){throw "Найдено несколько подходящих полей Project: $(($m.name)-join ', ')"}
   if($m.Count -eq 1){return $m[0]}
   return $null
 }
@@ -85,7 +85,7 @@ function Ensure-Select([string]$Name,[string[]]$Aliases,[object[]]$Defs){
   $s=Snapshot; $p=$s.project
   $f=Find-Field $p.fields.nodes $Aliases
   if(-not $f){
-    if($script:ReadOnly){throw "DRIFT: missing Project field '$Name'."}
+    if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: отсутствует поле Project '$Name'."}
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){projectV2Field{... on ProjectV2SingleSelectField{id name}}}}
 '@
@@ -93,10 +93,10 @@ mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){p
     $null=Gql $q @{input=@{projectId=$p.id;name=$Name;dataType='SINGLE_SELECT';singleSelectOptions=$opts}}
     return
   }
-  if($f.__typename -ne 'ProjectV2SingleSelectField'){throw "BLOCKED: '$($f.name)' has incompatible field type."}
+  if($f.__typename -ne 'ProjectV2SingleSelectField'){throw "ЗАБЛОКИРОВАНО: поле '$($f.name)' имеет несовместимый тип."}
   if((Test-OptionsExact $f $Defs) -and ($f.name -ceq $Name -or ($Name -eq 'Статус' -and $f.name -eq 'Status'))){return}
-  if($script:ReadOnly){throw "DRIFT: Project field '$Name' differs from standard."}
-  if([int]$p.items.totalCount -gt 0){throw "BLOCKED: Project field '$Name' differs and Project already has items; bootstrap will not replace option IDs."}
+  if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: поле Project '$Name' отличается от стандарта."}
+  if([int]$p.items.totalCount -gt 0){throw "ЗАБЛОКИРОВАНО: поле '$Name' отличается от стандарта, а в Project уже есть карточки; bootstrap не будет заменять идентификаторы вариантов поля."}
   Set-SelectField $f $Name $Defs
 }
 
@@ -104,10 +104,10 @@ function Ensure-Iteration {
   $s=Snapshot; $p=$s.project
   $f=Find-Field $p.fields.nodes @('Итерация')
   if($f){
-    if($f.__typename -ne 'ProjectV2IterationField' -or [int]$f.configuration.duration -ne 3){throw "BLOCKED: Iteration field differs from 3-day standard."}
+    if($f.__typename -ne 'ProjectV2IterationField' -or [int]$f.configuration.duration -ne 3){throw 'ЗАБЛОКИРОВАНО: поле «Итерация» отличается от стандарта в 3 дня.'}
     return
   }
-  if($script:ReadOnly){throw 'DRIFT: missing 3-day Iteration field.'}
+  if($script:ReadOnly){throw 'РАСХОЖДЕНИЕ: отсутствует поле «Итерация» длительностью 3 дня.'}
 $q=@'
 mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){projectV2Field{... on ProjectV2IterationField{id name}}}}
 '@
@@ -116,16 +116,16 @@ mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){p
 
 function Ensure-LinkAndTitle {
   $s=Snapshot; $p=$s.project; $repo=$s.repository
-  if(-not $repo){throw "Repository $Owner/$Repository not found."}
+  if(-not $repo){throw "Репозиторий $Owner/$Repository не найден."}
   if($p.title -cne $ProjectTitle){
-    if($script:ReadOnly){throw "DRIFT: Project title '$($p.title)' != '$ProjectTitle'."}
+    if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: название Project '$($p.title)' не равно '$ProjectTitle'."}
 $q=@'
 mutation($input:UpdateProjectV2Input!){updateProjectV2(input:$input){projectV2{id title}}}
 '@
     $null=Gql $q @{input=@{projectId=$p.id;title=$ProjectTitle}}
   }
   if(-not (@($p.repositories.nodes)|Where-Object{$_.id -eq $repo.id})){
-    if($script:ReadOnly){throw 'DRIFT: Project is not linked to repository.'}
+    if($script:ReadOnly){throw 'РАСХОЖДЕНИЕ: Project не связан с репозиторием.'}
 $q=@'
 mutation($input:LinkProjectV2ToRepositoryInput!){linkProjectV2ToRepository(input:$input){repository{id}}}
 '@
@@ -137,12 +137,12 @@ function Ensure-Views {
   $policy=Get-Content $ViewsPolicyPath -Raw -Encoding utf8|ConvertFrom-Json
   $s=Snapshot; $p=$s.project
   $status=Find-Field $p.fields.nodes @('Статус','Status')
-  if(-not $status){throw 'Status field is missing.'}
+  if(-not $status){throw 'Поле «Статус» отсутствует.'}
   $desired=@($policy.views|ForEach-Object{[pscustomobject]@{name=$_.name;layout=$_.layout;filter=$_.filter.Replace('{status}',$status.name)}})
   $canonical=@($desired.name)
-  $safeLegacy=@('View 1','Table','00 — Все задачи','01 — Готово к работе','02 — В работе','03 — Проверка','04 — Заблокировано')
+  $safeLegacy=@($policy.legacy_views)+@('View 1','Table')
   $unknown=@($p.views.nodes|Where-Object{$canonical -cnotcontains $_.name -and $safeLegacy -cnotcontains $_.name})
-  if($unknown.Count -gt 0){throw "BLOCKED: unknown Project views: $(($unknown.name)-join ', ')."}
+  if($unknown.Count -gt 0){throw "ЗАБЛОКИРОВАНО: найдены неизвестные представления Project: $(($unknown.name)-join ', ')."}
 
   $visible=@()
   foreach($alias in @('Title','Assignees','Status','Статус','Этап','Приоритет','Тип','Область','Размер','Итерация','Исполнитель','Проверяющий','Исполнение','Цель','Риск','Доказательство','Linked pull requests','Sub-issues progress')){
@@ -152,12 +152,12 @@ function Ensure-Views {
 
   foreach($v in $desired){
     $existing=@($p.views.nodes|Where-Object{$_.name -ceq $v.name})
-    if($existing.Count -gt 1){throw "BLOCKED: duplicate Project view '$($v.name)'."}
+    if($existing.Count -gt 1){throw "ЗАБЛОКИРОВАНО: представление Project '$($v.name)' продублировано."}
     if($existing.Count -eq 1){
-      if($existing[0].layout -cne $v.layout -or [string]$existing[0].filter -cne [string]$v.filter){throw "BLOCKED: existing view '$($v.name)' differs from standard."}
+      if($existing[0].layout -cne $v.layout -or [string]$existing[0].filter -cne [string]$v.filter){throw "ЗАБЛОКИРОВАНО: существующее представление '$($v.name)' отличается от стандарта."}
       continue
     }
-    if($script:ReadOnly){throw "DRIFT: missing Project view '$($v.name)'."}
+    if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: отсутствует представление Project '$($v.name)'."}
 $q=@'
 mutation($input:CreateProjectV2ViewInput!){createProjectV2View(input:$input){projectV2View{id}}}
 '@
@@ -174,7 +174,7 @@ mutation($input:UpdateProjectV2ViewInput!){updateProjectV2View(input:$input){pro
 
   $p=(Snapshot).project
   foreach($legacy in @($p.views.nodes|Where-Object{$safeLegacy -contains $_.name})){
-    if($script:ReadOnly){throw "DRIFT: safe legacy Project view remains: $($legacy.name)."}
+    if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: осталось устаревшее безопасно распознанное представление Project '$($legacy.name)'."}
 $q=@'
 mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){deletedViewId}}
 '@
@@ -184,10 +184,10 @@ mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){del
   $final=(Snapshot).project
   foreach($v in $desired){
     $m=@($final.views.nodes|Where-Object{$_.name -ceq $v.name})
-    if($m.Count -ne 1 -or $m[0].layout -cne $v.layout -or [string]$m[0].filter -cne [string]$v.filter){throw "VERIFY_FAIL: Project view '$($v.name)'."}
+    if($m.Count -ne 1 -or $m[0].layout -cne $v.layout -or [string]$m[0].filter -cne [string]$v.filter){throw "ОШИБКА_ПРОВЕРКИ: представление Project '$($v.name)' не соответствует стандарту."}
   }
   $extra=@($final.views.nodes|Where-Object{$canonical -cnotcontains $_.name})
-  if($extra.Count -gt 0){throw "VERIFY_FAIL: unexpected Project views remain: $(($extra.name)-join ', ')."}
+  if($extra.Count -gt 0){throw "ОШИБКА_ПРОВЕРКИ: после настройки остались неожиданные представления Project: $(($extra.name)-join ', ')."}
 }
 
 function Ensure-Items {
@@ -196,7 +196,7 @@ function Ensure-Items {
   $urls=@()
   foreach($kind in @('issue','pr')){
     $raw=& gh $kind list --repo $repo --state open --limit 1000 --json url
-    if($LASTEXITCODE -ne 0){throw "Cannot enumerate open $kind items."}
+    if($LASTEXITCODE -ne 0){throw "Не удалось получить открытые элементы типа '$kind'."}
     if($raw){
       $items=($raw -join "`n")|ConvertFrom-Json
       $urls+=@($items|ForEach-Object{$_.url})
@@ -204,52 +204,52 @@ function Ensure-Items {
   }
   foreach($url in @($urls|Where-Object{$_}|Sort-Object -Unique)){
     $null=& gh project item-add $ProjectNumber --owner $Owner --url $url --format json 2>&1
-    if($LASTEXITCODE -ne 0){throw "Cannot add Project item $url"}
+    if($LASTEXITCODE -ne 0){throw "Не удалось добавить карточку Project: $url"}
   }
 }
 
-if(-not(Get-Command gh -ErrorAction SilentlyContinue)){throw 'GitHub CLI (gh) not found.'}
+if(-not(Get-Command gh -ErrorAction SilentlyContinue)){throw 'GitHub CLI (gh) не найден.'}
 $null=& gh auth status 2>&1
-if($LASTEXITCODE -ne 0){throw 'GitHub CLI is not authenticated.'}
+if($LASTEXITCODE -ne 0){throw 'GitHub CLI не авторизован.'}
 
 Ensure-LinkAndTitle
 Ensure-Select 'Статус' @('Статус','Status') @(
  (Opt 'Входящие' 'GRAY' 'Новая работа.' @('Входящие','Todo')),
- (Opt 'Нужно разобрать' 'YELLOW' 'Нужен triage.'),
- (Opt 'Готово к работе' 'BLUE' 'Задачу можно брать.'),
+ (Opt 'Нужно разобрать' 'YELLOW' 'Нужно определить этап, приоритет, границы работы и зависимости.'),
+ (Opt 'Готово к работе' 'BLUE' 'Задачу можно брать в работу.'),
  (Opt 'В работе' 'ORANGE' 'Идёт активная работа.' @('В работе','In Progress')),
- (Opt 'Проверка QA' 'PURPLE' 'Независимая проверка.'),
- (Opt 'Заблокировано' 'RED' 'Есть блокер.'),
- (Opt 'Готово' 'GREEN' 'Работа завершена.' @('Готово','Done'))
+ (Opt 'Проверка QA' 'PURPLE' 'Идёт независимая проверка качества.'),
+ (Opt 'Заблокировано' 'RED' 'Есть блокирующее условие.'),
+ (Opt 'Готово' 'GREEN' 'Работа завершена по правилам.' @('Готово','Done'))
 )
 Ensure-Select 'Этап' @('Этап','Gate') @(
- (Opt 'G0 — Порядок проекта и задач' 'GRAY' 'Project и порядок работы.'),
- (Opt 'G1 — ТЗ и базовая архитектура' 'BLUE' 'ТЗ и архитектура.'),
- (Opt 'G2 — Машинные контракты' 'PURPLE' 'Контракты.'),
- (Opt 'G3 — Основа исполняемой системы' 'ORANGE' 'Runtime foundation.'),
- (Opt 'G4 — Сквозная версия v0.1' 'GREEN' 'Первая сквозная версия.'),
- (Opt 'G5 — После v0.1' 'YELLOW' 'Дальнейшее развитие.')
+ (Opt 'G0 — Порядок проекта и задач' 'GRAY' 'Настройка Project, очереди и порядка работы.'),
+ (Opt 'G1 — ТЗ и базовая архитектура' 'BLUE' 'Техническое задание и базовая архитектура.'),
+ (Opt 'G2 — Машинные контракты' 'PURPLE' 'Машинно проверяемые контракты.'),
+ (Opt 'G3 — Основа исполняемой системы' 'ORANGE' 'Основа исполняемой системы.'),
+ (Opt 'G4 — Сквозная версия v0.1' 'GREEN' 'Первая сквозная рабочая версия.'),
+ (Opt 'G5 — После v0.1' 'YELLOW' 'Дальнейшее развитие после первой версии.')
 )
 Ensure-Select 'Приоритет' @('Приоритет','Priority') @((Opt 'P0' 'RED' 'Критично.'),(Opt 'P1' 'ORANGE' 'Важно.'),(Opt 'P2' 'YELLOW' 'Полезно.'),(Opt 'P3' 'GRAY' 'Позже.'))
 Ensure-Select 'Тип' @('Тип','Work Type') @(
- (Opt 'ТЗ / архитектура' 'BLUE' 'ТЗ и архитектура.'),(Opt 'Документация' 'GRAY' 'Документация.'),(Opt 'Исследование' 'PURPLE' 'Исследование.'),(Opt 'Инфраструктура' 'ORANGE' 'Инфраструктура.'),(Opt 'Контракты' 'BLUE' 'Контракты.'),(Opt 'Исполняемая система' 'GREEN' 'Runtime.'),(Opt 'Безопасность' 'RED' 'Безопасность.'),(Opt 'Проверка качества / оценка' 'YELLOW' 'QA/Eval.')
+ (Opt 'ТЗ / архитектура' 'BLUE' 'Техническое задание и архитектура.'),(Opt 'Документация' 'GRAY' 'Документация.'),(Opt 'Исследование' 'PURPLE' 'Исследование.'),(Opt 'Инфраструктура' 'ORANGE' 'Инфраструктура.'),(Opt 'Контракты' 'BLUE' 'Машинные контракты.'),(Opt 'Исполняемая система' 'GREEN' 'Исполняемый код и службы.'),(Opt 'Безопасность' 'RED' 'Безопасность.'),(Opt 'Проверка качества / оценка' 'YELLOW' 'Проверка качества и оценка.')
 )
 Ensure-Select 'Область' @('Область') @(
- (Opt 'Архитектура и документация' 'BLUE' 'Архитектура и SSoT.'),(Opt 'Контекст и знания' 'PURPLE' 'Контекст и знания.'),(Opt 'Исполнение и исполнители' 'GREEN' 'Исполнение.'),(Opt 'Безопасность и управление' 'RED' 'Безопасность.'),(Opt 'Интерфейс и визуализация' 'YELLOW' 'UI.'),(Opt 'Инженерная инфраструктура' 'ORANGE' 'GitHub/CI/Tools.'),(Opt 'Общее / не определено' 'GRAY' 'Не классифицировано.')
+ (Opt 'Архитектура и документация' 'BLUE' 'Архитектура, документация и единый источник истины.'),(Opt 'Контекст и знания' 'PURPLE' 'Контекст, память и знания.'),(Opt 'Исполнение и исполнители' 'GREEN' 'Исполнение задач и исполнители.'),(Opt 'Безопасность и управление' 'RED' 'Безопасность и правила управления.'),(Opt 'Интерфейс и визуализация' 'YELLOW' 'Интерфейс и отображение информации.'),(Opt 'Инженерная инфраструктура' 'ORANGE' 'GitHub, автоматические проверки и инструменты.'),(Opt 'Общее / не определено' 'GRAY' 'Ещё не классифицировано.')
 )
-Ensure-Select 'Размер' @('Размер') @((Opt 'XS — совсем маленькая' 'GRAY' 'XS.'),(Opt 'S — маленькая' 'BLUE' 'S.'),(Opt 'M — средняя' 'YELLOW' 'M.'),(Opt 'L — большая' 'ORANGE' 'L.'),(Opt 'XL — очень большая' 'RED' 'XL; желательно разбить.'))
-$workers=@((Opt 'ChatGPT' 'GREEN' 'ChatGPT.'),(Opt 'AGY' 'BLUE' 'Антигравити.'),(Opt 'Codex' 'PURPLE' 'Codex.'),(Opt 'Человек' 'ORANGE' 'Человек.'),(Opt 'Другой' 'GRAY' 'Другой.'))
+Ensure-Select 'Размер' @('Размер') @((Opt 'XS — совсем маленькая' 'GRAY' 'Совсем маленькая задача.'),(Opt 'S — маленькая' 'BLUE' 'Маленькая задача.'),(Opt 'M — средняя' 'YELLOW' 'Средняя задача.'),(Opt 'L — большая' 'ORANGE' 'Большая задача.'),(Opt 'XL — очень большая' 'RED' 'Очень большая задача; желательно разбить на более мелкие.'))
+$workers=@((Opt 'ChatGPT' 'GREEN' 'ChatGPT.'),(Opt 'AGY' 'BLUE' 'Антигравити.'),(Opt 'Codex' 'PURPLE' 'Codex.'),(Opt 'Человек' 'ORANGE' 'Человек.'),(Opt 'Другой' 'GRAY' 'Другой исполнитель.'))
 Ensure-Select 'Исполнитель' @('Исполнитель','Implementation Worker') $workers
 Ensure-Select 'Проверяющий' @('Проверяющий','QA Worker') $workers
-Ensure-Select 'Исполнение' @('Исполнение','Состояние работы','Claim') @((Opt 'Свободно' 'GRAY' 'Свободно.'),(Opt 'В очереди' 'BLUE' 'Ждёт следующего Gate.'),(Opt 'Активно' 'ORANGE' 'Идёт работа.'),(Opt 'На проверке' 'PURPLE' 'Передано QA.'),(Opt 'Заблокировано' 'RED' 'Блокер.'),(Opt 'Освобождено' 'GREEN' 'Работа завершена/освобождена.'))
-Ensure-Select 'Цель' @('Цель','Target') @((Opt 'Базовая архитектура' 'BLUE' 'Baseline.'),(Opt 'v0.1' 'GREEN' 'v0.1.'),(Opt 'v0.2' 'PURPLE' 'v0.2.'),(Opt 'v1.0' 'ORANGE' 'v1.0.'),(Opt 'Позже' 'GRAY' 'Позже.'))
-Ensure-Select 'Риск' @('Риск','Risk') @((Opt 'Критический' 'RED' 'Critical.'),(Opt 'Высокий' 'ORANGE' 'High.'),(Opt 'Средний' 'YELLOW' 'Medium.'),(Opt 'Низкий' 'GREEN' 'Low.'))
-Ensure-Select 'Доказательство' @('Доказательство','Evidence') @((Opt 'Нет' 'RED' 'Evidence отсутствует.'),(Opt 'Частично' 'YELLOW' 'Evidence частичный.'),(Opt 'Автопроверки пройдены' 'BLUE' 'CI PASS.'),(Opt 'Проверка качества пройдена' 'GREEN' 'Independent QA PASS.'))
+Ensure-Select 'Исполнение' @('Исполнение','Состояние работы','Claim') @((Opt 'Свободно' 'GRAY' 'Никто не взял работу.'),(Opt 'В очереди' 'BLUE' 'Работа ждёт следующего разрешённого шага.'),(Opt 'Активно' 'ORANGE' 'Исполнитель прямо сейчас работает над задачей.'),(Opt 'На проверке' 'PURPLE' 'Работа передана независимому проверяющему.'),(Opt 'Заблокировано' 'RED' 'Продолжение работы заблокировано.'),(Opt 'Освобождено' 'GREEN' 'Исполнитель освободил задачу после завершения.'))
+Ensure-Select 'Цель' @('Цель','Target') @((Opt 'Базовая архитектура' 'BLUE' 'Принятая базовая архитектура.'),(Opt 'v0.1' 'GREEN' 'Первая рабочая версия.'),(Opt 'v0.2' 'PURPLE' 'Следующая рабочая версия.'),(Opt 'v1.0' 'ORANGE' 'Первая стабильная версия.'),(Opt 'Позже' 'GRAY' 'Не входит в ближайшие версии.'))
+Ensure-Select 'Риск' @('Риск','Risk') @((Opt 'Критический' 'RED' 'Критический риск.'),(Opt 'Высокий' 'ORANGE' 'Высокий риск.'),(Opt 'Средний' 'YELLOW' 'Средний риск.'),(Opt 'Низкий' 'GREEN' 'Низкий риск.'))
+Ensure-Select 'Доказательство' @('Доказательство','Evidence') @((Opt 'Нет' 'RED' 'Подтверждения результата пока нет.'),(Opt 'Частично' 'YELLOW' 'Есть только часть подтверждений.'),(Opt 'Автопроверки пройдены' 'BLUE' 'Автоматические проверки пройдены на точной версии.'),(Opt 'Проверка качества пройдена' 'GREEN' 'Независимая проверка качества пройдена на точной версии.'))
 Ensure-Iteration
 Ensure-Views
 Ensure-Items
 
 $final=Snapshot
 [pscustomobject]@{
-  schema='KAT9I_PROJECT_CONFIGURATION/1';status='PASS';owner=$Owner;repository=$Repository;project_number=$ProjectNumber;project_title=$final.project.title;items=[int]$final.project.items.totalCount;views=@($final.project.views.nodes).Count;mode=$Mode
+  schema='KAT9I_PROJECT_CONFIGURATION/1';status='ПРОЙДЕНО';owner=$Owner;repository=$Repository;project_number=$ProjectNumber;project_title=$final.project.title;items=[int]$final.project.items.totalCount;views=@($final.project.views.nodes).Count;mode=$Mode
 }|ConvertTo-Json -Depth 8
