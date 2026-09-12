@@ -208,6 +208,64 @@ function Ensure-Items {
   }
 }
 
+function Get-RepositorySecretNames {
+  $raw=& gh secret list --repo "$Owner/$Repository" --json name
+  if($LASTEXITCODE -ne 0){throw 'ЗАБЛОКИРОВАНО: не удалось проверить имена секретов репозитория.'}
+  if(-not $raw){return @()}
+  return @((($raw -join "`n")|ConvertFrom-Json)|ForEach-Object{$_.name})
+}
+
+function Set-RepositorySecretFromEnvironment([string]$Name,[string]$Value){
+  $start=[Diagnostics.ProcessStartInfo]::new()
+  $start.FileName='gh'
+  foreach($arg in @('secret','set',$Name,'--repo',"$Owner/$Repository")){$null=$start.ArgumentList.Add($arg)}
+  $start.UseShellExecute=$false
+  $start.RedirectStandardInput=$true
+  $start.RedirectStandardOutput=$true
+  $start.RedirectStandardError=$true
+  $process=[Diagnostics.Process]::new()
+  $process.StartInfo=$start
+  if(-not $process.Start()){throw "ЗАБЛОКИРОВАНО: не удалось запустить безопасную запись секрета '$Name'."}
+  $process.StandardInput.Write($Value)
+  $process.StandardInput.Close()
+  $process.WaitForExit()
+  if($process.ExitCode -ne 0){throw "ЗАБЛОКИРОВАНО: не удалось записать секрет '$Name' в GitHub. Значение секрета не выводилось."}
+}
+
+function Ensure-AutoAddRuntime {
+  $snapshot=Snapshot
+  $url=[string]$snapshot.project.url
+  if([string]::IsNullOrWhiteSpace($url)){throw 'ОШИБКА_ПРОВЕРКИ: GitHub не вернул URL Project.'}
+  $repo="$Owner/$Repository"
+
+  $currentVariable=$null
+  $raw=& gh variable get KAT9I_PROJECT_URL --repo $repo --json value 2>$null
+  if($LASTEXITCODE -eq 0 -and $raw){$currentVariable=(($raw -join "`n")|ConvertFrom-Json).value}
+  if([string]$currentVariable -cne $url){
+    if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: переменная KAT9I_PROJECT_URL отсутствует или не указывает на '$url'."}
+    $url | & gh variable set KAT9I_PROJECT_URL --repo $repo
+    if($LASTEXITCODE -ne 0){throw 'ЗАБЛОКИРОВАНО: не удалось установить переменную KAT9I_PROJECT_URL.'}
+  }
+
+  $raw=& gh variable get KAT9I_PROJECT_URL --repo $repo --json value
+  if($LASTEXITCODE -ne 0 -or -not $raw){throw 'ОШИБКА_ПРОВЕРКИ: переменная KAT9I_PROJECT_URL недоступна после настройки.'}
+  $verifiedVariable=(($raw -join "`n")|ConvertFrom-Json).value
+  if([string]$verifiedVariable -cne $url){throw 'ОШИБКА_ПРОВЕРКИ: переменная KAT9I_PROJECT_URL имеет неверное значение после настройки.'}
+
+  $secrets=@(Get-RepositorySecretNames)
+  if($secrets -notcontains 'KAT9I_PROJECT_TOKEN'){
+    if($script:ReadOnly){throw 'РАСХОЖДЕНИЕ: отсутствует обязательный секрет KAT9I_PROJECT_TOKEN для автоматического добавления новых задач и запросов на слияние в Project.'}
+    $envToken=[Environment]::GetEnvironmentVariable('KAT9I_PROJECT_TOKEN')
+    if([string]::IsNullOrWhiteSpace($envToken)){
+      throw 'ЗАБЛОКИРОВАНО: для постоянно работающей доски требуется секрет KAT9I_PROJECT_TOKEN. Передайте его безопасно через переменную окружения KAT9I_PROJECT_TOKEN и повторите «Установка». Значение секрета не должно попадать в командную строку, журнал или репозиторий.'
+    }
+    Set-RepositorySecretFromEnvironment 'KAT9I_PROJECT_TOKEN' $envToken
+    $secrets=@(Get-RepositorySecretNames)
+    if($secrets -notcontains 'KAT9I_PROJECT_TOKEN'){throw 'ОШИБКА_ПРОВЕРКИ: секрет KAT9I_PROJECT_TOKEN не найден после безопасной записи.'}
+  }
+  Write-Host 'Проверено: новые задачи и запросы на слияние смогут автоматически попадать в Project; URL Project настроен, обязательный секрет присутствует.'
+}
+
 if(-not(Get-Command gh -ErrorAction SilentlyContinue)){throw 'GitHub CLI (gh) не найден.'}
 $null=& gh auth status 2>&1
 if($LASTEXITCODE -ne 0){throw 'GitHub CLI не авторизован.'}
@@ -248,6 +306,7 @@ Ensure-Select 'Доказательство' @('Доказательство','E
 Ensure-Iteration
 Ensure-Views
 Ensure-Items
+Ensure-AutoAddRuntime
 
 $final=Snapshot
 [pscustomobject]@{
