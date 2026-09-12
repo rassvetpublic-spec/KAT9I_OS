@@ -54,7 +54,9 @@ function Rest([string]$Endpoint,[string]$Method='GET',$Body=$null){
 
 function Require-Tools {
   if($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt 7){throw 'ЗАБЛОКИРОВАНО: требуется PowerShell 7.'}
-  foreach($cmd in @('git','gh')){if(-not(Get-Command $cmd -ErrorAction SilentlyContinue)){throw "ЗАБЛОКИРОВАНО: обязательный инструмент '$cmd' не найден."}}
+  foreach($cmd in @('git','gh')){
+    if(-not(Get-Command $cmd -ErrorAction SilentlyContinue)){throw "ЗАБЛОКИРОВАНО: обязательный инструмент '$cmd' не найден."}
+  }
   $null=& gh auth status 2>&1
   if($LASTEXITCODE -ne 0){throw 'ЗАБЛОКИРОВАНО: GitHub CLI не авторизован.'}
   Add-Event 'GHB0' 'ПРОЙДЕНО' 'PowerShell 7, git и gh доступны; авторизация GitHub действительна.'
@@ -78,10 +80,10 @@ function Preflight-RequiredSecrets($Manifest){
     if($existing -contains $name){continue}
     $material=[Environment]::GetEnvironmentVariable($name)
     if([string]::IsNullOrWhiteSpace($material)){
-      throw "ЗАБЛОКИРОВАНО: для постоянного добавления новых Issues/PR в Project нужен секрет '$name'. Он отсутствует в репозитории и не передан через одноимённую переменную окружения. Значение секрета bootstrap не запрашивает и не выводит."
+      throw "ЗАБЛОКИРОВАНО: для постоянного добавления новых Issues/PR в Project нужен секрет '$name'. Он отсутствует в репозитории и не передан через одноимённую переменную окружения. Значение секрета подготовка не запрашивает и не выводит."
     }
   }
-  Add-Event 'GHB0' 'ПРОЙДЕНО' 'Обязательные секретные capability доступны как существующие имена секретов или безопасный материал окружения; значения не выводились.'
+  Add-Event 'GHB0' 'ПРОЙДЕНО' 'Обязательные секретные возможности доступны как существующие имена секретов или безопасный материал окружения; значения не выводились.'
 }
 
 function Get-RepoOrCreate {
@@ -212,27 +214,32 @@ function Put-RemoteFile([string]$Target,[string]$Content,$Existing=$null){
 
 function Ensure-Templates($Manifest){
   $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+  $mandatoryManaged=@('.github/workflows/quality.yml','.github/workflows/project-auto-add.yml')
   foreach($t in @($Manifest.templates)){
+    $target=[string]$t.target
     $source=[IO.Path]::GetFullPath((Join-Path $root ([string]$t.source)))
     if(-not $source.StartsWith($root,[StringComparison]::OrdinalIgnoreCase)){throw "ЗАБЛОКИРОВАНО: путь шаблона выходит за корень подготовки: $($t.source)"}
     if(-not(Test-Path -LiteralPath $source -PathType Leaf)){throw "ЗАБЛОКИРОВАНО: отсутствует исходный шаблон '$($t.source)'."}
     $desired=Render-Template $source
-    $existing=Get-RemoteFile ([string]$t.target)
+    $existing=Get-RemoteFile $target
     if(-not $existing){
-      if($ReadOnly){throw "РАСХОЖДЕНИЕ: отсутствует стандартный файл '$($t.target)'."}
-      Put-RemoteFile ([string]$t.target) $desired
+      if($ReadOnly){throw "РАСХОЖДЕНИЕ: отсутствует стандартный файл '$target'."}
+      Put-RemoteFile $target $desired
       continue
     }
     $current=Decode-RemoteContent $existing
     if($current -ceq $desired){continue}
     $managed=($current -match 'KAT9I_PROJECT_BOOTSTRAP/1')
     if($Mode -eq 'Восстановление' -and $managed){
-      Put-RemoteFile ([string]$t.target) $desired $existing
+      Put-RemoteFile $target $desired $existing
       continue
     }
-    Add-Event 'GHB2' 'ПОЛЬЗОВАТЕЛЬСКИЙ' "Существующий пользовательский файл '$($t.target)' сохранён; подготовка его не перезаписала."
+    if($mandatoryManaged -ccontains $target){
+      throw "ЗАБЛОКИРОВАНО: обязательный workflow '$target' отличается от стандартного управляемого варианта. Пользовательский файл сохранён без изменений, но подготовка не может доказать обязательный check-context или постоянный Project auto-add. Выполните явную миграцию либо режим «Восстановление» только для файла с маркером KAT9I_PROJECT_BOOTSTRAP/1."
+    }
+    Add-Event 'GHB2' 'ПОЛЬЗОВАТЕЛЬСКИЙ' "Существующий пользовательский файл '$target' сохранён; подготовка его не перезаписала."
   }
-  Add-Event 'GHB2' 'ПРОЙДЕНО' 'Переносимые стандартные файлы установлены; существующие пользовательские файлы сохранены.'
+  Add-Event 'GHB2' 'ПРОЙДЕНО' 'Переносимые стандартные файлы установлены; существующие пользовательские файлы сохранены; обязательные workflows подтверждены.'
 }
 
 function Get-ProjectNumber($Manifest){
@@ -310,15 +317,14 @@ function Ensure-Ruleset($Manifest){
   } else {
     $detail=Rest "repos/$RepoFull/rulesets/$($matches[0].id)"
     if(-not(Test-Ruleset $detail $Manifest)){
-      if($ReadOnly){throw "РАСХОЖДЕНИЕ: набор правил '$($Manifest.ruleset.name)' отличается от стандарта."}
-      $null=Rest "repos/$RepoFull/rulesets/$($matches[0].id)" 'PUT' $body
+      throw "ЗАБЛОКИРОВАНО: существующий набор правил '$($Manifest.ruleset.name)' отличается от базового стандарта. Автоматическая замена запрещена, потому что она может удалить дополнительные обязательные проверки, approvals или другие более строгие ограничения. Выполните отдельную явную миграцию после сравнения правил."
     }
   }
   $verify=@(Rest "repos/$RepoFull/rulesets")|Where-Object{$_.name -ceq [string]$Manifest.ruleset.name}|Select-Object -First 1
   if(-not $verify){throw 'ОШИБКА_ПРОВЕРКИ: после применения отсутствует набор правил защиты main.'}
   $detail=Rest "repos/$RepoFull/rulesets/$($verify.id)"
   if(-not(Test-Ruleset $detail $Manifest)){throw 'ОШИБКА_ПРОВЕРКИ: набор правил защиты main не соответствует стандарту после применения.'}
-  Add-Event 'GHB5' 'ПРОЙДЕНО' "Набор правил '$($Manifest.ruleset.name)' проверен."
+  Add-Event 'GHB5' 'ПРОЙДЕНО' "Набор правил '$($Manifest.ruleset.name)' проверен без ослабления существующих защит."
 }
 
 function Get-ProjectUrl([int]$Number){
