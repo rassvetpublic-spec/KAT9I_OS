@@ -23,6 +23,7 @@ $Utf8NoBom=[Text.UTF8Encoding]::new($false)
 $RepoFull="$Owner/$Repository"
 $ReadOnly=($Mode -eq 'Статус')
 $Events=[Collections.Generic.List[object]]::new()
+$script:RepositoryCreated=$false
 
 function Add-Event([string]$Gate,[string]$Status,[string]$Message){
   $Events.Add([pscustomobject]@{gate=$Gate;status=$Status;message=$Message})
@@ -63,12 +64,19 @@ function Get-RepoOrCreate {
   $repo=$null
   try {$repo=Rest "repos/$RepoFull"} catch {}
   if($repo){return $repo}
-  if($ReadOnly -or -not $CreateRepository){throw "ЗАБЛОКИРОВАНО: репозиторий $RepoFull не существует; для нового репозитория используйте режим «Установка» с параметром -CreateRepository."}
+  if($ReadOnly -or -not $CreateRepository){throw "ЗАБЛОКИРОВАНО: репозиторий $RepoFull не существует или недоступен; для нового репозитория используйте режим «Установка» с параметром -CreateRepository."}
   $flag=if($Visibility -eq 'Публичный'){'--public'}else{'--private'}
   $null=& gh repo create $RepoFull $flag --add-readme
   if($LASTEXITCODE -ne 0){throw "ЗАБЛОКИРОВАНО: не удалось создать репозиторий $RepoFull."}
+  $script:RepositoryCreated=$true
   $repo=Rest "repos/$RepoFull"
-  Add-Event 'GHB0' 'ПРОЙДЕНО' "Репозиторий $RepoFull создан с начальным коммитом."
+  if([string]$repo.default_branch -ne 'main'){
+    $old=[uri]::EscapeDataString([string]$repo.default_branch)
+    $null=Rest "repos/$RepoFull/branches/$old/rename" 'POST' @{new_name='main'}
+    $repo=Rest "repos/$RepoFull"
+    if([string]$repo.default_branch -ne 'main'){throw 'ОШИБКА_ПРОВЕРКИ: новый репозиторий не удалось перевести на ветку main.'}
+  }
+  Add-Event 'GHB0' 'ПРОЙДЕНО' "Репозиторий $RepoFull создан с начальным коммитом и веткой main."
   return $repo
 }
 
@@ -79,7 +87,7 @@ function Test-Admin($Repo){
 function Ensure-RepositoryBaseline($Repo,$Manifest){
   $desired=$Manifest.repository
   if([string]$Repo.default_branch -ne [string]$desired.default_branch){
-    throw "ЗАБЛОКИРОВАНО: ветка по умолчанию '$($Repo.default_branch)', ожидается '$($desired.default_branch)'. Переименование ветки намеренно не выполняется автоматически."
+    throw "ЗАБЛОКИРОВАНО: ветка по умолчанию '$($Repo.default_branch)', ожидается '$($desired.default_branch)'. Для существующего репозитория переименование намеренно не выполняется автоматически."
   }
   $checks=@{
     has_issues=[bool]$desired.has_issues
@@ -110,24 +118,45 @@ function Ensure-RepositoryBaseline($Repo,$Manifest){
   Add-Event 'GHB1' 'ПРОЙДЕНО' 'Базовые настройки репозитория соответствуют манифесту.'
 }
 
+function Get-AllLabels {
+  $result=@()
+  for($page=1;$page -le 20;$page++){
+    $batch=@(Rest "repos/$RepoFull/labels?per_page=100&page=$page")
+    $result+=@($batch)
+    if($batch.Count -lt 100){return @($result)}
+  }
+  throw 'ЗАБЛОКИРОВАНО: список меток слишком велик для доказуемо полного чтения.'
+}
+
 function Ensure-Labels($Manifest){
-  $existing=@(Rest "repos/$RepoFull/labels?per_page=100")
+  $existing=@(Get-AllLabels)
   foreach($d in @($Manifest.labels)){
-    $m=@($existing|Where-Object{$_.name -ceq $d.name})
-    if($m.Count -gt 1){throw "ЗАБЛОКИРОВАНО: метка '$($d.name)' продублирована."}
+    $known=@([string]$d.name)
+    if($d.PSObject.Properties['legacy_names']){$known+=@($d.legacy_names|ForEach-Object{[string]$_})}
+    $m=@($existing|Where-Object{$known -ccontains [string]$_.name})
+    if($m.Count -gt 1){throw "ЗАБЛОКИРОВАНО: для русской метки '$($d.name)' одновременно найдены несколько известных вариантов: $(($m.name)-join ', '). Автоматическое объединение не выполняется."}
     if($m.Count -eq 0){
       if($ReadOnly){throw "РАСХОЖДЕНИЕ: отсутствует метка '$($d.name)'."}
       $null=Rest "repos/$RepoFull/labels" 'POST' @{name=$d.name;color=$d.color;description=$d.description}
       continue
     }
     $e=$m[0]
-    if(([string]$e.color).ToLowerInvariant() -ne ([string]$d.color).ToLowerInvariant() -or [string]$e.description -ne [string]$d.description){
-      if($ReadOnly){throw "РАСХОЖДЕНИЕ: метка '$($d.name)' отличается от манифеста."}
-      $encoded=[uri]::EscapeDataString([string]$d.name)
+    if([string]$e.name -cne [string]$d.name -or ([string]$e.color).ToLowerInvariant() -ne ([string]$d.color).ToLowerInvariant() -or [string]$e.description -ne [string]$d.description){
+      if($ReadOnly){throw "РАСХОЖДЕНИЕ: метка '$($e.name)' требует безопасной миграции в '$($d.name)'."}
+      $encoded=[uri]::EscapeDataString([string]$e.name)
       $null=Rest "repos/$RepoFull/labels/$encoded" 'PATCH' @{new_name=$d.name;color=$d.color;description=$d.description}
     }
   }
-  Add-Event 'GHB3' 'ПРОЙДЕНО' 'Канонические русские метки присутствуют; неизвестные пользовательские метки сохранены.'
+  $verify=@(Get-AllLabels)
+  foreach($d in @($Manifest.labels)){
+    $canonical=@($verify|Where-Object{$_.name -ceq [string]$d.name})
+    if($canonical.Count -ne 1){throw "ОШИБКА_ПРОВЕРКИ: русская метка '$($d.name)' должна существовать ровно один раз."}
+    if($d.PSObject.Properties['legacy_names']){
+      $legacy=@($verify|Where-Object{@($d.legacy_names) -ccontains [string]$_.name})
+      if($legacy.Count -gt 0){throw "ОШИБКА_ПРОВЕРКИ: после миграции остались старые английские варианты метки '$($d.name)': $(($legacy.name)-join ', ')."}
+    }
+  }
+  Add-Event 'GHB3' 'ПРОЙДЕНО' 'Канонические метки приведены к русскому стандарту; неизвестные пользовательские метки сохранены.'
 }
 
 function Render-Template([string]$Path){
@@ -150,14 +179,18 @@ function Put-RemoteFile([string]$Target,[string]$Content,$Existing=$null){
   $encoded=($Target -split '/'|ForEach-Object{[uri]::EscapeDataString($_)}) -join '/'
   $body=@{message='служебное: применить стандартную подготовку проекта KAT9I';content=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Content));branch='main'}
   if($Existing){$body.sha=$Existing.sha}
-  $null=Rest "repos/$RepoFull/contents/$encoded" 'PUT' $body
+  try {
+    $null=Rest "repos/$RepoFull/contents/$encoded" 'PUT' $body
+  } catch {
+    throw "ЗАБЛОКИРОВАНО: не удалось записать стандартный файл '$Target' в main. Если main уже защищён, изменения файлов должны пройти через отдельный запрос на слияние; защита ветки автоматически не ослабляется. Исходная ошибка: $($_.Exception.Message)"
+  }
 }
 
 function Ensure-Templates($Manifest){
   $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
   foreach($t in @($Manifest.templates)){
     $source=[IO.Path]::GetFullPath((Join-Path $root ([string]$t.source)))
-    if(-not $source.StartsWith($root,[StringComparison]::OrdinalIgnoreCase)){throw "ЗАБЛОКИРОВАНО: путь шаблона выходит за корень bootstrap: $($t.source)"}
+    if(-not $source.StartsWith($root,[StringComparison]::OrdinalIgnoreCase)){throw "ЗАБЛОКИРОВАНО: путь шаблона выходит за корень подготовки: $($t.source)"}
     if(-not(Test-Path -LiteralPath $source -PathType Leaf)){throw "ЗАБЛОКИРОВАНО: отсутствует исходный шаблон '$($t.source)'."}
     $desired=Render-Template $source
     $existing=Get-RemoteFile ([string]$t.target)
@@ -173,7 +206,7 @@ function Ensure-Templates($Manifest){
       Put-RemoteFile ([string]$t.target) $desired $existing
       continue
     }
-    Add-Event 'GHB2' 'ПОЛЬЗОВАТЕЛЬСКИЙ' "Существующий пользовательский файл '$($t.target)' сохранён; bootstrap его не перезаписал."
+    Add-Event 'GHB2' 'ПОЛЬЗОВАТЕЛЬСКИЙ' "Существующий пользовательский файл '$($t.target)' сохранён; подготовка его не перезаписала."
   }
   Add-Event 'GHB2' 'ПРОЙДЕНО' 'Переносимые стандартные файлы установлены; существующие пользовательские файлы сохранены.'
 }
@@ -266,15 +299,21 @@ function Ensure-Ruleset($Manifest){
 
 function Audit-Capabilities($Manifest){
   $secretNames=@()
+  $secretAuditOk=$true
   try {
     $raw=& gh secret list --repo $RepoFull --json name
-    if($LASTEXITCODE -eq 0 -and $raw){$secretNames=@((($raw -join "`n")|ConvertFrom-Json)|ForEach-Object{$_.name})}
-  } catch {}
-  foreach($name in @($Manifest.capabilities.optional_secret_names)){
-    $status=if($secretNames -contains [string]$name){'ЕСТЬ'}else{'НЕОБЯЗАТЕЛЬНЫЙ_ОТСУТСТВУЕТ'}
-    Add-Event 'GHB6' $status "Секрет репозитория '$name': $status. Значение секрета не читалось."
+    if($LASTEXITCODE -ne 0){$secretAuditOk=$false}
+    elseif($raw){$secretNames=@((($raw -join "`n")|ConvertFrom-Json)|ForEach-Object{$_.name})}
+  } catch {$secretAuditOk=$false}
+  if(-not $secretAuditOk){
+    Add-Event 'GHB6' 'НЕ_ПРОВЕРЕНО' 'Не удалось получить список имён секретов. Значения секретов не читались; необязательные возможности не считаются подтверждёнными.'
+  } else {
+    foreach($name in @($Manifest.capabilities.optional_secret_names)){
+      $status=if($secretNames -contains [string]$name){'ЕСТЬ'}else{'НЕОБЯЗАТЕЛЬНЫЙ_ОТСУТСТВУЕТ'}
+      Add-Event 'GHB6' $status "Секрет репозитория '$name': $status. Значение секрета не читалось."
+    }
+    Add-Event 'GHB6' 'ПРОЙДЕНО' 'Возможности проверены без чтения значений секретов.'
   }
-  Add-Event 'GHB6' 'ПРОЙДЕНО' 'Возможности проверены без чтения значений секретов.'
 }
 
 function Emit-Receipt([string]$Status,[int]$Number,[string]$ErrorMessage=''){
@@ -298,7 +337,7 @@ function Emit-Receipt([string]$Status,[int]$Number,[string]$ErrorMessage=''){
 
 if(-not(Test-Path -LiteralPath $ManifestPath -PathType Leaf)){throw "Манифест не найден: $ManifestPath"}
 $Manifest=Get-Content $ManifestPath -Raw -Encoding utf8|ConvertFrom-Json -Depth 60
-if($Manifest.schema -ne 'KAT9I_PROJECT_BOOTSTRAP/1'){throw "Неподдерживаемая схема манифеста bootstrap: $($Manifest.schema)"}
+if($Manifest.schema -ne 'KAT9I_PROJECT_BOOTSTRAP/1'){throw "Неподдерживаемая схема манифеста подготовки: $($Manifest.schema)"}
 
 $resolvedProject=0
 try {
