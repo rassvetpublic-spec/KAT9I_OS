@@ -15,15 +15,15 @@ jobs:
     name: Базовые проверки качества и целостности
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Получить код репозитория
         uses: actions/checkout@v4
 
-      - name: Git whitespace check
+      - name: Проверить пробелы и формат изменений Git
         shell: bash
         run: git diff --check HEAD^
         continue-on-error: ${{ github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000' }}
 
-      - name: Проверить JSON
+      - name: Проверить файлы JSON
         shell: bash
         run: |
           python - <<'PY'
@@ -34,10 +34,10 @@ jobs:
                   continue
               with path.open(encoding='utf-8') as fh:
                   json.load(fh)
-          print('JSON: PASS')
+          print('JSON: ПРОЙДЕНО')
           PY
 
-      - name: Проверить отсутствие конфликт-маркеров
+      - name: Проверить отсутствие маркеров конфликтов
         shell: bash
         run: |
           python - <<'PY'
@@ -54,6 +54,6 @@ jobs:
               if any(m in text for m in markers):
                   bad.append(str(path))
           if bad:
-              raise SystemExit('Conflict markers: ' + ', '.join(bad))
-          print('Conflict markers: PASS')
+              raise SystemExit('Найдены маркеры конфликтов: ' + ', '.join(bad))
+          print('Маркеры конфликтов: ПРОЙДЕНО')
           PY
