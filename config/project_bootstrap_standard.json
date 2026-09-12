@@ -31,12 +31,17 @@
     "bypass": "none"
   },
   "labels": [
-    {"name": "ошибка", "color": "d73a4a", "description": "Ошибка или дефект"},
-    {"name": "улучшение", "color": "a2eeef", "description": "Новая функция или улучшение"},
-    {"name": "документация", "color": "0075ca", "description": "Изменение документации"},
-    {"name": "вопрос", "color": "d876e3", "description": "Нужно уточнение или решение"},
-    {"name": "безопасность", "color": "b60205", "description": "Вопрос или изменение по безопасности"},
-    {"name": "заблокировано", "color": "b60205", "description": "Работа заблокирована"}
+    {"name": "ошибка", "legacy_names": ["bug"], "color": "d73a4a", "description": "Ошибка или дефект"},
+    {"name": "улучшение", "legacy_names": ["enhancement"], "color": "a2eeef", "description": "Новая функция или улучшение"},
+    {"name": "документация", "legacy_names": ["documentation"], "color": "0075ca", "description": "Изменение документации"},
+    {"name": "вопрос", "legacy_names": ["question"], "color": "d876e3", "description": "Нужно уточнение или решение"},
+    {"name": "безопасность", "legacy_names": ["security"], "color": "b60205", "description": "Вопрос или изменение по безопасности"},
+    {"name": "заблокировано", "legacy_names": ["blocked"], "color": "b60205", "description": "Работа заблокирована"},
+    {"name": "дубликат", "legacy_names": ["duplicate"], "color": "cfd3d7", "description": "Такая задача или проблема уже существует"},
+    {"name": "первая задача", "legacy_names": ["good first issue"], "color": "7057ff", "description": "Подходит для первого знакомства с проектом"},
+    {"name": "нужна помощь", "legacy_names": ["help wanted"], "color": "008672", "description": "Нужна дополнительная помощь"},
+    {"name": "недействительно", "legacy_names": ["invalid"], "color": "e4e669", "description": "Задача или сообщение не требует дальнейшей работы"},
+    {"name": "не планируется", "legacy_names": ["wontfix"], "color": "ffffff", "description": "Работа по этой задаче сейчас не планируется"}
   ],
   "templates": [
     {"source": "templates/project_standard/AGENTS.md", "target": "AGENTS.md"},
