@@ -53,11 +53,13 @@
     {"source": "templates/project_standard/ISSUE_TEMPLATE/improvement.yml", "target": ".github/ISSUE_TEMPLATE/improvement.yml"},
     {"source": "templates/project_standard/ISSUE_TEMPLATE/feedback.yml", "target": ".github/ISSUE_TEMPLATE/feedback.yml"},
     {"source": "templates/project_standard/ISSUE_TEMPLATE/technical_task.yml", "target": ".github/ISSUE_TEMPLATE/technical_task.yml"},
-    {"source": "templates/project_standard/workflows/baseline-quality.yml", "target": ".github/workflows/quality.yml"}
+    {"source": "templates/project_standard/workflows/baseline-quality.yml", "target": ".github/workflows/quality.yml"},
+    {"source": "templates/project_standard/workflows/project-auto-add.yml", "target": ".github/workflows/project-auto-add.yml"}
   ],
   "capabilities": {
     "required_gh_scopes": ["repo", "project"],
-    "optional_secret_names": ["KAT9I_PROJECT_TOKEN"],
+    "required_secret_names": ["KAT9I_PROJECT_TOKEN"],
+    "required_variable_names": ["KAT9I_PROJECT_URL"],
     "never_log_secret_values": true
   },
   "safety": {
