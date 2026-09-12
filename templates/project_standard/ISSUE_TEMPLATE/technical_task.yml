@@ -1,3 +1,4 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
 name: Техническая задача
 description: Оформить конкретную техническую работу в {{PROJECT_NAME}}
 title: "[Задача] "
@@ -11,14 +12,14 @@ body:
   - type: textarea
     id: scope
     attributes:
-      label: Scope
+      label: Границы работы
       description: Что разрешено менять в рамках задачи.
     validations:
       required: true
   - type: textarea
     id: anti_scope
     attributes:
-      label: Anti-scope
+      label: Что не входит в задачу
       description: Что сознательно не меняем.
     validations:
       required: true
@@ -32,7 +33,7 @@ body:
   - type: textarea
     id: checks
     attributes:
-      label: Проверки / Evidence
+      label: Проверки и доказательства
       description: Какие проверки должны подтвердить результат.
     validations:
       required: true
@@ -52,5 +53,5 @@ body:
     attributes:
       label: Безопасность
       options:
-        - label: В Issue нет токенов, паролей, приватных ключей и других секретов.
+        - label: В задаче нет токенов, паролей, приватных ключей и других секретов.
           required: true
