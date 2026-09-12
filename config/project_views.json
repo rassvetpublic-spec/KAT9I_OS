@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "issue": 181,
   "layout_capabilities": {
     "TABLE_LAYOUT": {
@@ -32,12 +32,12 @@
       "filter": "is:open {status}:\"В работе\""
     },
     {
-      "name": "03 — Проверка QA",
+      "name": "03 — Проверка качества",
       "layout": "TABLE_LAYOUT",
-      "filter": "is:open {status}:\"Проверка QA\""
+      "filter": "is:open {status}:\"Проверка качества\""
     },
     {
-      "name": "04 — Поток релиза",
+      "name": "04 — Подготовка выпуска",
       "layout": "BOARD_LAYOUT",
       "filter": "is:pr"
     },
@@ -66,6 +66,8 @@
     "05 — Roadmap",
     "06 — Blocked / Parking",
     "07 — Agent KPI",
+    "03 — Проверка QA",
+    "04 — Поток релиза",
     "00 — Все задачи",
     "01 — Готово к работе",
     "02 — В работе",
