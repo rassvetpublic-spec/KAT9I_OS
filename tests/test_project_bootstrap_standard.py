@@ -25,6 +25,27 @@ class StandardProjectBootstrapTests(unittest.TestCase):
             self.assertRegex(label["name"], r"[А-Яа-яЁё]")
             self.assertRegex(label["description"], r"[А-Яа-яЁё]")
 
+    def test_known_github_default_labels_have_safe_russian_migrations(self):
+        data = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        migrations = {
+            legacy: item["name"]
+            for item in data["labels"]
+            for legacy in item.get("legacy_names", [])
+        }
+        self.assertEqual(migrations["bug"], "ошибка")
+        self.assertEqual(migrations["enhancement"], "улучшение")
+        self.assertEqual(migrations["documentation"], "документация")
+        self.assertEqual(migrations["duplicate"], "дубликат")
+        self.assertEqual(migrations["good first issue"], "первая задача")
+        self.assertEqual(migrations["help wanted"], "нужна помощь")
+        self.assertEqual(migrations["invalid"], "недействительно")
+        self.assertEqual(migrations["question"], "вопрос")
+        self.assertEqual(migrations["wontfix"], "не планируется")
+        text = BOOTSTRAP.read_text(encoding="utf-8")
+        self.assertIn("legacy_names", text)
+        self.assertIn("Автоматическое объединение не выполняется", text)
+        self.assertIn("Get-AllLabels", text)
+
     def test_templates_are_unique_and_portable(self):
         data = json.loads(MANIFEST.read_text(encoding="utf-8"))
         targets = [item["target"] for item in data["templates"]]
@@ -108,7 +129,7 @@ class StandardProjectBootstrapTests(unittest.TestCase):
             if source.suffix.lower() in {".md", ".yml", ".yaml"} or source.name == "CODEOWNERS":
                 self.assertRegex(text, r"[А-Яа-яЁё]", str(source))
                 checked += 1
-        self.assertGreaterEqual(checked, 6)
+        self.assertGreaterEqual(checked, 8)
 
 
 if __name__ == "__main__":
