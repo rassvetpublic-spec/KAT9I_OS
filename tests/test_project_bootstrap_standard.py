@@ -1,4 +1,6 @@
 import json
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -74,9 +76,9 @@ class StandardProjectBootstrapTests(unittest.TestCase):
         )
         for name in names:
             self.assertRegex(name, r"[А-Яа-яЁё]")
-        qa_view = next(view for view in data["views"] if view["name"] == "03 — Проверка качества")
-        self.assertIn("Проверка качества", qa_view["filter"])
-        self.assertNotIn("Проверка QA", qa_view["filter"])
+        quality_view = next(view for view in data["views"] if view["name"] == "03 — Проверка качества")
+        self.assertIn("Проверка качества", quality_view["filter"])
+        self.assertNotIn("Проверка QA", quality_view["filter"])
 
     def test_bootstrap_has_read_only_status_and_no_merge_authority(self):
         text = BOOTSTRAP.read_text(encoding="utf-8")
@@ -128,8 +130,29 @@ class StandardProjectBootstrapTests(unittest.TestCase):
                 continue
             if source.suffix.lower() in {".md", ".yml", ".yaml"} or source.name == "CODEOWNERS":
                 self.assertRegex(text, r"[А-Яа-яЁё]", str(source))
+                if source.name == "AGENTS.md":
+                    self.assertNotIn("Проверка QA", text)
+                    self.assertNotIn("machine identity", text.lower())
                 checked += 1
         self.assertGreaterEqual(checked, 8)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 недоступен в окружении тестов")
+    def test_powershell_bootstrap_scripts_parse(self):
+        for path in (BOOTSTRAP, PROJECT):
+            escaped = str(path).replace("'", "''")
+            command = (
+                "$tokens=$null; $errors=$null; "
+                f"[System.Management.Automation.Language.Parser]::ParseFile('{escaped}', [ref]$tokens, [ref]$errors) | Out-Null; "
+                "if($errors.Count -gt 0){ $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }"
+            )
+            result = subprocess.run(
+                ["pwsh", "-NoProfile", "-Command", command],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, f"{path}: {result.stderr}\n{result.stdout}")
 
 
 if __name__ == "__main__":
