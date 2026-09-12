@@ -1,6 +1,6 @@
 {
-  "version": 5,
-  "issue": 181,
+  "version": 3,
+  "issue": 150,
   "layout_capabilities": {
     "TABLE_LAYOUT": {
       "visible_fields": true,
@@ -17,57 +17,47 @@
   },
   "views": [
     {
-      "name": "00 — Обзор",
+      "name": "00 — Dashboard",
       "layout": "TABLE_LAYOUT",
       "filter": ""
     },
     {
-      "name": "01 — Очередь",
+      "name": "01 — Queue",
       "layout": "BOARD_LAYOUT",
       "filter": "is:open"
     },
     {
-      "name": "02 — Активная работа",
+      "name": "02 — Active Work",
       "layout": "BOARD_LAYOUT",
       "filter": "is:open {status}:\"В работе\""
     },
     {
-      "name": "03 — Проверка качества",
+      "name": "03 — QA Gate",
       "layout": "TABLE_LAYOUT",
       "filter": "is:open {status}:\"Проверка QA\""
     },
     {
-      "name": "04 — Подготовка выпуска",
+      "name": "04 — Release Flow",
       "layout": "BOARD_LAYOUT",
       "filter": "is:pr"
     },
     {
-      "name": "05 — План развития",
+      "name": "05 — Roadmap",
       "layout": "ROADMAP_LAYOUT",
       "filter": "is:open"
     },
     {
-      "name": "06 — Заблокировано / Парковка",
+      "name": "06 — Blocked / Parking",
       "layout": "TABLE_LAYOUT",
       "filter": "is:open {status}:\"Заблокировано\""
     },
     {
-      "name": "07 — Показатели исполнителей",
+      "name": "07 — Agent KPI",
       "layout": "TABLE_LAYOUT",
       "filter": "has:Исполнитель"
     }
   ],
   "legacy_views": [
-    "00 — Dashboard",
-    "01 — Queue",
-    "02 — Active Work",
-    "03 — QA Gate",
-    "04 — Release Flow",
-    "05 — Roadmap",
-    "06 — Blocked / Parking",
-    "07 — Agent KPI",
-    "03 — Проверка QA",
-    "04 — Поток релиза",
     "00 — Все задачи",
     "01 — Готово к работе",
     "02 — В работе",
