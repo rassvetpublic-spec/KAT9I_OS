@@ -1,3 +1,4 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
 name: Базовые проверки качества и целостности
 
 on:
@@ -41,7 +42,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          markers = ('<<<<<<< ', '=======', '>>>>>>> ')
+          markers = ('<' * 7 + ' ', '=' * 7, '>' * 7 + ' ')
           bad = []
           for path in Path('.').rglob('*'):
               if not path.is_file() or '.git' in path.parts:
