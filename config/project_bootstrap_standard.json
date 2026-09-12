@@ -15,7 +15,7 @@
   "project": {
     "title_template": "{repo} — разработка",
     "iteration_days": 3,
-    "views_policy": "config/project_views.json",
+    "views_policy": "config/project_bootstrap_views.json",
     "default_worker": "ChatGPT",
     "default_qa": "AGY"
   },
