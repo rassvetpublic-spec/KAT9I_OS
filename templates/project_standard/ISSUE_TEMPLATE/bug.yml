@@ -2,7 +2,7 @@
 name: Ошибка
 description: Сообщить, что в {{PROJECT_NAME}} что-то работает неправильно
 title: "[Ошибка] "
-labels: ["bug"]
+labels: ["ошибка"]
 body:
   - type: markdown
     attributes:
@@ -34,14 +34,14 @@ body:
     id: context
     attributes:
       label: Контекст
-      description: Версия, ветка, ОС, экран, модуль или другая полезная информация.
+      description: Версия, ветка, операционная система, экран, модуль или другая полезная информация.
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: Evidence
-      description: Ссылки, безопасные логи или скриншоты без секретов.
+      label: Доказательства
+      description: Ссылки, безопасные журналы или снимки экрана без секретов.
   - type: checkboxes
     id: safety
     attributes:
