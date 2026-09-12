@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "config" / "project_bootstrap_standard.json"
 BOOTSTRAP = ROOT / "scripts" / "bootstrap_project.ps1"
 PROJECT = ROOT / "scripts" / "configure_standard_project.ps1"
-VIEWS = ROOT / "config" / "project_views.json"
+VIEWS = ROOT / "config" / "project_bootstrap_views.json"
 
 
 class StandardProjectBootstrapTests(unittest.TestCase):
