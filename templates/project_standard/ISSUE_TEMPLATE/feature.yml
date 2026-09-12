@@ -2,7 +2,7 @@
 name: Новая функция
 description: Предложить новую возможность для {{PROJECT_NAME}}
 title: "[Функция] "
-labels: ["enhancement"]
+labels: ["улучшение"]
 body:
   - type: textarea
     id: problem
@@ -31,11 +31,11 @@ body:
   - type: textarea
     id: evidence
     attributes:
-      label: Дополнительный контекст / Evidence
+      label: Дополнительный контекст и доказательства
   - type: checkboxes
     id: safety
     attributes:
       label: Безопасность
       options:
-        - label: В Issue нет токенов, паролей, приватных ключей и других секретов.
+        - label: В задаче нет токенов, паролей, приватных ключей и других секретов.
           required: true
