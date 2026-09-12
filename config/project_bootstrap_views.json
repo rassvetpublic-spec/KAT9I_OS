@@ -34,7 +34,7 @@
     {
       "name": "03 — Проверка качества",
       "layout": "TABLE_LAYOUT",
-      "filter": "is:open {status}:\"Проверка QA\""
+      "filter": "is:open {status}:\"Проверка качества\""
     },
     {
       "name": "04 — Подготовка выпуска",
