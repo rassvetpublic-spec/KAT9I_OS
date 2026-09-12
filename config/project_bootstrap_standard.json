@@ -46,7 +46,7 @@
     {"source": "templates/project_standard/ISSUE_TEMPLATE/bug.yml", "target": ".github/ISSUE_TEMPLATE/bug.yml"},
     {"source": "templates/project_standard/ISSUE_TEMPLATE/feature.yml", "target": ".github/ISSUE_TEMPLATE/feature.yml"},
     {"source": "templates/project_standard/ISSUE_TEMPLATE/technical_task.yml", "target": ".github/ISSUE_TEMPLATE/technical_task.yml"},
-    {"source": "templates/project_standard/workflows/baseline-quality.yml", "target": ".github/workflows/baseline-quality.yml"}
+    {"source": "templates/project_standard/workflows/baseline-quality.yml", "target": ".github/workflows/quality.yml"}
   ],
   "capabilities": {
     "required_gh_scopes": ["repo", "project"],
