@@ -1,3 +1,4 @@
+<!-- KAT9I_PROJECT_BOOTSTRAP/1 managed -->
 # Правила AI-исполнителей проекта {{PROJECT_NAME}}
 
 ## Источник истины
