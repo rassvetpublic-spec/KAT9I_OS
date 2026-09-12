@@ -1,5 +1,4 @@
 import json
-import re
 import unittest
 from pathlib import Path
 
@@ -45,8 +44,8 @@ class StandardProjectBootstrapTests(unittest.TestCase):
                 "00 — Обзор",
                 "01 — Очередь",
                 "02 — Активная работа",
-                "03 — Проверка QA",
-                "04 — Поток релиза",
+                "03 — Проверка качества",
+                "04 — Подготовка выпуска",
                 "05 — План развития",
                 "06 — Заблокировано / Парковка",
                 "07 — Показатели исполнителей",
