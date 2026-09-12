@@ -45,6 +45,8 @@
     {"source": "templates/project_standard/ISSUE_TEMPLATE/config.yml", "target": ".github/ISSUE_TEMPLATE/config.yml"},
     {"source": "templates/project_standard/ISSUE_TEMPLATE/bug.yml", "target": ".github/ISSUE_TEMPLATE/bug.yml"},
     {"source": "templates/project_standard/ISSUE_TEMPLATE/feature.yml", "target": ".github/ISSUE_TEMPLATE/feature.yml"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/improvement.yml", "target": ".github/ISSUE_TEMPLATE/improvement.yml"},
+    {"source": "templates/project_standard/ISSUE_TEMPLATE/feedback.yml", "target": ".github/ISSUE_TEMPLATE/feedback.yml"},
     {"source": "templates/project_standard/ISSUE_TEMPLATE/technical_task.yml", "target": ".github/ISSUE_TEMPLATE/technical_task.yml"},
     {"source": "templates/project_standard/workflows/baseline-quality.yml", "target": ".github/workflows/quality.yml"}
   ],
