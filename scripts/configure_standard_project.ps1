@@ -4,7 +4,7 @@ param(
   [Parameter(Mandatory=$true)][string]$Repository,
   [Parameter(Mandatory=$true)][int]$ProjectNumber,
   [Parameter(Mandatory=$true)][string]$ProjectTitle,
-  [string]$ViewsPolicyPath = (Join-Path $PSScriptRoot '../config/project_views.json'),
+  [string]$ViewsPolicyPath = (Join-Path $PSScriptRoot '../config/project_bootstrap_views.json'),
   [ValidateSet('Установка','Статус','Восстановление')][string]$Mode='Установка'
 )
 
@@ -96,7 +96,7 @@ mutation($input:CreateProjectV2FieldInput!){createProjectV2Field(input:$input){p
   if($f.__typename -ne 'ProjectV2SingleSelectField'){throw "ЗАБЛОКИРОВАНО: поле '$($f.name)' имеет несовместимый тип."}
   if((Test-OptionsExact $f $Defs) -and ($f.name -ceq $Name -or ($Name -eq 'Статус' -and $f.name -eq 'Status'))){return}
   if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: поле Project '$Name' отличается от стандарта."}
-  if([int]$p.items.totalCount -gt 0){throw "ЗАБЛОКИРОВАНО: поле '$Name' отличается от стандарта, а в Project уже есть карточки; bootstrap не будет заменять идентификаторы вариантов поля."}
+  if([int]$p.items.totalCount -gt 0){throw "ЗАБЛОКИРОВАНО: поле '$Name' отличается от стандарта, а в Project уже есть карточки; подготовка не будет заменять идентификаторы вариантов поля."}
   Set-SelectField $f $Name $Defs
 }
 
@@ -176,7 +176,7 @@ mutation($input:UpdateProjectV2ViewInput!){updateProjectV2View(input:$input){pro
   foreach($legacy in @($p.views.nodes|Where-Object{$safeLegacy -contains $_.name})){
     if($script:ReadOnly){throw "РАСХОЖДЕНИЕ: осталось устаревшее безопасно распознанное представление Project '$($legacy.name)'."}
 $q=@'
-mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){deletedViewId}}
+mutation($input:DeleteProjectV2ViewInput!){deleteProjectV2View(input:$input){projectV2View{id}}}
 '@
     $null=Gql $q @{input=@{viewId=$legacy.id}}
   }
@@ -218,7 +218,7 @@ Ensure-Select 'Статус' @('Статус','Status') @(
  (Opt 'Нужно разобрать' 'YELLOW' 'Нужно определить этап, приоритет, границы работы и зависимости.'),
  (Opt 'Готово к работе' 'BLUE' 'Задачу можно брать в работу.'),
  (Opt 'В работе' 'ORANGE' 'Идёт активная работа.' @('В работе','In Progress')),
- (Opt 'Проверка QA' 'PURPLE' 'Идёт независимая проверка качества.'),
+ (Opt 'Проверка качества' 'PURPLE' 'Идёт независимая проверка качества.' @('Проверка качества','Проверка QA','QA')),
  (Opt 'Заблокировано' 'RED' 'Есть блокирующее условие.'),
  (Opt 'Готово' 'GREEN' 'Работа завершена по правилам.' @('Готово','Done'))
 )
@@ -238,7 +238,7 @@ Ensure-Select 'Область' @('Область') @(
  (Opt 'Архитектура и документация' 'BLUE' 'Архитектура, документация и единый источник истины.'),(Opt 'Контекст и знания' 'PURPLE' 'Контекст, память и знания.'),(Opt 'Исполнение и исполнители' 'GREEN' 'Исполнение задач и исполнители.'),(Opt 'Безопасность и управление' 'RED' 'Безопасность и правила управления.'),(Opt 'Интерфейс и визуализация' 'YELLOW' 'Интерфейс и отображение информации.'),(Opt 'Инженерная инфраструктура' 'ORANGE' 'GitHub, автоматические проверки и инструменты.'),(Opt 'Общее / не определено' 'GRAY' 'Ещё не классифицировано.')
 )
 Ensure-Select 'Размер' @('Размер') @((Opt 'XS — совсем маленькая' 'GRAY' 'Совсем маленькая задача.'),(Opt 'S — маленькая' 'BLUE' 'Маленькая задача.'),(Opt 'M — средняя' 'YELLOW' 'Средняя задача.'),(Opt 'L — большая' 'ORANGE' 'Большая задача.'),(Opt 'XL — очень большая' 'RED' 'Очень большая задача; желательно разбить на более мелкие.'))
-$workers=@((Opt 'ChatGPT' 'GREEN' 'ChatGPT.'),(Opt 'AGY' 'BLUE' 'Антигравити.'),(Opt 'Codex' 'PURPLE' 'Codex.'),(Opt 'Человек' 'ORANGE' 'Человек.'),(Opt 'Другой' 'GRAY' 'Другой исполнитель.'))
+$workers=@((Opt 'ChatGPT' 'GREEN' 'ChatGPT.'),(Opt 'Антигравити' 'BLUE' 'Антигравити.' @('Антигравити','AGY')),(Opt 'Codex' 'PURPLE' 'Codex.'),(Opt 'Человек' 'ORANGE' 'Человек.'),(Opt 'Другой' 'GRAY' 'Другой исполнитель.'))
 Ensure-Select 'Исполнитель' @('Исполнитель','Implementation Worker') $workers
 Ensure-Select 'Проверяющий' @('Проверяющий','QA Worker') $workers
 Ensure-Select 'Исполнение' @('Исполнение','Состояние работы','Claim') @((Opt 'Свободно' 'GRAY' 'Никто не взял работу.'),(Opt 'В очереди' 'BLUE' 'Работа ждёт следующего разрешённого шага.'),(Opt 'Активно' 'ORANGE' 'Исполнитель прямо сейчас работает над задачей.'),(Opt 'На проверке' 'PURPLE' 'Работа передана независимому проверяющему.'),(Opt 'Заблокировано' 'RED' 'Продолжение работы заблокировано.'),(Opt 'Освобождено' 'GREEN' 'Исполнитель освободил задачу после завершения.'))
