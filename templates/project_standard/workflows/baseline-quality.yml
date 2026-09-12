@@ -1,0 +1,58 @@
+name: Базовые проверки качества и целостности
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Базовые проверки качества и целостности
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Git whitespace check
+        shell: bash
+        run: git diff --check HEAD^
+        continue-on-error: ${{ github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000' }}
+
+      - name: Проверить JSON
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path('.').rglob('*.json'):
+              if '.git' in path.parts:
+                  continue
+              with path.open(encoding='utf-8') as fh:
+                  json.load(fh)
+          print('JSON: PASS')
+          PY
+
+      - name: Проверить отсутствие конфликт-маркеров
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          markers = ('<<<<<<< ', '=======', '>>>>>>> ')
+          bad = []
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or '.git' in path.parts:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if any(m in text for m in markers):
+                  bad.append(str(path))
+          if bad:
+              raise SystemExit('Conflict markers: ' + ', '.join(bad))
+          print('Conflict markers: PASS')
+          PY
