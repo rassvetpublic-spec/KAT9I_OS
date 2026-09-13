@@ -47,5 +47,10 @@ Write-Host "Installed bootstrap to $Root"
 Write-Host "Single entry point: $(Join-Path $Root 'ANTIGRAVITY.cmd')"
 Write-Host "Bootstrap backup: $BootstrapBackup"
 Write-Host 'Running read-only status...'
-& (Join-Path $Root 'ANTIGRAVITY.cmd') status
-exit $LASTEXITCODE
+$patchStatus = Join-Path $TargetSystem 'Patch-Antigravity.ps1'
+$hostExe = (Get-Process -Id $PID).Path
+if (-not $hostExe) { throw 'Cannot resolve current PowerShell host executable.' }
+& $hostExe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $patchStatus -Mode status -Root $Root
+$statusRc = [int]$LASTEXITCODE
+Write-Host "Post-install status exit code: $statusRc"
+exit $statusRc
