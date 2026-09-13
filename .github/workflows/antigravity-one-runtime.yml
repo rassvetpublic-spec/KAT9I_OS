@@ -89,9 +89,9 @@ jobs:
 
           $receiptsBefore = @(Get-ChildItem -LiteralPath (Join-Path $root '_System\Receipts') -Filter 'patch_*.json' -File -ErrorAction SilentlyContinue).Count
           $entry = Join-Path $root 'ANTIGRAVITY.cmd'
-          $cmdLine = 'call "{0}" dryrun' -f $entry
-          $dryRunProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/d','/s','/c',$cmdLine) -Wait -PassThru -NoNewWindow
-          $dryRunRc = [int]$dryRunProcess.ExitCode
+          $commandLine = '""{0}" dryrun"' -f $entry
+          & $env:ComSpec /d /c $commandLine
+          $dryRunRc = [int]$LASTEXITCODE
           if ($dryRunRc -eq 0) { throw 'DryRun unexpectedly reported compatibility success without a language_server target.' }
 
           foreach ($forbidden in @(
