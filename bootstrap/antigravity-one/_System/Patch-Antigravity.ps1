@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $SystemDir = Join-Path $Root '_System'
 $ManifestPath = Join-Path $SystemDir 'patch-signatures.json'
+$PatchStatePath = Join-Path $SystemDir 'patch-state.json'
 $ReceiptDir = Join-Path $SystemDir 'Receipts'
 $PatchBackupRoot = Join-Path $Root 'Backups\Patches'
 
@@ -37,6 +38,16 @@ function Normalize-Path([string]$Path) {
     return $full
 }
 
+function Convert-HexBytes([string]$Hex) {
+    $clean = ($Hex -replace '\s','')
+    if (($clean.Length % 2) -ne 0) { throw "Invalid hex length" }
+    $bytes = New-Object byte[] ($clean.Length / 2)
+    for ($i=0; $i -lt $bytes.Length; $i++) {
+        $bytes[$i] = [Convert]::ToByte($clean.Substring($i*2,2),16)
+    }
+    return $bytes
+}
+
 function Get-PeArchitecture([string]$Path) {
     $fs = [IO.File]::Open($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
     try {
@@ -44,6 +55,7 @@ function Get-PeArchitecture([string]$Path) {
         if ($br.ReadUInt16() -ne 0x5A4D) { throw 'Not an MZ executable' }
         $fs.Position = 0x3C
         $pe = $br.ReadInt32()
+        if ($pe -lt 0 -or $pe -gt ($fs.Length - 6)) { throw 'Invalid PE header offset' }
         $fs.Position = $pe
         if ($br.ReadUInt32() -ne 0x00004550) { throw 'Missing PE signature' }
         $machine = $br.ReadUInt16()
@@ -54,8 +66,8 @@ function Get-PeArchitecture([string]$Path) {
 }
 
 function Get-ProductVersion([string]$Target) {
-    $root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $Target))
-    $exe = Join-Path $root 'Antigravity.exe'
+    $appRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $Target))
+    $exe = Join-Path $appRoot 'Antigravity.exe'
     if (Test-Path -LiteralPath $exe) {
         $raw = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion
         if ($raw -match '\d+\.\d+(?:\.\d+){0,2}') { return $Matches[0] }
@@ -103,22 +115,23 @@ function Get-SignatureState([byte[]]$Data,$Signature) {
     return [pscustomobject]@{State='UNKNOWN';Offset=$null}
 }
 
+function Add-Candidate([System.Collections.Generic.List[string]]$List,[string]$Base,[string]$Relative) {
+    if (-not $Base) { return }
+    $p = Join-Path $Base $Relative
+    if (Test-Path -LiteralPath $p -PathType Leaf) { $List.Add([IO.Path]::GetFullPath($p)) }
+}
+
 function Get-Targets {
     $candidates = New-Object System.Collections.Generic.List[string]
-    foreach ($p in @(
-        (Join-Path $Root 'Standalone\App\resources\bin\language_server.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\antigravity\resources\bin\language_server.exe'),
-        (Join-Path $env:ProgramFiles 'Antigravity\resources\bin\language_server.exe'),
-        (Join-Path ${env:ProgramFiles(x86)} 'Antigravity\resources\bin\language_server.exe')
-    )) {
-        if ($p -and (Test-Path -LiteralPath $p -PathType Leaf)) { $candidates.Add([IO.Path]::GetFullPath($p)) }
-    }
-    $unique = @($candidates | Sort-Object -Unique)
-    return $unique
+    Add-Candidate $candidates $Root 'Standalone\App\resources\bin\language_server.exe'
+    Add-Candidate $candidates $env:LOCALAPPDATA 'Programs\antigravity\resources\bin\language_server.exe'
+    Add-Candidate $candidates $env:ProgramFiles 'Antigravity\resources\bin\language_server.exe'
+    Add-Candidate $candidates ${env:ProgramFiles(x86)} 'Antigravity\resources\bin\language_server.exe'
+    return @($candidates | Sort-Object -Unique)
 }
 
 function Test-ConsumerRunning {
-    return [bool](Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -in @('Antigravity','language_server','antigravity-tools') })
+    return [bool](Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -in @('Antigravity','language_server') })
 }
 
 function Load-Manifest {
@@ -126,6 +139,24 @@ function Load-Manifest {
     $m = Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($m.schema -ne 1) { throw 'Unsupported manifest schema' }
     return $m
+}
+
+function Load-PatchState {
+    if (-not (Test-Path -LiteralPath $PatchStatePath)) { return [pscustomobject]@{schema=1;records=@()} }
+    try {
+        $s = Get-Content -LiteralPath $PatchStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($s.schema -ne 1) { throw 'Unsupported patch-state schema' }
+        return $s
+    } catch {
+        throw "Invalid patch-state: $($_.Exception.Message)"
+    }
+}
+
+function Save-PatchState($State) {
+    New-Item -ItemType Directory -Force -Path $SystemDir | Out-Null
+    $tmp = $PatchStatePath + '.tmp'
+    [IO.File]::WriteAllText($tmp,($State | ConvertTo-Json -Depth 20) + "`r`n",[Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $tmp -Destination $PatchStatePath -Force
 }
 
 function Find-Compatibility($Manifest,[string]$Version,[string]$Arch,[string]$Hash) {
@@ -136,6 +167,19 @@ function Find-Compatibility($Manifest,[string]$Version,[string]$Arch,[string]$Ha
 
 function Get-Signature($Manifest,[string]$Id) {
     @($Manifest.signatures | Where-Object { [string]$_.id -eq $Id }) | Select-Object -First 1
+}
+
+function Find-StateRecord($State,[string]$PublicTarget,[string]$Version,[string]$Arch,[string]$CurrentHash) {
+    @($State.records | Where-Object {
+        ([string]$_.target -eq $PublicTarget) -and ([string]$_.version -eq $Version) -and
+        ([string]$_.architecture -eq $Arch) -and ([string]$_.patched_sha256 -eq $CurrentHash)
+    }) | Select-Object -First 1
+}
+
+function Upsert-StateRecord($State,$Record) {
+    $records = @($State.records | Where-Object { [string]$_.target -ne [string]$Record.target })
+    $records += $Record
+    $State.records = @($records)
 }
 
 function Write-Receipt($Payload) {
@@ -157,11 +201,13 @@ function New-VerifiedBackup([string]$Target,[string]$Version,[string]$Hash) {
 }
 
 function Restore-Verified([string]$Target,[string]$Backup,[string]$ExpectedHash) {
+    if (-not (Test-Path -LiteralPath $Backup -PathType Leaf)) { throw "Rollback backup missing: $Backup" }
     Copy-Item -LiteralPath $Backup -Destination $Target -Force
     if ((Get-Sha256 $Target) -ne $ExpectedHash) { throw "Rollback verification failed: $Target" }
 }
 
 $manifest = Load-Manifest
+$patchState = Load-PatchState
 $targets = @(Get-Targets)
 $results = New-Object System.Collections.Generic.List[object]
 
@@ -174,37 +220,59 @@ if ($targets.Count -eq 0) {
 $plans = New-Object System.Collections.Generic.List[object]
 foreach ($target in $targets) {
     try {
+        $publicTarget = Normalize-Path $target
         $arch = Get-PeArchitecture $target
         $version = Get-ProductVersion $target
         $hash = Get-Sha256 $target
         $compat = Find-Compatibility $manifest $version $arch $hash
+        $stateRecord = Find-StateRecord $patchState $publicTarget $version $arch $hash
         $sig = $null
         $state = 'UNKNOWN'
         $offset = $null
+        $authority = 'none'
+
         if ($compat) {
             $sig = Get-Signature $manifest ([string]$compat.signature_id)
             if (-not $sig) { throw 'compatibility references missing signature' }
             $ss = Get-SignatureState ([IO.File]::ReadAllBytes($target)) $sig
+            $state = $ss.State; $offset=$ss.Offset; $authority='manifest-source'
+        } elseif ($stateRecord) {
+            $sig = Get-Signature $manifest ([string]$stateRecord.signature_id)
+            if (-not $sig) { throw 'patch-state references missing signature' }
+            $ss = Get-SignatureState ([IO.File]::ReadAllBytes($target)) $sig
             $state = $ss.State; $offset=$ss.Offset
+            if ($state -ne 'PATCHED') { throw 'patch-state hash matched but patched signature is absent' }
+            $authority='patch-state'
         } else {
             foreach ($candidate in @($manifest.signatures | Where-Object { [string]$_.architecture -eq $arch })) {
                 $ss = Get-SignatureState ([IO.File]::ReadAllBytes($target)) $candidate
                 if ($ss.State -ne 'UNKNOWN') { $sig=$candidate; $state=$ss.State; $offset=$ss.Offset; break }
             }
         }
-        $authorized = [bool]$compat
-        $plans.Add([pscustomobject]@{Target=$target;Version=$version;Arch=$arch;Hash=$hash;Compat=$compat;Signature=$sig;State=$state;Offset=$offset;Authorized=$authorized;Backup=$null})
+
+        $authorized = [bool]($compat -or $stateRecord)
+        $plans.Add([pscustomobject]@{
+            Target=$target;PublicTarget=$publicTarget;Version=$version;Arch=$arch;Hash=$hash;
+            Compat=$compat;StateRecord=$stateRecord;Signature=$sig;State=$state;Offset=$offset;
+            Authorized=$authorized;Authority=$authority;Backup=$null
+        })
     } catch {
-        $plans.Add([pscustomobject]@{Target=$target;Version='unknown';Arch='unknown';Hash='';Compat=$null;Signature=$null;State='ERROR';Offset=$null;Authorized=$false;Backup=$null;Error=$_.Exception.Message})
+        $plans.Add([pscustomobject]@{
+            Target=$target;PublicTarget=(Normalize-Path $target);Version='unknown';Arch='unknown';Hash='';
+            Compat=$null;StateRecord=$null;Signature=$null;State='ERROR';Offset=$null;
+            Authorized=$false;Authority='none';Backup=$null;Error=$_.Exception.Message
+        })
     }
 }
 
 if ($Mode -eq 'status') {
     foreach ($p in $plans) {
-        $publicPath = Normalize-Path $p.Target
-        $status = if ($p.State -eq 'PATCHED') {'PATCHED'} elseif ($p.Authorized -and $p.State -eq 'ORIGINAL') {'READY'} else {'PATCH_INCOMPATIBLE / BLOCKED'}
-        Write-Host "$status | $($p.Version) | $($p.Arch) | $publicPath"
-        $results.Add([ordered]@{target=$publicPath;version=$p.Version;architecture=$p.Arch;sha256=$p.Hash;state=$p.State;authorized=$p.Authorized;result=$status})
+        $status = if ($p.Authorized -and $p.State -eq 'PATCHED') {'PATCHED_VERIFIED'} elseif ($p.Authorized -and $p.State -eq 'ORIGINAL') {'READY'} else {'PATCH_INCOMPATIBLE / BLOCKED'}
+        Write-Host "$status | $($p.Version) | $($p.Arch) | $($p.PublicTarget)"
+        $results.Add([ordered]@{
+            target=$p.PublicTarget;version=$p.Version;architecture=$p.Arch;sha256=$p.Hash;
+            state=$p.State;authorized=$p.Authorized;authority=$p.Authority;result=$status
+        })
     }
     $overall = if (@($results | Where-Object { $_.result -like '*BLOCKED*' }).Count) {'PATCH_BLOCKED'} else {'OK'}
     $receipt = Write-Receipt ([ordered]@{schema=1;time=(Get-Date).ToString('o');mode='status';overall=$overall;targets=@($results)})
@@ -219,24 +287,35 @@ if (Test-ConsumerRunning) {
 }
 
 if ($Mode -eq 'restore') {
+    $restoreFailures = New-Object System.Collections.Generic.List[string]
     foreach ($p in $plans) {
-        if (-not $p.Hash) { continue }
-        $dir = Join-Path (Join-Path $PatchBackupRoot $p.Version) $p.Hash
-        $backup = Join-Path $dir 'language_server.exe'
-        if (Test-Path -LiteralPath $backup) { Restore-Verified $p.Target $backup $p.Hash; Write-Host "RESTORED: $(Normalize-Path $p.Target)" }
+        if ($p.StateRecord) {
+            try {
+                $backup = [string]$p.StateRecord.backup
+                $sourceHash = [string]$p.StateRecord.source_sha256
+                Restore-Verified $p.Target $backup $sourceHash
+                $patchState.records = @($patchState.records | Where-Object { [string]$_.target -ne $p.PublicTarget })
+                Write-Host "RESTORED: $($p.PublicTarget)"
+            } catch { $restoreFailures.Add($_.Exception.Message) }
+        }
     }
+    Save-PatchState $patchState
+    if ($restoreFailures.Count) { throw ($restoreFailures -join '; ') }
     exit 0
 }
 
 $blocked = @($plans | Where-Object { -not $_.Authorized -or $_.State -notin @('ORIGINAL','PATCHED') })
 if ($blocked.Count) {
-    foreach ($p in $blocked) { Write-Host "PATCH_INCOMPATIBLE / BLOCKED | $($p.Version) | $($p.Arch) | $(Normalize-Path $p.Target) | $($p.Hash)" }
-    $receipt = Write-Receipt ([ordered]@{schema=1;time=(Get-Date).ToString('o');mode='patch';overall='PATCH_BLOCKED';reason='INCOMPATIBLE_TARGET';targets=@($blocked | ForEach-Object {[ordered]@{target=(Normalize-Path $_.Target);version=$_.Version;architecture=$_.Arch;sha256=$_.Hash;state=$_.State}})})
+    foreach ($p in $blocked) { Write-Host "PATCH_INCOMPATIBLE / BLOCKED | $($p.Version) | $($p.Arch) | $($p.PublicTarget) | $($p.Hash)" }
+    $receipt = Write-Receipt ([ordered]@{
+        schema=1;time=(Get-Date).ToString('o');mode='patch';overall='PATCH_BLOCKED';reason='INCOMPATIBLE_TARGET';
+        targets=@($blocked | ForEach-Object {[ordered]@{target=$_.PublicTarget;version=$_.Version;architecture=$_.Arch;sha256=$_.Hash;state=$_.State}})
+    })
     Write-Host "Receipt: $receipt"
     exit 23
 }
 
-# Transaction rule: verify backups for every target before the first write.
+# Transaction rule: verify backups for every ORIGINAL target before the first write.
 foreach ($p in $plans) {
     if ($p.State -eq 'ORIGINAL') { $p.Backup = New-VerifiedBackup $p.Target $p.Version $p.Hash }
 }
@@ -245,27 +324,55 @@ $changed = New-Object System.Collections.Generic.List[object]
 try {
     foreach ($p in $plans) {
         if ($p.State -eq 'PATCHED') {
-            $results.Add([ordered]@{target=(Normalize-Path $p.Target);version=$p.Version;architecture=$p.Arch;sha256=$p.Hash;state='PATCHED';result='ALREADY_PATCHED'})
+            $results.Add([ordered]@{
+                target=$p.PublicTarget;version=$p.Version;architecture=$p.Arch;sha256=$p.Hash;
+                state='PATCHED';authority=$p.Authority;result='ALREADY_PATCHED_VERIFIED'
+            })
             continue
         }
+
         $data = [IO.File]::ReadAllBytes($p.Target)
-        $fix = [Convert]::FromHexString(([string]$p.Signature.fix_hex -replace '\s',''))
+        $fix = Convert-HexBytes ([string]$p.Signature.fix_hex)
         $start = [int]$p.Offset + [int]$p.Signature.write_offset
         if ($start -lt 0 -or $start + $fix.Length -gt $data.Length) { throw "Patch range invalid: $($p.Target)" }
         [Array]::Copy($fix,0,$data,$start,$fix.Length)
         [IO.File]::WriteAllBytes($p.Target,$data)
         $changed.Add($p)
+
         $verify = Get-SignatureState ([IO.File]::ReadAllBytes($p.Target)) $p.Signature
         if ($verify.State -ne 'PATCHED') { throw "Post-write verify failed: $($p.Target)" }
         $after = Get-Sha256 $p.Target
         if ($p.Compat.patched_sha256 -and [string]$p.Compat.patched_sha256 -ne $after) { throw "Patched SHA256 mismatch: $($p.Target)" }
-        $results.Add([ordered]@{target=(Normalize-Path $p.Target);version=$p.Version;architecture=$p.Arch;source_sha256=$p.Hash;patched_sha256=$after;signature_id=$p.Signature.id;result='PATCHED_VERIFIED'})
+
+        $record = [pscustomobject][ordered]@{
+            target=$p.PublicTarget;version=$p.Version;architecture=$p.Arch;
+            source_sha256=$p.Hash;patched_sha256=$after;signature_id=[string]$p.Signature.id;
+            backup=$p.Backup;authority='native-manifest';patched_at=(Get-Date).ToString('o')
+        }
+        Upsert-StateRecord $patchState $record
+        Save-PatchState $patchState
+
+        $results.Add([ordered]@{
+            target=$p.PublicTarget;version=$p.Version;architecture=$p.Arch;source_sha256=$p.Hash;
+            patched_sha256=$after;signature_id=$p.Signature.id;result='PATCHED_VERIFIED'
+        })
     }
 } catch {
     $why = $_.Exception.Message
-    foreach ($p in @($changed)) { Restore-Verified $p.Target $p.Backup $p.Hash }
-    $receipt = Write-Receipt ([ordered]@{schema=1;time=(Get-Date).ToString('o');mode='patch';overall='ROLLED_BACK';reason=$why;targets=@($results)})
-    Write-Host "PATCH FAILED; transaction rolled back and verified. Receipt: $receipt"
+    $rollbackErrors = New-Object System.Collections.Generic.List[string]
+    foreach ($p in @($changed)) {
+        try {
+            Restore-Verified $p.Target $p.Backup $p.Hash
+            $patchState.records = @($patchState.records | Where-Object { [string]$_.target -ne $p.PublicTarget })
+        } catch { $rollbackErrors.Add($_.Exception.Message) }
+    }
+    Save-PatchState $patchState
+    $overall = if ($rollbackErrors.Count) {'ROLLBACK_FAILED'} else {'ROLLED_BACK_VERIFIED'}
+    $receipt = Write-Receipt ([ordered]@{
+        schema=1;time=(Get-Date).ToString('o');mode='patch';overall=$overall;reason=$why;
+        rollback_errors=@($rollbackErrors);targets=@($results)
+    })
+    Write-Host "PATCH FAILED; rollback result=$overall. Receipt: $receipt"
     exit 24
 }
 
