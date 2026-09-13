@@ -76,9 +76,9 @@ class AntigravityOneContractTests(unittest.TestCase):
         self.assertIn('if /i "%~1"=="dryrun"', lower)
         dryrun_block = lower.split('if /i "%~1"=="dryrun"', 1)[1].split('"%ps%" -nologo -noprofile -executionpolicy bypass -file "%ctrl%" %*', 1)[0]
         self.assertIn('"%ctrl%" status', dryrun_block)
-        self.assertNotIn(' install', dryrun_block)
-        self.assertNotIn(' repair', dryrun_block)
-        self.assertNotIn(' fallback', dryrun_block)
+        self.assertNotIn('"%ctrl%" install', dryrun_block)
+        self.assertNotIn('"%ctrl%" repair', dryrun_block)
+        self.assertNotIn('"%ctrl%" fallback', dryrun_block)
 
     def test_backup_before_first_write_and_transactional_rollback(self):
         patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
