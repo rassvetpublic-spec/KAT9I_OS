@@ -73,12 +73,21 @@ class AntigravityOneContractTests(unittest.TestCase):
     def test_dryrun_is_read_only_alias_to_status(self):
         cmd = (self.runtime_root / "ANTIGRAVITY.cmd").read_text(encoding="utf-8")
         lower = cmd.lower()
-        self.assertIn('if /i "%~1"=="dryrun"', lower)
-        dryrun_block = lower.split('if /i "%~1"=="dryrun"', 1)[1].split('"%ps%" -nologo -noprofile -executionpolicy bypass -file "%ctrl%" %*', 1)[0]
-        self.assertIn('"%ctrl%" status', dryrun_block)
+        self.assertIn('if /i "%~1"=="dryrun" goto :dryrun', lower)
+        dryrun_block = lower.rsplit(':dryrun', 1)[1]
+        self.assertIn('"%ctrl%" status -root "%root%"', dryrun_block)
         self.assertNotIn('"%ctrl%" install', dryrun_block)
         self.assertNotIn('"%ctrl%" repair', dryrun_block)
         self.assertNotIn('"%ctrl%" fallback', dryrun_block)
+
+    def test_entrypoint_binds_installed_root_and_avoids_stale_block_errorlevel(self):
+        cmd = (self.runtime_root / "ANTIGRAVITY.cmd").read_text(encoding="utf-8")
+        lower = cmd.lower()
+        self.assertIn('for %%i in ("%~dp0.") do set "root=%%~fi"', lower)
+        self.assertIn('%* -root "%root%"', lower)
+        self.assertIn('if "%~1"=="" goto :status', lower)
+        self.assertNotIn('if "%~1"=="" (', lower)
+        self.assertNotIn('if /i "%~1"=="dryrun" (', lower)
 
     def test_backup_before_first_write_and_transactional_rollback(self):
         patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
