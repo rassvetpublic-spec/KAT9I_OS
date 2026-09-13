@@ -38,6 +38,22 @@ function Normalize-Path([string]$Path) {
     return $full
 }
 
+function Normalize-Text([string]$Text) {
+    if ($null -eq $Text) { return '' }
+    $safe = [string]$Text
+    foreach ($pair in @(
+        @($env:LOCALAPPDATA,'%LOCALAPPDATA%'),
+        @($env:APPDATA,'%APPDATA%'),
+        @($env:USERPROFILE,'%USERPROFILE%')
+    )) {
+        if ($pair[0]) {
+            $safe = [regex]::Replace($safe,[regex]::Escape([string]$pair[0]),[string]$pair[1],[Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        }
+    }
+    $safe = [regex]::Replace($safe,'(?i)C:\\Users\\[^\\\s"'']+','%USERPROFILE%')
+    return $safe
+}
+
 function Convert-HexBytes([string]$Hex) {
     $clean = ($Hex -replace '\s','')
     if (($clean.Length % 2) -ne 0) { throw "Invalid hex length" }
@@ -148,7 +164,7 @@ function Load-PatchState {
         if ($s.schema -ne 1) { throw 'Unsupported patch-state schema' }
         return $s
     } catch {
-        throw "Invalid patch-state: $($_.Exception.Message)"
+        throw "Invalid patch-state: $(Normalize-Text $_.Exception.Message)"
     }
 }
 
@@ -196,14 +212,14 @@ function New-VerifiedBackup([string]$Target,[string]$Version,[string]$Hash) {
     $backup = Join-Path $dir 'language_server.exe'
     if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $Target -Destination $backup -Force }
     $bhash = Get-Sha256 $backup
-    if ($bhash -ne $Hash) { throw "Backup verification failed: $backup" }
+    if ($bhash -ne $Hash) { throw "Backup verification failed: $(Normalize-Path $backup)" }
     return $backup
 }
 
 function Restore-Verified([string]$Target,[string]$Backup,[string]$ExpectedHash) {
-    if (-not (Test-Path -LiteralPath $Backup -PathType Leaf)) { throw "Rollback backup missing: $Backup" }
+    if (-not (Test-Path -LiteralPath $Backup -PathType Leaf)) { throw "Rollback backup missing: $(Normalize-Path $Backup)" }
     Copy-Item -LiteralPath $Backup -Destination $Target -Force
-    if ((Get-Sha256 $Target) -ne $ExpectedHash) { throw "Rollback verification failed: $Target" }
+    if ((Get-Sha256 $Target) -ne $ExpectedHash) { throw "Rollback verification failed: $(Normalize-Path $Target)" }
 }
 
 $manifest = Load-Manifest
@@ -260,7 +276,7 @@ foreach ($target in $targets) {
         $plans.Add([pscustomobject]@{
             Target=$target;PublicTarget=(Normalize-Path $target);Version='unknown';Arch='unknown';Hash='';
             Compat=$null;StateRecord=$null;Signature=$null;State='ERROR';Offset=$null;
-            Authorized=$false;Authority='none';Backup=$null;Error=$_.Exception.Message
+            Authorized=$false;Authority='none';Backup=$null;Error=(Normalize-Text $_.Exception.Message)
         })
     }
 }
@@ -296,7 +312,7 @@ if ($Mode -eq 'restore') {
                 Restore-Verified $p.Target $backup $sourceHash
                 $patchState.records = @($patchState.records | Where-Object { [string]$_.target -ne $p.PublicTarget })
                 Write-Host "RESTORED: $($p.PublicTarget)"
-            } catch { $restoreFailures.Add($_.Exception.Message) }
+            } catch { $restoreFailures.Add((Normalize-Text $_.Exception.Message)) }
         }
     }
     Save-PatchState $patchState
@@ -334,15 +350,15 @@ try {
         $data = [IO.File]::ReadAllBytes($p.Target)
         $fix = Convert-HexBytes ([string]$p.Signature.fix_hex)
         $start = [int]$p.Offset + [int]$p.Signature.write_offset
-        if ($start -lt 0 -or $start + $fix.Length -gt $data.Length) { throw "Patch range invalid: $($p.Target)" }
+        if ($start -lt 0 -or $start + $fix.Length -gt $data.Length) { throw "Patch range invalid: $($p.PublicTarget)" }
         [Array]::Copy($fix,0,$data,$start,$fix.Length)
         $changed.Add($p)
         [IO.File]::WriteAllBytes($p.Target,$data)
 
         $verify = Get-SignatureState ([IO.File]::ReadAllBytes($p.Target)) $p.Signature
-        if ($verify.State -ne 'PATCHED') { throw "Post-write verify failed: $($p.Target)" }
+        if ($verify.State -ne 'PATCHED') { throw "Post-write verify failed: $($p.PublicTarget)" }
         $after = Get-Sha256 $p.Target
-        if ($p.Compat.patched_sha256 -and [string]$p.Compat.patched_sha256 -ne $after) { throw "Patched SHA256 mismatch: $($p.Target)" }
+        if ($p.Compat.patched_sha256 -and [string]$p.Compat.patched_sha256 -ne $after) { throw "Patched SHA256 mismatch: $($p.PublicTarget)" }
 
         $record = [pscustomobject][ordered]@{
             target=$p.PublicTarget;version=$p.Version;architecture=$p.Arch;
@@ -358,13 +374,13 @@ try {
         })
     }
 } catch {
-    $why = $_.Exception.Message
+    $why = Normalize-Text $_.Exception.Message
     $rollbackErrors = New-Object System.Collections.Generic.List[string]
     foreach ($p in @($changed)) {
         try {
             Restore-Verified $p.Target $p.Backup $p.Hash
             $patchState.records = @($patchState.records | Where-Object { [string]$_.target -ne $p.PublicTarget })
-        } catch { $rollbackErrors.Add($_.Exception.Message) }
+        } catch { $rollbackErrors.Add((Normalize-Text $_.Exception.Message)) }
     }
     Save-PatchState $patchState
     $overall = if ($rollbackErrors.Count) {'ROLLBACK_FAILED'} else {'ROLLED_BACK_VERIFIED'}
