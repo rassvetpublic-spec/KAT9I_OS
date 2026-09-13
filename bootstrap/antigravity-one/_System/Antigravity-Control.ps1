@@ -128,7 +128,6 @@ function Restore-FallbackSnapshot($Snapshot) {
 }
 
 function Register-VerifiedFallback($Snapshot) {
-    # Native status deliberately remains fail-closed until an explicit fallback is verified and registered here.
     [void](Invoke-NativePatch 'status')
     $receiptFile = Get-LatestReceipt
     if (-not $receiptFile) { throw 'Fallback verification receipt missing.' }
@@ -143,7 +142,6 @@ function Register-VerifiedFallback($Snapshot) {
         $records = @($old.records)
     }
 
-    $changed = New-Object System.Collections.Generic.List[object]
     try {
         foreach ($r in $Snapshot.records) {
             $current = Get-Sha256 $r.target
@@ -158,7 +156,6 @@ function Register-VerifiedFallback($Snapshot) {
                 source_sha256=[string]$r.source_sha256;patched_sha256=$current;signature_id=[string]$sigs[0].id;
                 backup=[string]$r.backup;authority='explicit-external-fallback';patched_at=(Get-Date).ToString('o')
             }
-            $changed.Add($r)
         }
         $state = [ordered]@{schema=1;records=@($records)}
         $tmp = $PatchStatePath + '.tmp'
@@ -209,7 +206,8 @@ function Try-IssueEscalation {
     $title = '[Compatibility][Antigravity ONE] Unknown/blocked language_server build'
     $existing = & gh issue list --repo $IssueRepo --state open --search 'Unknown/blocked language_server build in:title' --json number --jq '.[0].number' 2>$null
     if ($LASTEXITCODE -eq 0 -and $existing) { Write-Host "Compatibility Issue already exists: #$existing"; return }
-    & gh issue create --repo $IssueRepo --title $title --body "Compatibility receipt (sanitized):`n```json`n$body`n```" | Out-Host
+    $issueBody = "Compatibility receipt (sanitized):`r`n" + $body
+    & gh issue create --repo $IssueRepo --title $title --body $issueBody | Out-Host
 }
 
 switch ($Command) {
