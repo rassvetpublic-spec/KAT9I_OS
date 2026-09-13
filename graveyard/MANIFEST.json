@@ -67,6 +67,17 @@
       "actionable": false,
       "control": false,
       "canonical": false
+    },
+    {
+      "archive_id": "GY-20260913-codex-lifecycle-efficiency-and-kat9i-routing",
+      "path": "graveyard/GY-20260913-codex-lifecycle-efficiency-and-kat9i-routing.md",
+      "archive_date": "2026-09-13",
+      "byte_size": 13663,
+      "sha256": "34fe610cddd473666ec5a581430f9a226522e08cb8853e9289d681de29abea3f",
+      "git_blob_sha1": "9f6091af6110ed2cd7699ba06b9cd656888ca5ce",
+      "actionable": false,
+      "control": false,
+      "canonical": false
     }
   ]
 }
