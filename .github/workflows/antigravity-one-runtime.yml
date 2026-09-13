@@ -6,6 +6,7 @@ on:
       - 'bootstrap/antigravity-one/**'
       - 'scripts/antigravity_one_contract.py'
       - 'tests/test_antigravity_one_contract.py'
+      - '.github/workflows/antigravity-one-runtime.yml'
   workflow_dispatch:
 
 permissions:
@@ -30,3 +31,30 @@ jobs:
           test -f bootstrap/antigravity-one/_System/Antigravity-Control.ps1
           test -f bootstrap/antigravity-one/_System/Patch-Antigravity.ps1
           test -f bootstrap/antigravity-one/_System/patch-signatures.json
+
+  windows-parse:
+    name: Проверка PowerShell на Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверить синтаксис PowerShell runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(
+            'bootstrap/antigravity-one/Install-Antigravity-One.ps1',
+            'bootstrap/antigravity-one/_System/Antigravity-Control.ps1',
+            'bootstrap/antigravity-one/_System/Patch-Antigravity.ps1'
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file), [ref]$tokens, [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "${file}: $($_.Message)" }
+              exit 1
+            }
+            Write-Host "OK: $file"
+          }
