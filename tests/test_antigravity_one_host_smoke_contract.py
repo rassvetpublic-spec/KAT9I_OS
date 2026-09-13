@@ -21,6 +21,20 @@ class AntigravityOneHostSmokeContractTests(unittest.TestCase):
         self.assertIn("Invoke-Entry 'dryrun'", self.text)
         self.assertIn("READ_ONLY_MUTATION_DETECTED", self.text)
 
+    def test_invoke_entry_returns_only_scalar_exit_code(self):
+        self.assertIn("$childOutput = & $env:ComSpec /d /c $line 2>&1", self.text)
+        self.assertIn("$rc = [int]$LASTEXITCODE", self.text)
+        self.assertIn("foreach ($outputLine in @($childOutput)) { Write-Host $outputLine }", self.text)
+        self.assertIn("return $rc", self.text)
+
+    def test_protected_snapshot_fingerprints_descendants_without_content_read(self):
+        self.assertIn("Get-ProtectedTreeFingerprint", self.text)
+        self.assertIn("Get-ChildItem -LiteralPath $Path -Force -Recurse", self.text)
+        self.assertIn("metadata_sha256", self.text)
+        self.assertIn("item_count", self.text)
+        self.assertIn("Get-StringSha256", self.text)
+        self.assertNotIn("Get-Content -LiteralPath $Path", self.text)
+
     def test_mutating_commands_require_explicit_mode(self):
         self.assertIn("[ValidateSet('ReadOnly','Install','Repair')]", self.text)
         self.assertIn("if ($Mode -eq 'Install')", self.text)
