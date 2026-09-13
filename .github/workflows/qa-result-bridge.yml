@@ -8,6 +8,8 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  checks: read
+  statuses: read
 
 concurrency:
   group: qa-result-bridge-${{ github.event.issue.number }}
@@ -25,6 +27,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
 
       - name: Извлечь ссылку на QA review из Controller attestation
         id: attest
@@ -34,7 +37,7 @@ jobs:
           REVIEW_ID="$(python scripts/qa_result_bridge.py extract-review-id --event-path "$GITHUB_EVENT_PATH")"
           printf 'review_id=%s\n' "$REVIEW_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Прочитать live PR, owner comments и referenced review
+      - name: Прочитать live PR, Evidence и review-state
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -43,8 +46,36 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
+          LIVE_HEAD="$(jq -r '.head.sha' current-pr.json)"
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments.json
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews/${REVIEW_ID}" > qa-review.json
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" | jq 'add // []' > reviews.json
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/check-runs?per_page=100" > check-runs.json
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/status?per_page=100" > commit-status.json
+
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated} pageInfo{hasNextPage endCursor}}} pageInfo{hasNextPage endCursor}}}}}' \
+            -f owner="$OWNER" \
+            -f repo="$REPO" \
+            -F number="$PR_NUMBER" > review-threads.json
+          if [ "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' review-threads.json)" != "false" ]; then
+            echo "::error::MALFORMED_EVIDENCE: review thread inventory exceeds one deterministic page."
+            exit 1
+          fi
+          if jq -e '[.data.repository.pullRequest.reviewThreads.nodes[].comments.pageInfo.hasNextPage] | any' review-threads.json >/dev/null; then
+            echo "::error::MALFORMED_EVIDENCE: review comment inventory exceeds one deterministic page."
+            exit 1
+          fi
+          if [ "$(jq -r '.total_count // 0' check-runs.json)" -gt "$(jq '.check_runs | length' check-runs.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: check-run inventory is incomplete."
+            exit 1
+          fi
+          if [ "$(jq -r '.total_count // (.statuses | length)' commit-status.json)" -gt "$(jq '.statuses | length' commit-status.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: commit-status inventory is incomplete."
+            exit 1
+          fi
 
       - name: Проверить QA-COMMAND → AGY result → Controller attestation
         id: validate
@@ -68,26 +99,221 @@ jobs:
               out.write(f"exact_head={data.get('exact_head','')}\n")
           PY
 
+      - name: Проверить Evidence Epoch после QA-ACCEPT
+        if: steps.validate.outputs.decision == 'ACCEPT'
+        shell: bash
+        env:
+          COMMAND_ID: ${{ steps.validate.outputs.command_id }}
+          EXPECTED_HEAD: ${{ steps.validate.outputs.exact_head }}
+          REVIEW_ID: ${{ steps.attest.outputs.review_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from datetime import datetime
+          from pathlib import Path
+
+          command_marker='KAT9I-CONTROL/1 | QA-COMMAND'
+          result_marker='KAT9I-QA-RESULT/1'
+          command_id=os.environ['COMMAND_ID']
+          selected=int(os.environ['REVIEW_ID'])
+
+          def flatten(value):
+              if isinstance(value, dict): return [value]
+              out=[]
+              for item in value if isinstance(value, list) else []:
+                  out.extend(flatten(item))
+              return out
+          def first(body):
+              lines=str(body or '').splitlines()
+              return lines[0].strip() if lines else ''
+          def field(body, key):
+              for raw in str(body or '').splitlines()[1:]:
+                  line=raw.strip()
+                  if not line: break
+                  if '=' in line:
+                      k,v=line.split('=',1)
+                      if k.strip()==key: return v.strip()
+              return None
+          def stamp(value):
+              return datetime.fromisoformat(str(value or '').replace('Z','+00:00'))
+
+          comments=flatten(json.loads(Path('issue-comments.json').read_text(encoding='utf-8')))
+          commands=[c for c in comments if c.get('author_association')=='OWNER' and first(c.get('body'))==command_marker and field(c.get('body'),'command_id')==command_id]
+          if len(commands)!=1:
+              raise SystemExit('MALFORMED_EVIDENCE: active command_id must resolve to exactly one owner QA-COMMAND')
+          command_time=stamp(commands[0].get('created_at'))
+          reviews=flatten(json.loads(Path('reviews.json').read_text(encoding='utf-8')))
+          if not any(int(r.get('id') or 0)==selected for r in reviews):
+              raise SystemExit('MALFORMED_EVIDENCE: selected QA review absent from inventory')
+          competing=[str(r.get('id')) for r in reviews if int(r.get('id') or 0)!=selected and first(r.get('body'))==result_marker and stamp(r.get('submitted_at'))>command_time]
+          if competing:
+              raise SystemExit('REVIEW_DRIFT: competing structured QA-RESULT after active QA-COMMAND: '+','.join(sorted(competing)))
+          PY
+          python scripts/qa_evidence_epoch.py validate \
+            --command-id "$COMMAND_ID" \
+            --comments-path issue-comments.json \
+            --review-path qa-review.json \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --head "$EXPECTED_HEAD" \
+            --review-threads-path review-threads.json \
+            --reviews-path reviews.json \
+            --check-runs-path check-runs.json \
+            --status-path commit-status.json \
+            --root . \
+            --output evidence-epoch.json
+
       - name: Нет нового управляющего перехода
         if: steps.validate.outputs.decision != 'ACCEPT'
         run: echo "Controller attestation не требует нового lifecycle transition."
 
-      - name: Повторно проверить live HEAD и опубликовать trusted lifecycle marker
+      - name: Повторно проверить Evidence Epoch и опубликовать trusted lifecycle marker
         if: steps.validate.outputs.decision == 'ACCEPT'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
           EXPECTED_HEAD: ${{ steps.validate.outputs.exact_head }}
+          COMMAND_ID: ${{ steps.validate.outputs.command_id }}
+          REVIEW_ID: ${{ steps.attest.outputs.review_id }}
         run: |
           set -euo pipefail
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::SECRET_MISSING: KAT9I_PROJECT_TOKEN не передан; lifecycle не изменён."
             exit 1
           fi
+
           LIVE_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
-            echo "::error::STALE_HEAD: PR HEAD изменился после Controller attestation; FAST marker не публикуется."
+            echo "::error::HEAD_DRIFT: PR HEAD изменился после Controller attestation; FAST marker не публикуется."
+            exit 1
+          fi
+
+          git fetch --quiet origin "${{ github.event.repository.default_branch }}"
+          if ! git diff --quiet HEAD FETCH_HEAD -- QA_PROTOCOL.md scripts/qa_result_bridge.py scripts/qa_evidence_epoch.py .github/workflows/qa-result-bridge.yml; then
+            echo "::error::POLICY_DRIFT: trusted QA protocol изменился после checkout; FAST marker не публикуется."
+            exit 1
+          fi
+
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments-final.json
+          python - <<'PY'
+          import json
+          from datetime import datetime
+          from pathlib import Path
+
+          marker = 'KAT9I-CONTROL/1 | QA-COMMAND'
+          event = json.loads(Path(Path(__import__('os').environ['GITHUB_EVENT_PATH'])).read_text(encoding='utf-8'))
+          attest = event.get('comment') or {}
+          attest_time = datetime.fromisoformat(str(attest.get('created_at') or '').replace('Z', '+00:00'))
+          attest_key = (attest_time, int(attest.get('id') or 0))
+          payload = json.loads(Path('issue-comments-final.json').read_text(encoding='utf-8'))
+
+          def flatten(value):
+              if isinstance(value, dict):
+                  return [value]
+              out = []
+              for item in value if isinstance(value, list) else []:
+                  out.extend(flatten(item))
+              return out
+
+          for comment in flatten(payload):
+              if comment.get('author_association') != 'OWNER':
+                  continue
+              first = str(comment.get('body') or '').splitlines()
+              if not first or first[0].strip() != marker:
+                  continue
+              created = datetime.fromisoformat(str(comment.get('created_at') or '').replace('Z', '+00:00'))
+              key = (created, int(comment.get('id') or 0))
+              if key > attest_key:
+                  raise SystemExit('STALE_EVIDENCE: superseding owner QA-COMMAND appeared after QA-ACCEPT')
+          PY
+
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" | jq 'add // []' > reviews-final.json
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/check-runs?per_page=100" > check-runs-final.json
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${LIVE_HEAD}/status?per_page=100" > commit-status-final.json
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          gh api graphql \
+            -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated} pageInfo{hasNextPage endCursor}}} pageInfo{hasNextPage endCursor}}}}}' \
+            -f owner="$OWNER" \
+            -f repo="$REPO" \
+            -F number="$PR_NUMBER" > review-threads-final.json
+          if [ "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' review-threads-final.json)" != "false" ]; then
+            echo "::error::MALFORMED_EVIDENCE: final review thread inventory is incomplete."
+            exit 1
+          fi
+          if jq -e '[.data.repository.pullRequest.reviewThreads.nodes[].comments.pageInfo.hasNextPage] | any' review-threads-final.json >/dev/null; then
+            echo "::error::MALFORMED_EVIDENCE: final review comment inventory is incomplete."
+            exit 1
+          fi
+          if [ "$(jq -r '.total_count // 0' check-runs-final.json)" -gt "$(jq '.check_runs | length' check-runs-final.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: final check-run inventory is incomplete."
+            exit 1
+          fi
+          if [ "$(jq -r '.total_count // (.statuses | length)' commit-status-final.json)" -gt "$(jq '.statuses | length' commit-status-final.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: final commit-status inventory is incomplete."
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json, os
+          from datetime import datetime
+          from pathlib import Path
+
+          command_marker='KAT9I-CONTROL/1 | QA-COMMAND'
+          result_marker='KAT9I-QA-RESULT/1'
+          command_id=os.environ['COMMAND_ID']
+          selected=int(os.environ['REVIEW_ID'])
+
+          def flatten(value):
+              if isinstance(value, dict): return [value]
+              out=[]
+              for item in value if isinstance(value, list) else []:
+                  out.extend(flatten(item))
+              return out
+          def first(body):
+              lines=str(body or '').splitlines()
+              return lines[0].strip() if lines else ''
+          def field(body, key):
+              for raw in str(body or '').splitlines()[1:]:
+                  line=raw.strip()
+                  if not line: break
+                  if '=' in line:
+                      k,v=line.split('=',1)
+                      if k.strip()==key: return v.strip()
+              return None
+          def stamp(value):
+              return datetime.fromisoformat(str(value or '').replace('Z','+00:00'))
+
+          comments=flatten(json.loads(Path('issue-comments-final.json').read_text(encoding='utf-8')))
+          commands=[c for c in comments if c.get('author_association')=='OWNER' and first(c.get('body'))==command_marker and field(c.get('body'),'command_id')==command_id]
+          if len(commands)!=1:
+              raise SystemExit('MALFORMED_EVIDENCE: active command_id must resolve to exactly one owner QA-COMMAND')
+          command_time=stamp(commands[0].get('created_at'))
+          reviews=flatten(json.loads(Path('reviews-final.json').read_text(encoding='utf-8')))
+          if not any(int(r.get('id') or 0)==selected for r in reviews):
+              raise SystemExit('MALFORMED_EVIDENCE: selected QA review absent from final inventory')
+          competing=[str(r.get('id')) for r in reviews if int(r.get('id') or 0)!=selected and first(r.get('body'))==result_marker and stamp(r.get('submitted_at'))>command_time]
+          if competing:
+              raise SystemExit('REVIEW_DRIFT: competing structured QA-RESULT after active QA-COMMAND: '+','.join(sorted(competing)))
+          PY
+
+          python scripts/qa_evidence_epoch.py validate \
+            --command-id "$COMMAND_ID" \
+            --comments-path issue-comments-final.json \
+            --review-path qa-review.json \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --head "$LIVE_HEAD" \
+            --review-threads-path review-threads-final.json \
+            --reviews-path reviews-final.json \
+            --check-runs-path check-runs-final.json \
+            --status-path commit-status-final.json \
+            --root . \
+            --output evidence-epoch-final.json
+
+          FINAL_LIVE_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          if [ "$FINAL_LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
+            echo "::error::HEAD_DRIFT: PR HEAD изменился непосредственно перед FAST publication; marker не публикуется."
             exit 1
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$(cat bridge-comment.md)" >/dev/null
