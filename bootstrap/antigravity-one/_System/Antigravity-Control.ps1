@@ -85,8 +85,12 @@ function New-StateBackup([string]$Reason) {
 
 function Invoke-NativePatch([string]$Mode) {
     if (-not (Test-Path -LiteralPath $PatchScript)) { throw "Patch engine missing: $PatchScript" }
-    & $PatchScript -Mode $Mode -Root $Root -AllowIssueWrite:$AllowIssueWrite
-    return $LASTEXITCODE
+    $hostExe = (Get-Process -Id $PID).Path
+    if (-not $hostExe) { throw 'Cannot resolve current PowerShell host executable.' }
+    $childArgs = @('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$PatchScript,'-Mode',$Mode,'-Root',$Root)
+    if ($AllowIssueWrite) { $childArgs += '-AllowIssueWrite' }
+    & $hostExe @childArgs
+    return [int]$LASTEXITCODE
 }
 
 function Get-LatestReceipt {
@@ -128,21 +132,23 @@ function Restore-FallbackSnapshot($Snapshot) {
 }
 
 function Register-VerifiedFallback($Snapshot) {
-    [void](Invoke-NativePatch 'status')
-    $receiptFile = Get-LatestReceipt
-    if (-not $receiptFile) { throw 'Fallback verification receipt missing.' }
-    $receipt = Get-Content -LiteralPath $receiptFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-    $byTarget = @{}
-    foreach ($t in @($receipt.targets)) { $byTarget[[string]$t.target] = $t }
-
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    $records = @()
-    if (Test-Path -LiteralPath $PatchStatePath) {
-        $old = Get-Content -LiteralPath $PatchStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $records = @($old.records)
-    }
-
+    $hadPatchState = Test-Path -LiteralPath $PatchStatePath
+    $oldPatchState = if ($hadPatchState) { [IO.File]::ReadAllBytes($PatchStatePath) } else { $null }
     try {
+        [void](Invoke-NativePatch 'status')
+        $receiptFile = Get-LatestReceipt
+        if (-not $receiptFile) { throw 'Fallback verification receipt missing.' }
+        $receipt = Get-Content -LiteralPath $receiptFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+        $byTarget = @{}
+        foreach ($t in @($receipt.targets)) { $byTarget[[string]$t.target] = $t }
+
+        $manifest = Get-Content -LiteralPath $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $records = @()
+        if ($hadPatchState) {
+            $old = Get-Content -LiteralPath $PatchStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $records = @($old.records)
+        }
+
         foreach ($r in $Snapshot.records) {
             $current = Get-Sha256 $r.target
             if ($current -eq [string]$r.source_sha256) { throw "Fallback did not modify target: $($r.public_target)" }
@@ -165,6 +171,11 @@ function Register-VerifiedFallback($Snapshot) {
         if ($rc -ne 0) { throw 'Registered fallback did not pass native status verification.' }
     } catch {
         Restore-FallbackSnapshot $Snapshot
+        if ($hadPatchState) {
+            [IO.File]::WriteAllBytes($PatchStatePath,$oldPatchState)
+        } else {
+            Remove-Item -LiteralPath $PatchStatePath -Force -ErrorAction SilentlyContinue
+        }
         throw
     }
 }
