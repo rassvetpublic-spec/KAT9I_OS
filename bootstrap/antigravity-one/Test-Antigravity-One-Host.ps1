@@ -33,15 +33,44 @@ function Get-Sha256([string]$Path) {
     return ([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant()
 }
 
+function Get-StringSha256([string]$Value) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+        $digest = $sha.ComputeHash($bytes)
+    } finally { $sha.Dispose() }
+    return ([BitConverter]::ToString($digest)).Replace('-','').ToLowerInvariant()
+}
+
+function Get-ProtectedTreeFingerprint([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return [ordered]@{ exists = $false; item_count = 0; metadata_sha256 = $null }
+    }
+
+    $rootItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    $records = New-Object System.Collections.Generic.List[string]
+    $records.Add(('D|.|{0}|{1}' -f $rootItem.LastWriteTimeUtc.Ticks,[int]$rootItem.Attributes))
+
+    foreach ($item in @(Get-ChildItem -LiteralPath $Path -Force -Recurse -ErrorAction Stop | Sort-Object FullName)) {
+        $relative = $item.FullName.Substring($rootItem.FullName.Length).TrimStart('\').Replace('\','/')
+        $kind = if ($item.PSIsContainer) { 'D' } else { 'F' }
+        $length = if ($item.PSIsContainer) { '-' } else { [string]$item.Length }
+        $records.Add(('{0}|{1}|{2}|{3}|{4}' -f $kind,$relative,$length,$item.LastWriteTimeUtc.Ticks,[int]$item.Attributes))
+    }
+
+    $canonical = [string]::Join("`n",@($records))
+    return [ordered]@{
+        exists = $true
+        item_count = $records.Count
+        metadata_sha256 = Get-StringSha256 $canonical
+    }
+}
+
 function Get-ProtectedSnapshot {
     $items = [ordered]@{}
     foreach ($relative in @('Standalone\Profile','_Manager\Data','_Manager\State')) {
         $path = Join-Path $Root $relative
-        $item = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
-        $items[$relative] = [ordered]@{
-            exists = [bool]$item
-            last_write_utc = if ($item) { $item.LastWriteTimeUtc.ToString('o') } else { $null }
-        }
+        $items[$relative] = Get-ProtectedTreeFingerprint $path
     }
     $patchState = Join-Path $Root '_System\patch-state.json'
     $items['patch-state.json'] = [ordered]@{
@@ -57,8 +86,10 @@ function Invoke-Entry([string]$Command) {
         throw "Antigravity ONE entry point missing: $(Normalize-Path $entry)"
     }
     $line = '""{0}" {1}"' -f $entry,$Command
-    & $env:ComSpec /d /c $line
-    return [int]$LASTEXITCODE
+    $childOutput = & $env:ComSpec /d /c $line 2>&1
+    $rc = [int]$LASTEXITCODE
+    foreach ($outputLine in @($childOutput)) { Write-Host $outputLine }
+    return $rc
 }
 
 if ($Mode -ne 'ReadOnly' -and -not $AllowMutation) {
