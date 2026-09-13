@@ -336,8 +336,8 @@ try {
         $start = [int]$p.Offset + [int]$p.Signature.write_offset
         if ($start -lt 0 -or $start + $fix.Length -gt $data.Length) { throw "Patch range invalid: $($p.Target)" }
         [Array]::Copy($fix,0,$data,$start,$fix.Length)
-        [IO.File]::WriteAllBytes($p.Target,$data)
         $changed.Add($p)
+        [IO.File]::WriteAllBytes($p.Target,$data)
 
         $verify = Get-SignatureState ([IO.File]::ReadAllBytes($p.Target)) $p.Signature
         if ($verify.State -ne 'PATCHED') { throw "Post-write verify failed: $($p.Target)" }
