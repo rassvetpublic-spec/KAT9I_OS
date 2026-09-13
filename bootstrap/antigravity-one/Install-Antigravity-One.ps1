@@ -47,8 +47,5 @@ Write-Host "Installed bootstrap to $Root"
 Write-Host "Single entry point: $(Join-Path $Root 'ANTIGRAVITY.cmd')"
 Write-Host "Bootstrap backup: $BootstrapBackup"
 Write-Host 'Running read-only status...'
-$controller = Join-Path $TargetSystem 'Antigravity-Control.ps1'
-$hostExe = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { (Get-Command pwsh.exe).Source } else { (Get-Command powershell.exe).Source }
-& $hostExe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $controller status -Root $Root
-$statusRc = [int]$LASTEXITCODE
-exit $statusRc
+$patchStatus = Join-Path $TargetSystem 'Patch-Antigravity.ps1'
+& $patchStatus -Mode status -Root $Root
