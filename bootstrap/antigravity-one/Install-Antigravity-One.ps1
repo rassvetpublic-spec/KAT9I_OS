@@ -47,5 +47,7 @@ Write-Host "Installed bootstrap to $Root"
 Write-Host "Single entry point: $(Join-Path $Root 'ANTIGRAVITY.cmd')"
 Write-Host "Bootstrap backup: $BootstrapBackup"
 Write-Host 'Running read-only status...'
-& (Join-Path $Root 'ANTIGRAVITY.cmd') status
-exit $LASTEXITCODE
+$entry = Join-Path $Root 'ANTIGRAVITY.cmd'
+& $env:ComSpec /d /s /c "`"$entry`" status"
+$statusRc = [int]$LASTEXITCODE
+exit $statusRc
