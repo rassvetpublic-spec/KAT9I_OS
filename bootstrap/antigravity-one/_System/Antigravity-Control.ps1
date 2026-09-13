@@ -89,8 +89,9 @@ function Invoke-NativePatch([string]$Mode) {
     if (-not $hostExe) { throw 'Cannot resolve current PowerShell host executable.' }
     $childArgs = @('-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-File',$PatchScript,'-Mode',$Mode,'-Root',$Root)
     if ($AllowIssueWrite) { $childArgs += '-AllowIssueWrite' }
-    & $hostExe @childArgs
-    return [int]$LASTEXITCODE
+    & $hostExe @childArgs | ForEach-Object { Write-Host $_ }
+    $rc = [int]$LASTEXITCODE
+    return $rc
 }
 
 function Get-LatestReceipt {
