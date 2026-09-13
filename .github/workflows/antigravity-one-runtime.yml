@@ -58,3 +58,49 @@ jobs:
             }
             Write-Host "OK: $file"
           }
+      - name: Zero-state smoke — bootstrap и DryRun должны fail-closed без mutation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'antigravity-zero-state'
+          if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }
+
+          & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File 'bootstrap/antigravity-one/Install-Antigravity-One.ps1' -Root $root
+          $installRc = $LASTEXITCODE
+          if ($installRc -eq 0) { throw 'Zero-state install unexpectedly reported success without a language_server target.' }
+
+          foreach ($required in @(
+            (Join-Path $root 'ANTIGRAVITY.cmd'),
+            (Join-Path $root '_System\Antigravity-Control.ps1'),
+            (Join-Path $root '_System\Patch-Antigravity.ps1'),
+            (Join-Path $root '_System\patch-signatures.json')
+          )) {
+            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Bootstrap file missing: $required" }
+          }
+
+          foreach ($forbidden in @(
+            (Join-Path $root 'Standalone\Profile'),
+            (Join-Path $root '_Manager\Data'),
+            (Join-Path $root '_Manager\State'),
+            (Join-Path $root '_System\patch-state.json')
+          )) {
+            if (Test-Path -LiteralPath $forbidden) { throw "Zero-state bootstrap mutated protected state: $forbidden" }
+          }
+
+          $receiptsBefore = @(Get-ChildItem -LiteralPath (Join-Path $root '_System\Receipts') -Filter 'patch_*.json' -File -ErrorAction SilentlyContinue).Count
+          & cmd.exe /d /c "`"$root\ANTIGRAVITY.cmd`" dryrun"
+          $dryRunRc = $LASTEXITCODE
+          if ($dryRunRc -eq 0) { throw 'DryRun unexpectedly reported compatibility success without a language_server target.' }
+
+          foreach ($forbidden in @(
+            (Join-Path $root 'Standalone\Profile'),
+            (Join-Path $root '_Manager\Data'),
+            (Join-Path $root '_Manager\State'),
+            (Join-Path $root '_System\patch-state.json')
+          )) {
+            if (Test-Path -LiteralPath $forbidden) { throw "DryRun mutated protected state: $forbidden" }
+          }
+
+          $receiptsAfter = @(Get-ChildItem -LiteralPath (Join-Path $root '_System\Receipts') -Filter 'patch_*.json' -File -ErrorAction SilentlyContinue).Count
+          if ($receiptsAfter -le $receiptsBefore) { throw 'DryRun did not produce read-only diagnostic receipt.' }
+          Write-Host "ZERO_STATE_SMOKE_PASS install_rc=$installRc dryrun_rc=$dryRunRc receipts=$receiptsAfter"
