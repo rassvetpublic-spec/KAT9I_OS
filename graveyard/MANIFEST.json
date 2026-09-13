@@ -67,6 +67,17 @@
       "actionable": false,
       "control": false,
       "canonical": false
+    },
+    {
+      "archive_id": "GY-20260913-ai2local-kat9i-deferred-donors",
+      "path": "graveyard/GY-20260913-ai2local-kat9i-deferred-donors_v1.0.0.md",
+      "archive_date": "2026-09-13",
+      "byte_size": 14402,
+      "sha256": "d4b2f67978a1f3a6c8f69c5ee0f1a0a8fcc11281893812c2d5feab86c045d124",
+      "git_blob_sha1": "16c28e2eea6fe2f887c8756f1d2b2fb9182ff69f",
+      "actionable": false,
+      "control": false,
+      "canonical": false
     }
   ]
 }
