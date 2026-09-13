@@ -376,7 +376,7 @@ try {
 } catch {
     $why = Normalize-Text $_.Exception.Message
     $rollbackErrors = New-Object System.Collections.Generic.List[string]
-    foreach ($p in @($changed)) {
+    foreach ($p in $changed) {
         try {
             Restore-Verified $p.Target $p.Backup $p.Hash
             $patchState.records = @($patchState.records | Where-Object { [string]$_.target -ne $p.PublicTarget })
