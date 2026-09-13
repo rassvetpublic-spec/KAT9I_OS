@@ -70,6 +70,16 @@ class AntigravityOneContractTests(unittest.TestCase):
         install_block = controller.split("'install'", 1)[1].split("'repair'", 1)[0]
         self.assertNotIn("Invoke-ExplicitFallback", install_block)
 
+    def test_dryrun_is_read_only_alias_to_status(self):
+        cmd = (self.runtime_root / "ANTIGRAVITY.cmd").read_text(encoding="utf-8")
+        lower = cmd.lower()
+        self.assertIn('if /i "%~1"=="dryrun"', lower)
+        dryrun_block = lower.split('if /i "%~1"=="dryrun"', 1)[1].split('"%ps%" -nologo -noprofile -executionpolicy bypass -file "%ctrl%" %*', 1)[0]
+        self.assertIn('"%ctrl%" status', dryrun_block)
+        self.assertNotIn(' install', dryrun_block)
+        self.assertNotIn(' repair', dryrun_block)
+        self.assertNotIn(' fallback', dryrun_block)
+
     def test_backup_before_first_write_and_transactional_rollback(self):
         patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
         backup_pos = patch.index("Transaction rule: verify backups for every ORIGINAL target before the first write")
