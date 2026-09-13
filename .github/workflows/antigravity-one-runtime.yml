@@ -106,3 +106,4 @@ jobs:
           $receiptsAfter = @(Get-ChildItem -LiteralPath (Join-Path $root '_System\Receipts') -Filter 'patch_*.json' -File -ErrorAction SilentlyContinue).Count
           if ($receiptsAfter -le $receiptsBefore) { throw 'DryRun did not produce read-only diagnostic receipt.' }
           Write-Host "ZERO_STATE_SMOKE_PASS install_rc=$installRc dryrun_rc=$dryRunRc receipts=$receiptsAfter"
+          exit 0
