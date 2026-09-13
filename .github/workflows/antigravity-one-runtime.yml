@@ -1,0 +1,32 @@
+name: Runtime Antigravity ONE
+
+on:
+  pull_request:
+    paths:
+      - 'bootstrap/antigravity-one/**'
+      - 'scripts/antigravity_one_contract.py'
+      - 'tests/test_antigravity_one_contract.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Проверка runtime-контракта Antigravity ONE
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Проверить manifest и сигнатуры
+        run: python scripts/antigravity_one_contract.py --check
+      - name: Запустить regression-тесты Antigravity ONE
+        run: python -m unittest tests/test_antigravity_one_contract.py
+      - name: Проверить наличие единой точки входа и runtime-файлов
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f bootstrap/antigravity-one/ANTIGRAVITY.cmd
+          test -f bootstrap/antigravity-one/Install-Antigravity-One.ps1
+          test -f bootstrap/antigravity-one/_System/Antigravity-Control.ps1
+          test -f bootstrap/antigravity-one/_System/Patch-Antigravity.ps1
+          test -f bootstrap/antigravity-one/_System/patch-signatures.json
