@@ -70,6 +70,40 @@ class AntigravityOneContractTests(unittest.TestCase):
         install_block = controller.split("'install'", 1)[1].split("'repair'", 1)[0]
         self.assertNotIn("Invoke-ExplicitFallback", install_block)
 
+    def test_dryrun_is_read_only_alias_to_status(self):
+        cmd = (self.runtime_root / "ANTIGRAVITY.cmd").read_text(encoding="utf-8")
+        lower = cmd.lower()
+        self.assertIn('if /i "%~1"=="dryrun" goto :dryrun', lower)
+        dryrun_block = lower.rsplit(':dryrun', 1)[1]
+        self.assertIn('"%ctrl%" status -root "%root%"', dryrun_block)
+        self.assertNotIn('"%ctrl%" install', dryrun_block)
+        self.assertNotIn('"%ctrl%" repair', dryrun_block)
+        self.assertNotIn('"%ctrl%" fallback', dryrun_block)
+
+    def test_entrypoint_binds_installed_root_and_avoids_stale_block_errorlevel(self):
+        cmd = (self.runtime_root / "ANTIGRAVITY.cmd").read_text(encoding="utf-8")
+        lower = cmd.lower()
+        self.assertIn('for %%i in ("%~dp0.") do set "root=%%~fi"', lower)
+        self.assertIn('%* -root "%root%"', lower)
+        self.assertIn('if "%~1"=="" goto :status', lower)
+        self.assertNotIn('if "%~1"=="" (', lower)
+        self.assertNotIn('if /i "%~1"=="dryrun" (', lower)
+
+    def test_installer_propagates_native_status_exit_code(self):
+        installer = (self.runtime_root / "Install-Antigravity-One.ps1").read_text(encoding="utf-8")
+        self.assertIn("$hostExe = (Get-Process -Id $PID).Path", installer)
+        self.assertIn("$statusRc = [int]$LASTEXITCODE", installer)
+        self.assertIn("exit $statusRc", installer)
+        self.assertIn("-File $patchStatus -Mode status -Root $Root", installer)
+
+    def test_controller_native_patch_return_is_not_polluted_by_stdout(self):
+        controller = (self.runtime_root / "_System" / "Antigravity-Control.ps1").read_text(encoding="utf-8")
+        native = controller.split("function Invoke-NativePatch", 1)[1].split("function Get-LatestReceipt", 1)[0]
+        self.assertIn("ForEach-Object { Write-Host $_ }", native)
+        self.assertIn("$rc = [int]$LASTEXITCODE", native)
+        self.assertIn("return $rc", native)
+        self.assertNotIn("& $hostExe @childArgs\n    return", native)
+
     def test_backup_before_first_write_and_transactional_rollback(self):
         patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
         backup_pos = patch.index("Transaction rule: verify backups for every ORIGINAL target before the first write")
