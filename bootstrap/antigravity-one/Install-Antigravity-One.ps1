@@ -48,6 +48,6 @@ Write-Host "Single entry point: $(Join-Path $Root 'ANTIGRAVITY.cmd')"
 Write-Host "Bootstrap backup: $BootstrapBackup"
 Write-Host 'Running read-only status...'
 $entry = Join-Path $Root 'ANTIGRAVITY.cmd'
-& $env:ComSpec /d /s /c "`"$entry`" status"
-$statusRc = [int]$LASTEXITCODE
-exit $statusRc
+$cmdLine = 'call "{0}" status' -f $entry
+$statusProcess = Start-Process -FilePath $env:ComSpec -ArgumentList @('/d','/s','/c',$cmdLine) -Wait -PassThru -NoNewWindow
+exit ([int]$statusProcess.ExitCode)
