@@ -67,17 +67,40 @@ class AntigravityOneContractTests(unittest.TestCase):
         self.assertIn("Antigravity-Control.ps1", cmd)
         self.assertIn("ValidateSet('status','install','repair','fallback')", controller)
         self.assertIn("EXPLICIT FALLBACK", controller)
-        self.assertNotIn("Invoke-ExplicitFallback\n        exit", controller.split("'install'", 1)[1].split("'repair'", 1)[0])
+        install_block = controller.split("'install'", 1)[1].split("'repair'", 1)[0]
+        self.assertNotIn("Invoke-ExplicitFallback", install_block)
 
-    def test_backup_before_first_write_and_rollback_contract(self):
+    def test_backup_before_first_write_and_transactional_rollback(self):
         patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
-        backup_pos = patch.index("Transaction rule: verify backups for every target before the first write")
+        backup_pos = patch.index("Transaction rule: verify backups for every ORIGINAL target before the first write")
         write_pos = patch.index("[IO.File]::WriteAllBytes($p.Target,$data)")
         rollback_pos = patch.index("Restore-Verified $p.Target $p.Backup $p.Hash")
         self.assertLess(backup_pos, write_pos)
         self.assertGreater(rollback_pos, write_pos)
-        self.assertIn("PATCH_INCOMPATIBLE / BLOCKED", patch)
-        self.assertIn("signature is ambiguous", patch)
+        self.assertIn("ROLLED_BACK_VERIFIED", patch)
+        self.assertIn("ROLLBACK_FAILED", patch)
+
+    def test_patched_state_requires_authority(self):
+        patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
+        self.assertIn("Find-StateRecord", patch)
+        self.assertIn("$p.Authorized -and $p.State -eq 'PATCHED'", patch)
+        self.assertIn("authority='native-manifest'", patch)
+        self.assertIn("patch-state.json", patch)
+
+    def test_restore_uses_recorded_original_backup(self):
+        patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
+        self.assertIn("$p.StateRecord.backup", patch)
+        self.assertIn("$p.StateRecord.source_sha256", patch)
+        self.assertIn("Restore-Verified", patch)
+
+    def test_fallback_has_binary_backup_verify_register_and_rollback(self):
+        controller = (self.runtime_root / "_System" / "Antigravity-Control.ps1").read_text(encoding="utf-8")
+        self.assertIn("New-FallbackBinarySnapshot", controller)
+        self.assertIn("Fallback backup verification failed", controller)
+        self.assertIn("Register-VerifiedFallback", controller)
+        self.assertIn("explicit-external-fallback", controller)
+        self.assertIn("Restore-FallbackSnapshot", controller)
+        self.assertIn("FALLBACK_VERIFIED", controller)
 
     def test_receipts_use_normalized_paths(self):
         patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
@@ -85,6 +108,11 @@ class AntigravityOneContractTests(unittest.TestCase):
         self.assertIn("%LOCALAPPDATA%", patch)
         self.assertIn("%APPDATA%", patch)
         self.assertIn("%USERPROFILE%", patch)
+
+    def test_no_dotnet_fromhexstring_dependency(self):
+        patch = (self.runtime_root / "_System" / "Patch-Antigravity.ps1").read_text(encoding="utf-8")
+        self.assertNotIn("FromHexString", patch)
+        self.assertIn("Convert-HexBytes", patch)
 
 
 if __name__ == "__main__":
