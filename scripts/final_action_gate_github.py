@@ -62,8 +62,10 @@ def find_qa_pass(comments: Iterable[Dict[str, Any]], head: str) -> Optional[Dict
     for comment in comments:
         if not _owner(comment):
             continue
-        match = FAST_QA_RE.match(_first_line(comment.get("body")))
-        if match and match.group(1).lower() == head.lower():
+        line = _first_line(comment.get("body"))
+        match = FAST_QA_RE.match(line)
+        agy = re.search(r"(?:^|\|)\s*qa=AGY(?:\s*\||$)", line, re.IGNORECASE)
+        if match and agy and match.group(1).lower() == head.lower():
             matches.append(comment)
     if not matches:
         return None
@@ -124,7 +126,7 @@ def find_owner_mtd(
             continue
         if fields.get("target_revision", "").lower() != target_revision.lower():
             continue
-        if fields.get("evidence_digest") != evidence_digest_value:
+        if fields.get("gate_evidence_digest") != evidence_digest_value:
             continue
         if fields.get("action_hash") != action_hash:
             continue
