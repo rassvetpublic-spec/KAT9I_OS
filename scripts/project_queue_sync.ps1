@@ -3,7 +3,7 @@ param(
   [string]$Repository='KAT9I_OS',
   [int]$ProjectNumber=2,
   [Parameter(Mandatory=$true)][string]$Url,
-  [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','QA','QUEUED','BLOCKED','DONE')][string]$State,
+  [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','QA_READY','QA','QUEUED','BLOCKED','DONE')][string]$State,
   [string]$Worker='',
   [string]$QaWorker='',
   [switch]$LibraryMode
@@ -47,10 +47,17 @@ function QueueProfile([string]$Name,[string]$WorkerName,[string]$QaName){
       $profile['Исполнение']='Активно'
       $profile['Статус']='В работе'
     }
+    'QA_READY' {
+      if(-not [string]::IsNullOrWhiteSpace($WorkerName)){$profile['Исполнитель']=$WorkerName.Trim()}
+      if(-not [string]::IsNullOrWhiteSpace($qaCanonical)){$profile['Проверяющий']=$qaCanonical}
+      $profile['Доказательство']='Автопроверки пройдены'
+      $profile['Исполнение']='В очереди'
+      $profile['Статус']='Проверка QA'
+    }
     'QA' {
       if(-not [string]::IsNullOrWhiteSpace($WorkerName)){$profile['Исполнитель']=$WorkerName.Trim()}
       if(-not [string]::IsNullOrWhiteSpace($qaCanonical)){$profile['Проверяющий']=$qaCanonical}
-      $profile['Доказательство']='Частично'
+      $profile['Доказательство']='Автопроверки пройдены'
       $profile['Исполнение']='На проверке'
       $profile['Статус']='Проверка QA'
     }
