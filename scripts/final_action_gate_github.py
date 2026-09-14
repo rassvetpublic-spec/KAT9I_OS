@@ -101,10 +101,11 @@ def quality_pass(
     head: str,
     target_ref: str,
     target_revision: str,
+    target_is_ancestor: bool,
 ) -> Dict[str, Any]:
     payload = check_runs_payload if isinstance(check_runs_payload, dict) else {}
     runs = payload.get("check_runs") or []
-    matches = [
+    matches = [] if not target_is_ancestor else [
         r
         for r in runs
         if r.get("name") == QUALITY_CHECK
@@ -184,6 +185,7 @@ def build_snapshot(pr: Dict[str, Any], comments_payload: Any, check_runs_payload
     head = str(pr["head"]["sha"])
     target_ref = str(pr["base"]["ref"])
     target_revision = str(pr["base"]["sha"])
+    target_is_ancestor = pr.get("kat9i_target_is_ancestor") is True
     subject_ref = f"pr:{number}"
     comments = _flatten(comments_payload)
 
@@ -194,6 +196,7 @@ def build_snapshot(pr: Dict[str, Any], comments_payload: Any, check_runs_payload
         head=head,
         target_ref=target_ref,
         target_revision=target_revision,
+        target_is_ancestor=target_is_ancestor,
     )
     evidence_digest_value = evidence_digest(qa, integration)
     payload = canonical_action_payload(
@@ -254,6 +257,7 @@ def build_snapshot(pr: Dict[str, Any], comments_payload: Any, check_runs_payload
         "adapter": {
             "platform": "github",
             "pr_number": number,
+            "target_is_ancestor": target_is_ancestor,
             "qa_evidence_ref": f"github-comment:{qa.get('id')}" if qa else None,
         },
     }
