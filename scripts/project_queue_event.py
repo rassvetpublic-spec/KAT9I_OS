@@ -71,11 +71,17 @@ def _trusted_snapshot_projection(event: dict, comment: dict, body: str) -> dict 
     if not issue.get("pull_request"):
         raise ValueError("снимок доказательств для Project разрешён только в обсуждении PR")
     meta = _simple_envelope(body, SNAPSHOT_MARKER, SNAPSHOT_FIELDS)
+    try:
+        snapshot = parse_epoch_section(body)
+    except EvidenceEpochError as exc:
+        raise ValueError(f"снимок доказательств отклонён каноническим валидатором: {exc}") from exc
     issue_number = int(issue.get("number") or 0)
     if not re.fullmatch(r"[1-9][0-9]*", meta["target_pr"]) or int(meta["target_pr"]) != issue_number:
         raise ValueError("снимок доказательств target_pr не совпадает с номером PR")
     if not HEAD_RE.fullmatch(meta["exact_head"]):
         raise ValueError("снимок доказательств содержит некорректный exact_head")
+    if snapshot["snapshot_head"] != meta["exact_head"]:
+        raise ValueError("exact_head снимка не совпадает с его EVIDENCE_EPOCH")
     if meta["controller"] != "ChatGPT" or meta["authority"] != "DATA_ONLY":
         raise ValueError("снимок доказательств имеет неподдерживаемый источник или authority")
     url = issue.get("html_url")
