@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "repository": "rassvetpublic-spec/KAT9I_OS",
+  "trusted_controller_logins": ["rassvetpublic-spec"],
+  "presence_issue": 171,
+  "presence_comment_id": 5662182662,
+  "poll_seconds": 10,
+  "bootstrap_open_pr_limit": 100,
+  "local_seen_limit": 128,
+  "protocol_entry": "WORKER_QA.md",
+  "control_protocol": "QA_PROTOCOL.md",
+  "token_budget": {
+    "preferred_model_tier": "Sol",
+    "max_model_tier_without_escalation": "Sol",
+    "soft_input_tokens": 24000,
+    "max_input_tokens": 32000,
+    "max_output_tokens": 4000,
+    "hard_total_model_tokens": 40000,
+    "max_context_files": 20,
+    "max_log_lines": 600,
+    "max_escalations": 1,
+    "idle_poll_llm_tokens": 0
+  },
+  "allowed_escalation_reasons": [
+    "SECURITY_RISK",
+    "INVARIANT_CONFLICT",
+    "QA_DISAGREEMENT",
+    "CROSS_SYSTEM_IMPACT",
+    "CAPABILITY_GAP"
+  ]
+}
