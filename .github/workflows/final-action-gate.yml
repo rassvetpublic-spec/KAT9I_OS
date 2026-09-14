@@ -87,7 +87,11 @@ jobs:
           HEAD_SHA="$(jq -r '.head.sha' current-pr.json)"
           TARGET_REF="$(jq -r '.base.ref' current-pr.json)"
           TARGET_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${TARGET_REF}" --jq '.object.sha')"
-          jq --arg target_sha "$TARGET_SHA" '.base.sha = $target_sha' current-pr.json > current-pr-live.json
+          gh api "repos/${GITHUB_REPOSITORY}/compare/${TARGET_SHA}...${HEAD_SHA}" > target-head-compare.json
+          TARGET_IS_ANCESTOR="$(jq -r '((.status == "ahead" or .status == "identical") and ((.behind_by // 0) == 0))' target-head-compare.json)"
+          jq --arg target_sha "$TARGET_SHA" --argjson target_is_ancestor "$TARGET_IS_ANCESTOR" \
+            '.base.sha = $target_sha | .kat9i_target_is_ancestor = $target_is_ancestor' \
+            current-pr.json > current-pr-live.json
           mv current-pr-live.json current-pr.json
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments.json
           gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?per_page=100" > check-runs.json
@@ -98,6 +102,7 @@ jobs:
           printf 'head=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
           printf 'target_ref=%s\n' "$TARGET_REF" >> "$GITHUB_OUTPUT"
           printf 'target=%s\n' "$TARGET_SHA" >> "$GITHUB_OUTPUT"
+          printf 'target_is_ancestor=%s\n' "$TARGET_IS_ANCESTOR" >> "$GITHUB_OUTPUT"
 
       - name: Вычислить переносимое решение Final Action Gate
         if: steps.resolve.outputs.pr_number != ''
