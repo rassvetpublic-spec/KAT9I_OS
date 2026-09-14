@@ -65,8 +65,9 @@ class QaWorkerBootstrapTests(unittest.TestCase):
         entry = (ROOT / "WORKER_QA.md").read_text(encoding="utf-8")
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("Единственная корневая точка входа", entry)
-        self.assertIn("Issue #171 — исторический Issue", entry)
-        self.assertIn("idle_poll_llm_tokens=0", entry)
+        self.assertIn("Issue #171 — только история требования", entry)
+        self.assertIn("0 LLM tokens", entry)
+        self.assertIn("Project.Приоритет → FIFO authoritative QA-COMMAND", entry)
         self.assertIn("WORKER QA", agents)
         self.assertIn("WORKER_QA.md", agents)
 
