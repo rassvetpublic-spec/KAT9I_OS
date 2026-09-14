@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import unittest
 
+from scripts.qa_evidence_epoch import aggregate_digest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -28,6 +30,10 @@ class QaWorkerBootstrapTests(unittest.TestCase):
         self.config = json.loads((ROOT / "config" / "qa_worker.json").read_text(encoding="utf-8"))
 
     def _command(self, comment_id=1, *, exact_head="a" * 40, allow_merge="false", malformed=False):
+        review_digest = "1" * 64
+        gate_digest = "2" * 64
+        policy_digest = "3" * 64
+        evidence_digest = aggregate_digest(exact_head, review_digest, gate_digest, policy_digest)
         fields = [
             "KAT9I-CONTROL/1 | QA-COMMAND",
             f"command_id=qa-test-{comment_id}",
@@ -43,18 +49,20 @@ class QaWorkerBootstrapTests(unittest.TestCase):
             "allow_fast_marker=false",
             "allow_code_mutation=false",
             "project_lifecycle_mutation=false",
+            "",
             "EVIDENCE_EPOCH",
             "epoch_version=1",
             f"snapshot_head={exact_head}",
-            "review_digest=" + "1" * 64,
-            "gate_digest=" + "2" * 64,
-            "policy_digest=" + "3" * 64,
-            "evidence_digest=" + "4" * 64,
+            f"review_digest={review_digest}",
+            f"gate_digest={gate_digest}",
+            f"policy_digest={policy_digest}",
+            f"evidence_digest={evidence_digest}",
         ]
         if malformed:
             fields = [line for line in fields if not line.startswith("gate_digest=")]
         return {
             "id": comment_id,
+            "created_at": f"2026-09-14T10:{comment_id:02d}:00Z",
             "author_association": "OWNER",
             "user": {"login": "rassvetpublic-spec"},
             "body": "\n".join(fields),
