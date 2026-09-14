@@ -20,6 +20,11 @@ POLICY_VERSION = "0.1.0"
 FAST_QA_RE = re.compile(r"^FAST-QA-PASS\s*\|.*\bhead=([0-9a-f]{40})\b", re.IGNORECASE)
 OWNER_MTD_MARKER = "KAT9I-CONTROL/1 | OWNER-MTD"
 QUALITY_CHECK = "Базовые проверки качества и целостности"
+APPROVAL_ID_RE = re.compile(r"^appr-[a-zA-Z0-9_-]{8,64}$")
+IDENTITY_ID_RE = re.compile(r"^id-[a-zA-Z0-9_-]{8,64}$")
+TASK_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{3,64}$")
+NONCE_RE = re.compile(r"^[a-zA-Z0-9_-]{16,64}$")
+APPROVER_ROLES = {"LOCAL_USER", "LOCAL_ADMIN"}
 
 
 def _flatten(value: Any) -> List[Dict[str, Any]]:
@@ -145,6 +150,40 @@ def evidence_digest(qa: Optional[Dict[str, Any]], integration: Dict[str, Any]) -
     })
 
 
+def _approval_record(fields: Dict[str, str], *, pr_number: int, action_hash: str) -> Optional[Dict[str, str]]:
+    approval_id = fields.get("approval_id", "")
+    identity_id = fields.get("approver_identity_id", "")
+    role = fields.get("approver_role", "")
+    task_id = fields.get("task_id", "")
+    nonce = fields.get("nonce", "")
+    issued_at = fields.get("issued_at", "")
+    expires_at = fields.get("expires_at", "")
+    if not APPROVAL_ID_RE.fullmatch(approval_id):
+        return None
+    if not IDENTITY_ID_RE.fullmatch(identity_id):
+        return None
+    if role not in APPROVER_ROLES:
+        return None
+    if not TASK_ID_RE.fullmatch(task_id) or task_id != f"pr-{pr_number}":
+        return None
+    if fields.get("action_hash") != action_hash:
+        return None
+    if not NONCE_RE.fullmatch(nonce):
+        return None
+    if not issued_at or not expires_at:
+        return None
+    return {
+        "approval_id": approval_id,
+        "approver_identity_id": identity_id,
+        "approver_role": role,
+        "task_id": task_id,
+        "action_hash": action_hash,
+        "nonce": nonce,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
+    }
+
+
 def find_owner_mtd(
     comments: Iterable[Dict[str, Any]],
     *,
@@ -170,10 +209,12 @@ def find_owner_mtd(
             continue
         if fields.get("gate_evidence_digest") != evidence_digest_value:
             continue
-        if fields.get("action_hash") != action_hash:
+        record = _approval_record(fields, pr_number=pr_number, action_hash=action_hash)
+        if record is None:
             continue
         enriched = dict(comment)
         enriched["fields"] = fields
+        enriched["approval_record"] = record
         matches.append(enriched)
     if not matches:
         return None
@@ -221,25 +262,18 @@ def build_snapshot(pr: Dict[str, Any], comments_payload: Any, check_runs_payload
     )
 
     authorization = None
+    approval_record = None
     if mtd is not None:
-        fields = mtd["fields"]
-        issued_at = fields.get("issued_at") or mtd.get("created_at")
-        expires_at = fields.get("expires_at")
-        if not expires_at and issued_at:
-            text = str(issued_at).replace("Z", "+00:00")
-            try:
-                expires_at = (datetime.fromisoformat(text).astimezone(timezone.utc) + timedelta(hours=12)).isoformat().replace("+00:00", "Z")
-            except ValueError:
-                expires_at = ""
+        approval_record = mtd["approval_record"]
         authorization = {
             "verdict": "ALLOW",
-            "action_hash": action_hash,
+            "action_hash": approval_record["action_hash"],
             "subject_revision": head,
             "target_ref": target_ref,
             "target_revision": target_revision,
-            "issued_at": issued_at,
-            "expires_at": expires_at,
-            "evidence_ref": f"github-comment:{mtd.get('id')}",
+            "issued_at": approval_record["issued_at"],
+            "expires_at": approval_record["expires_at"],
+            "evidence_ref": f"approval-record:{approval_record['approval_id']}",
         }
 
     return {
@@ -259,6 +293,7 @@ def build_snapshot(pr: Dict[str, Any], comments_payload: Any, check_runs_payload
             "pr_number": number,
             "target_is_ancestor": target_is_ancestor,
             "qa_evidence_ref": f"github-comment:{qa.get('id')}" if qa else None,
+            "approval_record": approval_record,
         },
     }
 
