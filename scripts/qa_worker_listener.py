@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic, DATA-only discovery loop for KAT9I_OS QA workers.
-
-The process performs GitHub metadata polling without invoking an LLM. It exits
-only when a validated pending QA-COMMAND is found, emitting one compact JSON
-packet for the already-running QA worker to consume.
-"""
+"""Deterministic, DATA-only discovery loop for KAT9I_OS QA workers."""
 from __future__ import annotations
 
 import argparse
@@ -24,9 +19,11 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "qa_worker.json"
+PROJECT_SYNC = ROOT / "scripts" / "qa_project_sync.py"
 COMMAND_HEADER = "KAT9I-CONTROL/1 | QA-COMMAND"
 RESULT_HEADER = "KAT9I-QA-RESULT/1"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+FAST_HEAD = re.compile(r"\bhead=([0-9a-f]{40})\b")
 
 
 def load_config() -> dict[str, Any]:
@@ -38,10 +35,7 @@ def auth_token() -> str:
     if token:
         return token.strip()
     try:
-        proc = subprocess.run(
-            ["gh", "auth", "token"], capture_output=True, text=True, check=True,
-            timeout=10,
-        )
+        proc = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=True, timeout=10)
         if proc.stdout.strip():
             return proc.stdout.strip()
     except (OSError, subprocess.SubprocessError):
@@ -51,7 +45,6 @@ def auth_token() -> str:
 
 class GitHub:
     def __init__(self, repo: str, token: str):
-        self.repo = repo
         self.base = f"https://api.github.com/repos/{repo}"
         self.headers = {
             "Accept": "application/vnd.github+json",
@@ -97,9 +90,7 @@ def parse_fields(body: str, header: str) -> dict[str, str] | None:
     fields: dict[str, str] = {}
     for line in lines[1:]:
         line = line.strip()
-        if not line or line == "EVIDENCE_EPOCH":
-            continue
-        if "=" not in line:
+        if not line or line == "EVIDENCE_EPOCH" or "=" not in line:
             continue
         key, value = line.split("=", 1)
         key = key.strip()
@@ -112,12 +103,15 @@ def protocol_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def first_line(body: str) -> str:
+    return body.replace("\r\n", "\n").split("\n", 1)[0].strip()
+
+
 def is_trusted_owner_comment(comment: dict[str, Any], config: dict[str, Any]) -> bool:
     if comment.get("author_association") != "OWNER":
         return False
     login = ((comment.get("user") or {}).get("login") or "").lower()
-    trusted = {x.lower() for x in config["trusted_controller_logins"]}
-    return login in trusted
+    return login in {x.lower() for x in config["trusted_controller_logins"]}
 
 
 def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, Any]) -> dict[str, str] | None:
@@ -140,9 +134,7 @@ def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, 
         return None
     if fields["role"] != "QA_EXECUTOR" or fields["result_sink"] != "PR_REVIEW":
         return None
-    if not SHA40.fullmatch(fields["exact_head"]):
-        return None
-    if fields["snapshot_head"] != fields["exact_head"]:
+    if not SHA40.fullmatch(fields["exact_head"]) or fields["snapshot_head"] != fields["exact_head"]:
         return None
     if fields["qa_mode"] not in {"FULL", "DELTA", "REUSE"}:
         return None
@@ -154,12 +146,10 @@ def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, 
     return fields
 
 
-def latest_authoritative_command(gh: GitHub, pr_number: int, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]] | None:
-    comments = gh.paged(f"/issues/{pr_number}/comments")
+def latest_authoritative_command_from_comments(comments: list[dict[str, Any]], pr_number: int, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]] | None:
     candidates = [
         c for c in comments
-        if is_trusted_owner_comment(c, config)
-        and (c.get("body") or "").replace("\r\n", "\n").split("\n", 1)[0].strip() == COMMAND_HEADER
+        if is_trusted_owner_comment(c, config) and first_line(c.get("body") or "") == COMMAND_HEADER
     ]
     if not candidates:
         return None
@@ -167,27 +157,86 @@ def latest_authoritative_command(gh: GitHub, pr_number: int, config: dict[str, A
     latest = candidates[-1]
     fields = validate_command(latest, pr_number, config)
     if fields is None:
-        return None  # latest malformed/forbidden command blocks fallback to older commands
+        return None
     return latest, fields
 
 
-def already_answered(gh: GitHub, pr_number: int, fields: dict[str, str]) -> bool:
-    reviews = gh.paged(f"/pulls/{pr_number}/reviews")
-    for review in reviews:
+def latest_authoritative_command(gh: GitHub, pr_number: int, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]] | None:
+    return latest_authoritative_command_from_comments(gh.paged(f"/issues/{pr_number}/comments"), pr_number, config)
+
+
+def result_for_command(gh: GitHub, pr_number: int, fields: dict[str, str]) -> dict[str, Any] | None:
+    matches = []
+    for review in gh.paged(f"/pulls/{pr_number}/reviews"):
         result = parse_fields(review.get("body") or "", RESULT_HEADER)
         if result is None:
             continue
-        if result.get("command_id") != fields["command_id"]:
-            continue
-        if result.get("exact_head") != fields["exact_head"]:
+        if result.get("command_id") != fields["command_id"] or result.get("exact_head") != fields["exact_head"]:
             continue
         if (review.get("commit_id") or "").lower() != fields["exact_head"]:
             continue
-        return True
-    return False
+        matches.append((int(review.get("id") or 0), review, result))
+    if not matches:
+        return None
+    matches.sort(key=lambda x: x[0])
+    return {"review": matches[-1][1], "fields": matches[-1][2]}
 
 
-def task_for_pr(gh: GitHub, pr_number: int, config: dict[str, Any]) -> dict[str, Any] | None:
+def sync_project(pr_number: int, state: str) -> dict[str, Any]:
+    if not PROJECT_SYNC.is_file():
+        return {"verdict": "DEGRADED", "reason": "qa_project_sync.py missing"}
+    proc = subprocess.run(
+        [sys.executable, str(PROJECT_SYNC), "--pr", str(pr_number), "--state", state],
+        cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", check=False,
+    )
+    if proc.returncode != 0:
+        return {"verdict": "DEGRADED", "reason": (proc.stderr or proc.stdout).strip()[:500]}
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return {"verdict": "DEGRADED", "reason": "project sync returned non-JSON"}
+
+
+def derive_project_state(gh: GitHub, pr_number: int, config: dict[str, Any]) -> str | None:
+    pr = gh.get(f"/pulls/{pr_number}")
+    if pr.get("state") != "open":
+        return None
+    comments = gh.paged(f"/issues/{pr_number}/comments")
+    latest = latest_authoritative_command_from_comments(comments, pr_number, config)
+    if latest is None:
+        return None
+    command_comment, fields = latest
+    live_head = (((pr.get("head") or {}).get("sha")) or "").lower()
+    if live_head != fields["exact_head"]:
+        return "STALE"
+    after_command = [
+        c for c in comments
+        if is_trusted_owner_comment(c, config) and int(c.get("id") or 0) > int(command_comment.get("id") or 0)
+    ]
+    after_command.sort(key=lambda c: int(c.get("id") or 0))
+    for comment in reversed(after_command):
+        line = first_line(comment.get("body") or "")
+        if line.startswith("FAST-QA-PASS"):
+            match = FAST_HEAD.search(line)
+            if match and match.group(1) == fields["exact_head"]:
+                return "PASS"
+        if line.startswith("FAST-BLOCKED"):
+            match = FAST_HEAD.search(line)
+            if not match or match.group(1) == fields["exact_head"]:
+                return "BLOCKED"
+    if result_for_command(gh, pr_number, fields):
+        return "IN_REVIEW"
+    return "READY"
+
+
+def reconcile_project(gh: GitHub, pr_number: int, config: dict[str, Any]) -> dict[str, Any]:
+    state = derive_project_state(gh, pr_number, config)
+    if not state:
+        return {"verdict": "SKIP", "reason": "no active authoritative QA command"}
+    return sync_project(pr_number, state)
+
+
+def task_for_pr(gh: GitHub, pr_number: int, config: dict[str, Any], profile: str) -> dict[str, Any] | None:
     pr = gh.get(f"/pulls/{pr_number}")
     if pr.get("state") != "open":
         return None
@@ -197,55 +246,67 @@ def task_for_pr(gh: GitHub, pr_number: int, config: dict[str, Any]) -> dict[str,
     comment, fields = latest
     live_head = (((pr.get("head") or {}).get("sha")) or "").lower()
     if live_head != fields["exact_head"]:
+        sync_project(pr_number, "STALE")
         return None
-    if already_answered(gh, pr_number, fields):
+    if result_for_command(gh, pr_number, fields):
+        reconcile_project(gh, pr_number, config)
         return None
+    project_ready = sync_project(pr_number, "READY")
+    profile_policy = config["profiles"][profile]
     return {
-        "schema": 1,
+        "schema": 2,
         "event": "KAT9I-QA-WAKE/1",
         "authority": "DATA_ONLY",
         "target_pr": pr_number,
         "command_id": fields["command_id"],
         "exact_head": fields["exact_head"],
         "qa_mode": fields["qa_mode"],
+        "worker_profile": profile,
+        "review_mode": profile_policy["review_mode"],
+        "reuse_same_context": bool(profile_policy.get("reuse_same_context", True)),
         "authoritative_comment_id": comment.get("id"),
         "authoritative_comment_url": comment.get("html_url"),
         "protocol_entry": config["protocol_entry"],
         "control_protocol": config["control_protocol"],
         "budget": config["token_budget"],
+        "project_ready": project_ready,
         "rule": "fetch targeted evidence only; do not reread issue history",
     }
 
 
-def bootstrap_open_prs(gh: GitHub, config: dict[str, Any]) -> dict[str, Any] | None:
+def bootstrap_open_prs(gh: GitHub, config: dict[str, Any], profile: str) -> dict[str, Any] | None:
     limit = int(config.get("bootstrap_open_pr_limit", 100))
     pulls = gh.get(f"/pulls?state=open&sort=updated&direction=desc&per_page={min(limit, 100)}")
+    first_packet = None
     for pr in pulls[:limit]:
-        packet = task_for_pr(gh, int(pr["number"]), config)
-        if packet:
-            return packet
-    return None
+        pr_number = int(pr["number"])
+        reconcile_project(gh, pr_number, config)
+        if first_packet is None:
+            first_packet = task_for_pr(gh, pr_number, config, profile)
+    if first_packet:
+        first_packet["project_claim"] = sync_project(int(first_packet["target_pr"]), "IN_REVIEW")
+    return first_packet
 
 
-def candidate_prs_from_comments(gh: GitHub, since: str, config: dict[str, Any]) -> list[int]:
+def comment_events(gh: GitHub, since: str, config: dict[str, Any]) -> list[tuple[int, str]]:
     query = urlencode({"sort": "created", "direction": "asc", "since": since})
     comments = gh.paged(f"/issues/comments?{query}")
-    result: list[int] = []
+    events: list[tuple[int, str]] = []
     for comment in comments:
-        body = (comment.get("body") or "").replace("\r\n", "\n")
         if not is_trusted_owner_comment(comment, config):
             continue
-        if body.split("\n", 1)[0].strip() != COMMAND_HEADER:
+        line = first_line(comment.get("body") or "")
+        if line != COMMAND_HEADER and not line.startswith("FAST-QA-PASS") and not line.startswith("FAST-BLOCKED"):
             continue
-        issue_url = comment.get("issue_url") or ""
         try:
-            result.append(int(issue_url.rstrip("/").split("/")[-1]))
+            pr_number = int((comment.get("issue_url") or "").rstrip("/").split("/")[-1])
         except ValueError:
             continue
-    return list(dict.fromkeys(result))
+        events.append((pr_number, line))
+    return events
 
 
-def update_presence(gh: GitHub, config: dict[str, Any], state: str) -> None:
+def update_presence(gh: GitHub, config: dict[str, Any], state: str, profile: str) -> None:
     entry = ROOT / config["protocol_entry"]
     control = ROOT / config["control_protocol"]
     budget = config["token_budget"]
@@ -255,6 +316,8 @@ def update_presence(gh: GitHub, config: dict[str, Any], state: str) -> None:
         "role=QA_EXECUTOR",
         f"state={state}",
         "mode=AUTO_LISTEN" if state == "CONNECTED" else "mode=OFFLINE",
+        f"profile={profile}",
+        f"review_mode={config['profiles'][profile]['review_mode']}",
         "protocol_ack=ACK" if state == "CONNECTED" else "protocol_ack=NONE",
         f"protocol_sha256={protocol_hash(entry)}",
         f"control_protocol_sha256={protocol_hash(control)}",
@@ -270,8 +333,8 @@ def update_presence(gh: GitHub, config: dict[str, Any], state: str) -> None:
     gh.patch(f"/issues/comments/{int(config['presence_comment_id'])}", {"body": body})
 
 
-def wait_for_task(gh: GitHub, config: dict[str, Any], once: bool = False) -> int:
-    packet = bootstrap_open_prs(gh, config)
+def wait_for_task(gh: GitHub, config: dict[str, Any], profile: str, once: bool = False) -> int:
+    packet = bootstrap_open_prs(gh, config, profile)
     if packet:
         print(json.dumps(packet, ensure_ascii=False, separators=(",", ":")))
         return 0
@@ -282,37 +345,46 @@ def wait_for_task(gh: GitHub, config: dict[str, Any], once: bool = False) -> int
     while True:
         time.sleep(poll)
         next_cursor = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=2)).isoformat().replace("+00:00", "Z")
-        for pr_number in candidate_prs_from_comments(gh, cursor, config):
-            packet = task_for_pr(gh, pr_number, config)
+        seen: set[int] = set()
+        for pr_number, _ in comment_events(gh, cursor, config):
+            if pr_number in seen:
+                continue
+            seen.add(pr_number)
+            reconcile_project(gh, pr_number, config)
+            packet = task_for_pr(gh, pr_number, config, profile)
             if packet:
+                packet["project_claim"] = sync_project(pr_number, "IN_REVIEW")
                 print(json.dumps(packet, ensure_ascii=False, separators=(",", ":")))
                 return 0
         cursor = next_cursor
 
 
 def main() -> int:
+    config = load_config()
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=("connect", "wait", "once", "disconnect"))
+    parser.add_argument("--profile", choices=tuple(config["profiles"]), default=config["default_profile"])
     args = parser.parse_args()
-    config = load_config()
     for path_key in ("protocol_entry", "control_protocol"):
         path = ROOT / config[path_key]
         if not path.is_file():
             raise RuntimeError(f"Required protocol file missing: {path}")
     gh = GitHub(config["repository"], auth_token())
     if args.command == "connect":
-        update_presence(gh, config, "CONNECTED")
+        update_presence(gh, config, "CONNECTED", args.profile)
         print(json.dumps({
             "event": "KAT9I-QA-CONNECTED/1",
             "mode": "AUTO_LISTEN",
+            "profile": args.profile,
+            "review_mode": config["profiles"][args.profile]["review_mode"],
             "poll_seconds": config["poll_seconds"],
             "idle_poll_llm_tokens": 0,
         }, separators=(",", ":")))
         return 0
     if args.command == "disconnect":
-        update_presence(gh, config, "DISCONNECTED")
+        update_presence(gh, config, "DISCONNECTED", args.profile)
         return 0
-    return wait_for_task(gh, config, once=args.command == "once")
+    return wait_for_task(gh, config, args.profile, once=args.command == "once")
 
 
 if __name__ == "__main__":
