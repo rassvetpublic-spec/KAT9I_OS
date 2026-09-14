@@ -1,5 +1,5 @@
 {
-  "schema": 3,
+  "schema": 4,
   "repository": "rassvetpublic-spec/KAT9I_OS",
   "trusted_controller_logins": ["rassvetpublic-spec"],
   "presence_issue": 171,
@@ -33,15 +33,9 @@
   "project": {
     "owner": "rassvetpublic-spec",
     "number": 2,
-    "qa_state_field": "Состояние QA",
-    "states": [
-      "Не назначен",
-      "Готов к QA",
-      "На проверке QA",
-      "QA пройден",
-      "QA заблокирован",
-      "QA устарел"
-    ]
+    "schema_mode": "EXISTING_FIELDS_ONLY",
+    "managed_fields": ["Статус", "Исполнение", "Проверяющий", "Доказательство"],
+    "logical_phases": ["Готов к QA", "На проверке QA", "QA пройден", "QA заблокирован", "QA устарел"]
   },
   "token_budget": {
     "preferred_model_tier": "Sol",
