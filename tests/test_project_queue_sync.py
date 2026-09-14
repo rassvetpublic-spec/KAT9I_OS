@@ -40,6 +40,17 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertNotIn("gh pr merge", sync)
         self.assertNotIn("merge_pull_request", sync)
 
+    def test_project_read_retry_is_bounded_and_writes_are_not_retried(self):
+        sync = SYNC.read_text(encoding="utf-8")
+        self.assertIn("for($attempt=1;$attempt -le 2;$attempt++)", sync)
+        self.assertIn("Start-Sleep -Seconds 1", sync)
+        self.assertIn("после 2 попыток чтения", sync)
+        edit_start = sync.index("function Invoke-ProjectEdit")
+        edit_end = sync.index("function Sync-ProjectQueueState")
+        edit_body = sync[edit_start:edit_end]
+        self.assertNotIn("for($attempt", edit_body)
+        self.assertNotIn("Start-Sleep", edit_body)
+
     def test_workflow_is_single_trusted_project_writer_for_qa_phases(self):
         text = WORKFLOW.read_text(encoding="utf-8")
         event = EVENT.read_text(encoding="utf-8")
