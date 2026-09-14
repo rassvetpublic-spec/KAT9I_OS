@@ -1,93 +1,100 @@
-# KAT9I_OS Donor Promotion Protocol
+# Протокол переноса из donor-репозиториев KAT9I_OS
 
 ## Назначение
 
-Этот протокол определяет, как KAT9I_OS принимает идеи, контракты и реализацию из внешних donor-репозиториев без создания второго SSoT и без ослабления текущего канона.
+Этот протокол определяет, как KAT9I_OS принимает идеи, контракты и реализации из внешних donor-репозиториев без создания второго SSoT и без ослабления текущего канона.
 
-GitHub-канон KAT9I_OS всегда имеет приоритет над donor-кодом, donor-документацией и donor-release state.
+Канон KAT9I_OS в GitHub всегда имеет приоритет над donor-кодом, donor-документацией и состоянием donor-release.
 
-## Обязательный pin
+## Обязательная фиксация источника
 
 Любая donor-сессия начинается с фиксации:
 
 - `repository`;
-- exact donor commit SHA;
-- source path;
+- точного donor commit SHA;
+- `source path`;
 - Git blob SHA, если доступен;
-- exact KAT9I_OS baseline SHA;
-- Issue, которая разрешает promotion.
+- точного baseline SHA KAT9I_OS;
+- Issue, разрешающей перенос.
 
-Floating refs (`main`, `latest`, branch name без exact SHA) не являются достаточным доказательством происхождения.
+Плавающие ссылки (`main`, `latest`, имя ветки без точного SHA) не являются достаточным доказательством происхождения.
 
 ## Классификация
 
 Каждый признанный ценным donor-артефакт обязан получить ровно один статус:
 
-- `PROMOTE_AS_CODE` — реализация переносится и становится KAT9I-кодом только после semantic diff, адаптации и собственных тестов;
-- `PROMOTE_AS_CONTEXT` — переносится инвариант/контракт, а donor-код остаётся только provenance/evidence;
-- `PRESERVE_AS_DONOR_REFERENCE` — ценность сохранена точным source/blob pin, но текущий канон уже эквивалентен или сильнее;
+- `PROMOTE_AS_CODE` — реализация переносится в KAT9I-код только после semantic diff, адаптации и собственных тестов;
+- `PROMOTE_AS_CONTEXT` — переносится инвариант или контракт, а donor-код остаётся доказательством происхождения;
+- `PRESERVE_AS_DONOR_REFERENCE` — ценность сохранена точной ссылкой на source/blob, но текущий канон уже эквивалентен или сильнее;
 - `DEFER` — ценность подтверждена, но активация отложена до выполнения указанного gate;
 - `REJECT_ANTIPATTERN` — сохраняется как отрицательное знание и запрещённый способ реализации.
 
-Нельзя завершать promotion, если существует хотя бы один ценный элемент без классификации. Machine summary обязана содержать `unclassified_count = 0`.
+Перенос нельзя считать завершённым, пока существует хотя бы один ценный элемент без классификации. Машиночитаемый итог обязан содержать `unclassified_count = 0`.
 
-## Semantic diff прежде копирования
+## Semantic diff до копирования
 
-Порядок принятия:
+Порядок принятия решения:
 
-1. Сначала сравнить поведение и инварианты donor с текущим KAT9I canon.
+1. Сравнить поведение и инварианты donor с текущим каноном KAT9I.
 2. Если KAT9I уже реализует эквивалентный или более сильный механизм, donor-код не дублируется.
-3. Если donor добавляет полезный отсутствующий инвариант, сначала он формулируется в KAT9I contract/SSoT.
-4. Код переносится только если существует подтверждённый implementation gap и не возникает параллельной authority-системы.
-5. Любой порт получает собственные KAT9I tests/evidence; donor CI не считается доказательством KAT9I correctness.
+3. Если donor добавляет полезный отсутствующий инвариант, сначала он формулируется в контракте или SSoT KAT9I.
+4. Код переносится только при доказанном implementation gap и только если не возникает параллельная система полномочий.
+5. Любой порт получает собственные KAT9I tests/evidence; donor CI не считается доказательством корректности KAT9I.
 
-## Запрет downgrade
+## Запрет понижения гарантий
 
-Donor никогда не может отменять или ослаблять более сильные KAT9I controls. В частности, promotion не может обходить:
+Donor никогда не может отменять или ослаблять более сильные KAT9I controls. В частности, перенос не может обходить:
 
 - `EVIDENCE_EPOCH`;
 - anti-replay;
 - Controller attestation;
-- exact live HEAD checks;
-- stale-evidence invalidation;
-- independent Antigravity QA;
-- Owner/MTD gate;
-- QUEUE-GUARD.
+- проверки точного live HEAD;
+- инвалидирование stale evidence;
+- независимый Antigravity QA;
+- Owner Gate `mtd`;
+- `QUEUE-GUARD`.
 
-Если donor-механизм конфликтует с ними, сохраняется только совместимый инвариант, а конфликтующая реализация классифицируется `REJECT_ANTIPATTERN` или `DEFER`.
+Если donor-механизм конфликтует с этими гарантиями, сохраняется только совместимый инвариант, а конфликтующая реализация получает `REJECT_ANTIPATTERN` или `DEFER`.
 
-## Merge authority
+## Жизненный цикл donor ChangeSet
 
-Donor promotion проходит обычный ChangeSet lifecycle. Перед MTD обязательны:
+Donor promotion проходит обычный ChangeSet lifecycle KAT9I.
 
-- linked Issue;
-- exact candidate HEAD;
-- exact expected base SHA;
-- required CI/checks на candidate HEAD;
-- независимый QA Evidence на candidate HEAD;
-- zero unresolved blocking review threads;
+До Owner Gate `mtd` обязательны:
+
+- связанная Issue;
+- точный PR HEAD;
+- текущий base SHA;
+- обязательные CI/checks для проверяемого ChangeSet;
+- независимый QA Evidence;
+- отсутствие нерешённых блокирующих review threads;
 - повторное чтение live PR metadata после сбора Evidence;
-- отсутствие HEAD/base/evidence drift;
-- governed merge с expected candidate HEAD; прямой merge в обход QUEUE-GUARD запрещён.
+- отсутствие недоказанного HEAD/base/evidence drift.
 
-Изменение candidate HEAD или expected base после квалифицирующего snapshot инвалидирует merge-ready evidence до повторной проверки.
+Явная команда владельца `mtd` разрешает перейти к финальной интеграционной фазе, но сама по себе не разрешает немедленный merge.
 
-## Preservation manifest
+После `mtd` строится synthetic integration candidate из текущего проверенного PR HEAD и текущего base SHA. Финальные интеграционные CI/gates выполняются на этом candidate. Изменение HEAD или base делает candidate и связанные с ним финальные доказательства устаревшими.
 
-Для каждой donor-сессии создаётся machine-readable manifest. Он является индексом решений и provenance, но не подменяет canonical architecture files.
+Непосредственно перед merge выполняется повторная live-проверка HEAD, base, применимости QA/Policy/Gate Evidence, отсутствия блокирующих review threads и успешности synthetic integration candidate. Merge выполняется только через действующий governed transport/QUEUE-GUARD. Прямой merge в обход этого пути запрещён.
 
-Минимальные поля каждого элемента:
+## Манифест сохранности
 
-- stable id;
-- source path(s);
-- exact source/blob identity;
+Для каждой donor-сессии создаётся машиночитаемый manifest. Он является индексом решений и происхождения, но не подменяет канонические архитектурные файлы.
+
+Минимально для каждого элемента фиксируются:
+
+- стабильный `id`;
+- `source path` или набор путей;
+- точная source/blob identity;
 - ценность;
 - classification;
-- KAT9I destination или defer/reject reason;
-- verification/evidence.
+- точка назначения KAT9I либо причина `DEFER`/`REJECT_ANTIPATTERN`;
+- способ проверки.
 
-Критерий полноты: `inventory_count == classified_count` и `unclassified_count == 0`.
+Для доказательства охвата manifest также фиксирует точное donor tree SHA, просмотренные области дерева, правила группировки файлов в capability families и явно исключённые категории с причинами исключения.
+
+Критерий полноты классификации: `inventory_count == classified_count` и `unclassified_count == 0`. Это доказывает отсутствие непринятых решений внутри зафиксированной области аудита, но не заменяет KAT9I-native тесты для будущего активированного кода.
 
 ## Красный donor
 
-Красный CI donor-репозитория не запрещает исследование или сохранение идей, но запрещает слепое объявление его runtime-модулей готовым KAT9I production code. Такой код допускается только через отдельный порт, собственные тесты и KAT9I QA.
+Красный CI donor-репозитория не запрещает исследование или сохранение идей, но запрещает слепо объявлять его runtime-модули готовым production-кодом KAT9I. Такой код допускается только через отдельный порт, собственные тесты KAT9I и независимый QA.
