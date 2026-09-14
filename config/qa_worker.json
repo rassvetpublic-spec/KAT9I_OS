@@ -1,5 +1,5 @@
 {
-  "schema": 4,
+  "schema": 5,
   "repository": "rassvetpublic-spec/KAT9I_OS",
   "trusted_controller_logins": ["rassvetpublic-spec"],
   "presence_issue": 171,
@@ -9,6 +9,7 @@
   "local_seen_limit": 128,
   "protocol_entry": "WORKER_QA.md",
   "control_protocol": "QA_PROTOCOL.md",
+  "human_output_language": "ru",
   "default_profile": "QA",
   "auto_review_on_nonpass": true,
   "nonpass_verdicts": ["CHANGES REQUESTED", "BLOCKED", "QA ABORTED"],
@@ -29,6 +30,23 @@
       "always_review": true,
       "require_review_findings_section": true
     }
+  },
+  "recent_qa_output": {
+    "default_limit": 5,
+    "max_limit": 10,
+    "print_only_on_change": true,
+    "idle_silence": true,
+    "table_columns": ["PR", "Режим", "HEAD", "Статус", "Review"],
+    "status_labels": {
+      "READY": "Готов к QA",
+      "RUNNING": "На проверке",
+      "PASS": "QA пройден",
+      "NONPASS": "Нужны изменения",
+      "BLOCKED": "Заблокирован",
+      "STALE": "QA устарел",
+      "ABORTED": "QA прерван"
+    },
+    "footer_template": "Автопрослушивание · 10 с · ожидают: {pending} · токены ожидания: 0"
   },
   "project": {
     "owner": "rassvetpublic-spec",
