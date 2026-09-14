@@ -27,11 +27,65 @@ CONTROL_MARKERS = {
 }
 IDENTITY_KEYS = {"worker", "qa"}
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
+SNAPSHOT_MARKER = "KAT9I-EVIDENCE-SNAPSHOT/1"
+SNAPSHOT_FIELDS = {"target_pr", "exact_head", "controller", "authority"}
 
 
 def _first_line(body: str) -> str:
     lines = (body or "").splitlines()
     return lines[0].strip() if lines else ""
+
+
+def _simple_envelope(body: str, marker: str, allowed: set[str]) -> dict[str, str]:
+    lines = (body or "").splitlines()
+    if not lines or lines[0].strip() != marker:
+        raise ValueError("неверный маркер структурированного события")
+    meta: dict[str, str] = {}
+    for raw in lines[1:]:
+        line = raw.strip()
+        if not line:
+            break
+        if "=" not in line:
+            raise ValueError("повреждённая строка структурированного события")
+        key, value = (part.strip() for part in line.split("=", 1))
+        if key not in allowed:
+            raise ValueError(f"неподдерживаемое поле структурированного события: {key}")
+        if key in meta:
+            raise ValueError(f"повторное поле структурированного события: {key}")
+        if not value:
+            raise ValueError(f"пустое поле структурированного события: {key}")
+        meta[key] = value
+    missing = sorted(allowed - meta.keys())
+    if missing:
+        raise ValueError("не хватает полей структурированного события: " + ", ".join(missing))
+    return meta
+
+
+def _trusted_snapshot_projection(event: dict, comment: dict, body: str) -> dict | None:
+    if _first_line(body) != SNAPSHOT_MARKER:
+        return None
+    if str((comment.get("user") or {}).get("login") or "") != "github-actions[bot]":
+        return None
+    issue = event.get("issue") or {}
+    if not issue.get("pull_request"):
+        raise ValueError("снимок доказательств для Project разрешён только в обсуждении PR")
+    meta = _simple_envelope(body, SNAPSHOT_MARKER, SNAPSHOT_FIELDS)
+    issue_number = int(issue.get("number") or 0)
+    if not re.fullmatch(r"[1-9][0-9]*", meta["target_pr"]) or int(meta["target_pr"]) != issue_number:
+        raise ValueError("снимок доказательств target_pr не совпадает с номером PR")
+    if not HEAD_RE.fullmatch(meta["exact_head"]):
+        raise ValueError("снимок доказательств содержит некорректный exact_head")
+    if meta["controller"] != "ChatGPT" or meta["authority"] != "DATA_ONLY":
+        raise ValueError("снимок доказательств имеет неподдерживаемый источник или authority")
+    url = issue.get("html_url")
+    if not url:
+        raise ValueError("снимок доказательств не содержит PR html_url в событии")
+    return {
+        "url": url,
+        "state": "QA_READY",
+        "qa": "AGY",
+        "expected_head": meta["exact_head"],
+    }
 
 
 def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
@@ -101,9 +155,12 @@ def _qa_command_projection(event: dict, body: str) -> dict | None:
 def resolve(event_name: str, action: str, event: dict) -> dict | None:
     if event_name == "issue_comment" and action == "created":
         comment = event.get("comment") or {}
+        body = comment.get("body") or ""
+        snapshot_projection = _trusted_snapshot_projection(event, comment, body)
+        if snapshot_projection is not None:
+            return snapshot_projection
         if comment.get("author_association") != "OWNER":
             return None
-        body = comment.get("body") or ""
         qa_projection = _qa_command_projection(event, body)
         if qa_projection is not None:
             return qa_projection
