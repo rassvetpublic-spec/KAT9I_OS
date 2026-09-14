@@ -25,7 +25,6 @@ COMMAND_HEADER = "KAT9I-CONTROL/1 | QA-COMMAND"
 RESULT_HEADER = "KAT9I-QA-RESULT/1"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 FAST_HEAD = re.compile(r"\bhead=([0-9a-f]{40})\b")
-TERMINAL_STATUSES = {"PASS", "NONPASS", "BLOCKED", "STALE", "ABORTED"}
 
 
 def load_config() -> dict[str, Any]:
@@ -414,14 +413,21 @@ def bootstrap(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str,
             add_history(state, terminal, config)
         if candidate:
             key = candidate_key(candidate["target_pr"], candidate["command_id"], candidate["exact_head"])
-            previous = (state.get("candidates") or {}).get(key) or {}
-            if previous.get("status") == "RUNNING":
-                candidate["status"] = "READY"
+            candidate["status"] = "READY"
             new_candidates[key] = candidate
     state["candidates"] = new_candidates
     state["bootstrapped"] = True
     state["cursor"] = scan_cursor
     state["priority_source"] = source
+    save_state(state)
+
+
+def refresh_priorities(gh: GitHub, config: dict[str, Any], state: dict[str, Any]) -> None:
+    priorities, source = project_priority_map(gh, config)
+    state["priority_source"] = source
+    for candidate in (state.get("candidates") or {}).values():
+        pr_number = int(candidate["target_pr"])
+        candidate["priority"] = priorities.get(pr_number) if source == "PROJECT_V2" else None
     save_state(state)
 
 
@@ -433,8 +439,8 @@ def refresh_candidate(
         return None
     pr_number = int(current["target_pr"])
     pr = gh.get(f"/pulls/{pr_number}")
-    priorities, source = project_priority_map(gh, config)
-    state["priority_source"] = source
+    current_priority = current.get("priority")
+    priorities = {pr_number: current_priority} if current_priority else {}
     candidate, terminal = candidate_for_pr(gh, pr, config, profile, priorities)
     state["candidates"].pop(key, None)
     if terminal:
@@ -456,9 +462,7 @@ def sorted_candidates(state: dict[str, Any], config: dict[str, Any]) -> list[dic
 
 
 def recent_rows(state: dict[str, Any], config: dict[str, Any], limit: int) -> list[dict[str, Any]]:
-    active = list((state.get("candidates") or {}).values())
-    history = list(state.get("history") or [])
-    rows = active + history
+    rows = list((state.get("candidates") or {}).values()) + list(state.get("history") or [])
     rows.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
     return rows[:limit]
 
@@ -471,7 +475,7 @@ def table_text(state: dict[str, Any], config: dict[str, Any], limit: int | None 
     rows = recent_rows(state, config, limit)
     lines = [
         "Последние QA:",
-        "| PR | Приоритет | Режим | HEAD | Статус | Review |",
+        "| PR | Приоритет | Режим | HEAD | Статус | Ревью |",
         "|---:|:---:|:---:|:---:|---|:---:|",
     ]
     if rows:
@@ -525,6 +529,7 @@ def packet_for_candidate(candidate: dict[str, Any], config: dict[str, Any], pend
 
 
 def claim_next(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    refresh_priorities(gh, config, state)
     running = [x for x in sorted_candidates(state, config) if x.get("status") == "RUNNING"]
     if running:
         key = candidate_key(running[0]["target_pr"], running[0]["command_id"], running[0]["exact_head"])
