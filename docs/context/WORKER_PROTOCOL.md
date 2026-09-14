@@ -1,11 +1,11 @@
-# Worker Protocol
+# Протокол Worker
 
-Этот файл — короткая карта ролей. Он не определяет отдельный QA lifecycle.
+Этот файл — короткая карта ролей. Он не определяет отдельный жизненный цикл QA.
 
-- `WORKER` — implementation/execution role для одного активного ChangeSet.
-- `WORKER QA` — специальная независимая QA role. Единственная точка входа: `/WORKER_QA.md`.
+- `WORKER` — роль реализации/исполнения для одного активного ChangeSet.
+- `WORKER QA` — специальная независимая роль QA. Единственная точка входа: `/WORKER_QA.md`.
 - `QA_PROTOCOL.md` — единственный CONTROL-протокол обмена Controller ↔ QA Executor.
 
-Команда `WORKER QA` требует прочитать `WORKER_QA.md` и `QA_PROTOCOL.md`, зарегистрировать presence, перейти в `AUTO_LISTEN` и использовать deterministic polling 10 s без LLM-токенов в idle.
+Команда `WORKER QA` требует прочитать `WORKER_QA.md` и `QA_PROTOCOL.md`, зарегистрировать присутствие, перейти в `AUTO_LISTEN` и использовать детерминированный опрос каждые 10 секунд без расхода LLM-токенов в ожидании.
 
-Implementation Worker не может считать свою проверку независимым QA. QA Worker не меняет проверяемый ChangeSet, не мержит и не управляет Project lifecycle.
+Worker реализации не может считать собственную проверку независимым QA. QA Worker не меняет проверяемый ChangeSet, не выполняет merge и не управляет жизненным циклом Project.
