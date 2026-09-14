@@ -17,7 +17,6 @@ def load_module(name: str, relative: str):
 
 
 listener = load_module("qa_worker_listener", "scripts/qa_worker_listener.py")
-project_sync = load_module("qa_project_sync", "scripts/qa_project_sync.py")
 CONFIG = json.loads((ROOT / "config" / "qa_worker.json").read_text(encoding="utf-8"))
 
 
@@ -175,20 +174,25 @@ def test_human_output_language_is_russian():
     assert labels["PASS"] == "QA пройден"
 
 
-def test_project_projection_has_no_second_state_or_final_authority_and_listener_never_writes_project():
+def test_project_projection_uses_existing_fields_and_single_trusted_writer():
     assert CONFIG["project"]["schema_mode"] == "EXISTING_FIELDS_ONLY"
     assert set(CONFIG["project"]["managed_fields"]) == {
         "Статус", "Исполнение", "Проверяющий", "Доказательство"
     }
-    project_source = (ROOT / "scripts" / "qa_project_sync.py").read_text(encoding="utf-8")
     listener_source = (ROOT / "scripts" / "qa_worker_listener.py").read_text(encoding="utf-8")
-    assert "qa_state_field" not in project_source
-    assert "createProjectV2Field" not in project_source
-    assert set(project_sync.STATE_MAP) == {"READY", "IN_REVIEW", "STALE"}
-    assert "PASS" not in project_sync.STATE_MAP
-    assert "BLOCKED" not in project_sync.STATE_MAP
+    queue_source = (ROOT / "scripts" / "project_queue_sync.ps1").read_text(encoding="utf-8")
+    event_source = (ROOT / "scripts" / "project_queue_event.py").read_text(encoding="utf-8")
+    workflow_source = (ROOT / ".github" / "workflows" / "project-queue-sync.yml").read_text(encoding="utf-8")
+    assert not (ROOT / "scripts" / "qa_project_sync.py").exists()
     assert "qa_project_sync" not in listener_source
     assert "sync_project(" not in listener_source
+    assert "QA_READY" in queue_source
+    assert "Автопроверки пройдены" in queue_source
+    assert "KAT9I-EVIDENCE-SNAPSHOT/1" in event_source
+    assert "COMMAND_MARKER" in event_source
+    assert "parse_epoch_section" in event_source
+    assert "QA_READY" in workflow_source
+    assert "project_queue_sync.ps1" in workflow_source
 
 
 def test_token_budget_is_shared_with_review_and_idle_is_zero():
