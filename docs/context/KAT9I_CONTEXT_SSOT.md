@@ -9,11 +9,18 @@ GitHub является источником истины (SSoT).
 
 ## Модель ролей
 
-- ChatGPT — архитектура, анализ, координация.
+- ChatGPT — архитектура, анализ, координация и Controller/Dispatcher.
 - WORKER — выполнение ChangeSet.
 - AGY (Antigravity) — независимый QA.
 - Codex — анализ кода и ревью.
 - Human — владелец mtd и финального разрешения.
+
+## QA canonical routing
+
+- `QA_PROTOCOL.md` — единственный CONTROL-протокол Controller ↔ QA Executor.
+- `WORKER_QA.md` — единственная корневая точка входа для команды `WORKER QA` и runtime/discovery/token policy.
+- `config/qa_worker.json` — machine-readable polling/token budget.
+- Issue #171 — audit/history задачи, не runtime inbox.
 
 ## Правило mtd
 
