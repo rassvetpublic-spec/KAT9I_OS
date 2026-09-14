@@ -8,6 +8,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from qa_evidence_epoch import EvidenceEpochError, parse_epoch_section  # noqa: E402
 from qa_result_bridge import (  # noqa: E402
     BridgeError,
     COMMAND_FIELDS,
@@ -136,11 +137,14 @@ def _qa_command_projection(event: dict, body: str) -> dict | None:
         raise ValueError("QA-COMMAND разрешена только в обсуждении PR")
     try:
         command = validate_command(parse_envelope(body, COMMAND_MARKER, COMMAND_FIELDS))
-    except BridgeError as exc:
+        snapshot = parse_epoch_section(body)
+    except (BridgeError, EvidenceEpochError) as exc:
         raise ValueError(f"QA-COMMAND отклонена каноническим валидатором: {exc}") from exc
     issue_number = int(issue.get("number") or 0)
     if command["target_pr"] != issue_number:
         raise ValueError("QA-COMMAND target_pr не совпадает с номером PR")
+    if snapshot["snapshot_head"] != command["exact_head"]:
+        raise ValueError("QA-COMMAND exact_head не совпадает со снимком доказательств")
     url = issue.get("html_url")
     if not url:
         raise ValueError("QA-COMMAND не содержит PR html_url в событии")
