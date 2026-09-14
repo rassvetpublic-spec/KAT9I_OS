@@ -6,6 +6,7 @@ param(
   [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','QA_READY','QA','QUEUED','BLOCKED','DONE')][string]$State,
   [string]$Worker='',
   [string]$QaWorker='',
+  [string]$PreflightPath='',
   [switch]$LibraryMode
 )
 
@@ -142,6 +143,29 @@ function Resolve-ProjectItemId{
   return $itemId
 }
 
+function Resolve-ProjectCoordinates{
+  if(-not [string]::IsNullOrWhiteSpace($PreflightPath)){
+    if(-not (Test-Path -LiteralPath $PreflightPath -PathType Leaf)){
+      throw "Проверенный пакет Project не найден: $PreflightPath"
+    }
+    try{$handoff=Get-Content -LiteralPath $PreflightPath -Raw -Encoding UTF8 | ConvertFrom-Json -Depth 20}
+    catch{throw 'Проверенный пакет Project содержит некорректный JSON.'}
+    if([string](Get-PropertyValue $handoff 'Url') -cne $Url){throw 'Проверенный пакет Project относится к другому URL.'}
+    if([string](Get-PropertyValue $handoff 'State') -cne $State){throw 'Проверенный пакет Project относится к другому состоянию.'}
+    $projectId=[string](Get-PropertyValue $handoff 'ProjectId')
+    $itemId=[string](Get-PropertyValue $handoff 'ItemId')
+    if([string]::IsNullOrWhiteSpace($projectId) -or [string]::IsNullOrWhiteSpace($itemId)){
+      throw 'Проверенный пакет Project не содержит ProjectId/ItemId.'
+    }
+    return [pscustomobject]@{ProjectId=$projectId;ItemId=$itemId;Source='PREFLIGHT'}
+  }
+
+  $project=Assert-ProjectAccess
+  $projectId=[string](Get-PropertyValue $project 'id')
+  $itemId=Resolve-ProjectItemId
+  return [pscustomobject]@{ProjectId=$projectId;ItemId=$itemId;Source='LIVE_READ'}
+}
+
 function Get-ProjectSelectFields([string]$ProjectId){
   $query=@'
 query($id:ID!){
@@ -198,9 +222,9 @@ function Invoke-ProjectEdit([string]$ProjectId,[string]$ItemId,$Binding){
 
 function Sync-ProjectQueueState{
   Assert-ItemUrl
-  $project=Assert-ProjectAccess
-  $projectId=[string](Get-PropertyValue $project 'id')
-  $itemId=Resolve-ProjectItemId
+  $coordinates=Resolve-ProjectCoordinates
+  $projectId=[string]$coordinates.ProjectId
+  $itemId=[string]$coordinates.ItemId
   $profile=QueueProfile $State $Worker $QaWorker
   $fields=Get-ProjectSelectFields $projectId
 
@@ -216,7 +240,7 @@ function Sync-ProjectQueueState{
     if($bindings.Contains($field)){Invoke-ProjectEdit $projectId $itemId $bindings[$field]}
   }
   Invoke-ProjectEdit $projectId $itemId $bindings['Статус']
-  Write-Host "Project queue synced: state=$State; url=$Url; worker=$Worker; qa=$(Normalize-QaWorker $QaWorker)"
+  Write-Host "Project queue synced: state=$State; url=$Url; worker=$Worker; qa=$(Normalize-QaWorker $QaWorker); source=$($coordinates.Source)"
 }
 
 if($LibraryMode){return}
