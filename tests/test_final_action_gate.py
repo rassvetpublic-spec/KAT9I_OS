@@ -15,6 +15,21 @@ HEAD = "a" * 40
 TARGET = "b" * 40
 
 
+def quality_check(*, check_id=100, target_revision=TARGET, completed_at="2026-09-14T09:00:00Z"):
+    return {
+        "id": check_id,
+        "name": "Базовые проверки качества и целостности",
+        "head_sha": HEAD,
+        "conclusion": "success",
+        "completed_at": completed_at,
+        "pull_requests": [{
+            "number": 195,
+            "head": {"sha": HEAD},
+            "base": {"ref": "main", "sha": target_revision},
+        }],
+    }
+
+
 def valid_snapshot():
     payload = canonical_action_payload(
         operation="PROMOTE_CHANGE",
@@ -94,7 +109,7 @@ class FinalActionGateTests(unittest.TestCase):
 
     def test_github_adapter_requires_owner_structured_mtd(self):
         pr = {"number": 195, "head": {"sha": HEAD}, "base": {"ref": "main", "sha": TARGET}}
-        checks = {"check_runs": [{"name": "Базовые проверки качества и целостности", "conclusion": "success"}]}
+        checks = {"check_runs": [quality_check()]}
         qa = {"id": 1, "author_association": "OWNER", "created_at": "2026-09-14T09:00:00Z", "body": f"FAST-QA-PASS | worker=ChatGPT | qa=AGY | head={HEAD}"}
         snapshot = build_snapshot(pr, [qa], checks)
         self.assertEqual(evaluate(snapshot, now=NOW)["decision"], "DENY")
@@ -121,7 +136,7 @@ class FinalActionGateTests(unittest.TestCase):
 
     def test_non_owner_mtd_is_ignored(self):
         pr = {"number": 195, "head": {"sha": HEAD}, "base": {"ref": "main", "sha": TARGET}}
-        checks = {"check_runs": [{"name": "Базовые проверки качества и целостности", "conclusion": "success"}]}
+        checks = {"check_runs": [quality_check()]}
         base = build_snapshot(pr, [], checks)
         mtd = {
             "id": 2,
@@ -141,7 +156,7 @@ class FinalActionGateTests(unittest.TestCase):
 
     def test_new_evidence_invalidates_old_mtd(self):
         pr = {"number": 195, "head": {"sha": HEAD}, "base": {"ref": "main", "sha": TARGET}}
-        checks = {"check_runs": [{"id": 100, "name": "Базовые проверки качества и целостности", "conclusion": "success", "completed_at": "2026-09-14T09:00:00Z"}]}
+        checks = {"check_runs": [quality_check()]}
         qa = {"id": 1, "author_association": "OWNER", "created_at": "2026-09-14T09:00:00Z", "body": f"FAST-QA-PASS | worker=ChatGPT | qa=AGY | head={HEAD}"}
         base = build_snapshot(pr, [qa], checks)
         mtd = {
@@ -159,18 +174,28 @@ class FinalActionGateTests(unittest.TestCase):
             ]),
         }
         self.assertIsNotNone(build_snapshot(pr, [qa, mtd], checks)["authorization"])
-        checks["check_runs"].append({"id": 101, "name": "Базовые проверки качества и целостности", "conclusion": "success", "completed_at": "2026-09-14T09:20:00Z"})
+        checks["check_runs"].append(quality_check(check_id=101, completed_at="2026-09-14T09:20:00Z"))
         refreshed = build_snapshot(pr, [qa, mtd], checks)
         self.assertIsNone(refreshed["authorization"])
         self.assertNotEqual(base["evidence_digest"], refreshed["evidence_digest"])
 
     def test_fast_marker_without_agy_is_not_qa_evidence(self):
         pr = {"number": 195, "head": {"sha": HEAD}, "base": {"ref": "main", "sha": TARGET}}
-        checks = {"check_runs": [{"name": "Базовые проверки качества и целостности", "conclusion": "success"}]}
+        checks = {"check_runs": [quality_check()]}
         fake_fast = {"id": 1, "author_association": "OWNER", "created_at": "2026-09-14T09:00:00Z", "body": f"FAST-QA-PASS | worker=ChatGPT | qa=OTHER | head={HEAD}"}
         snapshot = build_snapshot(pr, [fake_fast], checks)
         self.assertEqual(snapshot["qa"]["verdict"], "BLOCKED")
         self.assertEqual(evaluate(snapshot, now=NOW)["decision"], "DENY")
+
+    def test_old_quality_target_is_not_integration_evidence(self):
+        pr = {"number": 195, "head": {"sha": HEAD}, "base": {"ref": "main", "sha": TARGET}}
+        checks = {"check_runs": [quality_check(target_revision="c" * 40)]}
+        qa = {"id": 1, "author_association": "OWNER", "created_at": "2026-09-14T09:00:00Z", "body": f"FAST-QA-PASS | worker=ChatGPT | qa=AGY | head={HEAD}"}
+        snapshot = build_snapshot(pr, [qa], checks)
+        self.assertEqual(snapshot["integration"]["verdict"], "BLOCKED")
+        result = evaluate(snapshot, now=NOW)
+        self.assertEqual(result["decision"], "DENY")
+        self.assertIn("INTEGRATION_NOT_PASS", result["reason_codes"])
 
     def test_workflow_uses_trusted_default_branch_and_no_pr_checkout(self):
         workflow = ROOT / ".github" / "workflows" / "final-action-gate.yml"
