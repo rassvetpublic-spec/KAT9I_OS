@@ -24,7 +24,8 @@ $expected=@{
   INBOX=@('Входящие','Свободно','Нет')
   READY=@('Готово к работе','Свободно','Нет')
   ACTIVE=@('В работе','Активно','Частично')
-  QA=@('Проверка QA','На проверке','Частично')
+  QA_READY=@('Проверка QA','В очереди','Автопроверки пройдены')
+  QA=@('Проверка QA','На проверке','Автопроверки пройдены')
   QUEUED=@('Проверка QA','В очереди','Проверка качества пройдена')
 }
 foreach($stateName in $expected.Keys){
@@ -36,18 +37,18 @@ foreach($stateName in $expected.Keys){
 $blocked=QueueProfile 'BLOCKED' 'ChatGPT' 'Antigravity'
 Assert-Equal 'Заблокировано' $blocked['Статус'] 'Неверный Статус для BLOCKED.'
 Assert-Equal 'Заблокировано' $blocked['Исполнение'] 'Неверное Исполнение для BLOCKED.'
-Assert-NoKey $blocked 'Доказательство' 'BLOCKED не должен выдумывать уровень Evidence.'
+Assert-NoKey $blocked 'Доказательство' 'BLOCKED не должен выдумывать уровень доказательств.'
 $done=QueueProfile 'DONE' 'ChatGPT' 'Agy'
 Assert-Equal 'Готово' $done['Статус'] 'Неверный Статус для DONE.'
 Assert-Equal 'Освобождено' $done['Исполнение'] 'Неверное Исполнение для DONE.'
-Assert-NoKey $done 'Доказательство' 'DONE не должен выдумывать QA Evidence.'
+Assert-NoKey $done 'Доказательство' 'DONE не должен выдумывать QA-доказательства.'
 
 foreach($alias in @('AGY','Agy','Antigravity','Антигравити','Antigravity (AGY)','Антигравити (AGY)')){
   Assert-Equal 'AGY' (Normalize-QaWorker $alias) "QA alias '$alias' должен нормализоваться в одну Project identity."
 }
-Assert-Equal '' (Normalize-QaWorker '') 'Пустой QA Worker должен означать preserve existing assignment.'
+Assert-Equal '' (Normalize-QaWorker '') 'Пустой QA Worker должен означать сохранение существующего назначения.'
 
-foreach($stateName in @('ACTIVE','QA','QUEUED')){
+foreach($stateName in @('ACTIVE','QA_READY','QA','QUEUED')){
   $p=QueueProfile $stateName 'Codex' 'Antigravity (AGY)'
   Assert-HasKey $p 'Исполнитель' "$stateName должен фиксировать явно переданного Исполнителя."
   Assert-HasKey $p 'Проверяющий' "$stateName должен фиксировать явно переданного Проверяющего."
@@ -56,7 +57,7 @@ foreach($stateName in @('ACTIVE','QA','QUEUED')){
 }
 $customQa=QueueProfile 'QA' 'ChatGPT' 'Codex'
 Assert-Equal 'Codex' $customQa['Проверяющий'] 'Поддерживаемый custom QA Worker должен передаваться без подмены.'
-foreach($stateName in @('ACTIVE','QA','QUEUED')){
+foreach($stateName in @('ACTIVE','QA_READY','QA','QUEUED')){
   $p=QueueProfile $stateName '' ''
   Assert-NoKey $p 'Исполнитель' "$stateName без metadata должен сохранить существующего Исполнителя."
   Assert-NoKey $p 'Проверяющий' "$stateName без metadata должен сохранить существующего Проверяющего."
@@ -223,7 +224,7 @@ $script:MissingOption='Проверка качества пройдена'
 $failed=$false
 try{Sync-ProjectQueueState}catch{$failed=$true;if($_.Exception.Message -notmatch 'Проверка качества пройдена'){throw}}
 if(-not $failed){throw 'Ожидалась fail-closed ошибка отсутствующего option ID.'}
-if(@($script:Calls|Where-Object{$_.Count -ge 2 -and $_[1] -eq 'item-edit'}).Count -ne 0){throw 'Preflight ID resolution должен завершиться до первой записи.'}
+if(@($script:Calls|Where-Object{$_.Count -ge 2 -and $_[1] -eq 'item-edit'}).Count -ne 0){throw 'Разрешение ID должно завершиться до первой записи.'}
 $script:MissingOption=$null
 
 $script:Calls=@()
@@ -233,7 +234,7 @@ try{Sync-ProjectQueueState}catch{$failed=$true;if($_.Exception.Message -notmatch
 if(-not $failed){throw 'Ожидалась ошибка записи поля.'}
 $writtenFieldIds=@($script:Calls|Where-Object{$_.Count -ge 2 -and $_[1] -eq 'item-edit'}|ForEach-Object{$_[[Array]::IndexOf($_,'--field-id')+1]})
 if($writtenFieldIds -contains 'F_STATUS'){throw 'Статус не должен меняться после промежуточного сбоя.'}
-if($writtenFieldIds -contains 'F_EXECUTION'){throw 'Исполнение не должно меняться после сбоя Evidence.'}
+if($writtenFieldIds -contains 'F_EXECUTION'){throw 'Исполнение не должно меняться после сбоя Доказательства.'}
 $script:FailFieldId=$null
 
 $oldUrl=$Url
