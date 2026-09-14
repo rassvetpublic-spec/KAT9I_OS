@@ -1,0 +1,173 @@
+name: Final Action Gate — теневой режим
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: ["Контроль качества репозитория"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Номер PR для принудительной повторной проверки
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  checks: read
+  statuses: write
+
+concurrency:
+  group: final-action-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request != null &&
+       github.event.comment.author_association == 'OWNER' &&
+       (startsWith(github.event.comment.body, 'FAST-QA-PASS') ||
+        startsWith(github.event.comment.body, 'KAT9I-CONTROL/1 | OWNER-MTD')))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить только доверенную реализацию Gate из default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+
+      - name: Определить PR
+        id: resolve
+        shell: bash
+        env:
+          DISPATCH_PR: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          PR_NUMBER=""
+          case "$GITHUB_EVENT_NAME" in
+            pull_request_target)
+              PR_NUMBER="$(jq -r '.pull_request.number // empty' "$GITHUB_EVENT_PATH")"
+              ;;
+            issue_comment)
+              PR_NUMBER="$(jq -r '.issue.number // empty' "$GITHUB_EVENT_PATH")"
+              ;;
+            workflow_run)
+              PR_NUMBER="$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")"
+              ;;
+            workflow_dispatch)
+              PR_NUMBER="$DISPATCH_PR"
+              ;;
+          esac
+          if [ -n "$PR_NUMBER" ] && ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Некорректный номер PR."
+            exit 1
+          fi
+          printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Нет PR для проверки
+        if: steps.resolve.outputs.pr_number == ''
+        run: echo "Событие не относится к PR; действий нет."
+
+      - name: Собрать live snapshot GitHub без выполнения кода PR
+        if: steps.resolve.outputs.pr_number != ''
+        id: snapshot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
+          HEAD_SHA="$(jq -r '.head.sha' current-pr.json)"
+          TARGET_SHA="$(jq -r '.base.sha' current-pr.json)"
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments.json
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?per_page=100" > check-runs.json
+          if [ "$(jq -r '.total_count // 0' check-runs.json)" -gt "$(jq '.check_runs | length' check-runs.json)" ]; then
+            echo "::error::MALFORMED_EVIDENCE: check-run inventory incomplete."
+            exit 1
+          fi
+          printf 'head=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'target=%s\n' "$TARGET_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Вычислить переносимое решение Final Action Gate
+        if: steps.resolve.outputs.pr_number != ''
+        id: evaluate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/final_action_gate_github.py \
+            --pr current-pr.json \
+            --comments issue-comments.json \
+            --check-runs check-runs.json \
+            --output final-action-gate.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data=json.loads(Path('final-action-gate.json').read_text(encoding='utf-8'))
+          gate=data['gate']
+          snap=data['snapshot']
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as out:
+              out.write(f"decision={gate.get('decision','DENY')}\n")
+              out.write(f"reasons={','.join(gate.get('reason_codes') or [])}\n")
+              out.write(f"action_hash={snap.get('action_hash','')}\n")
+              out.write(f"evidence_digest={snap.get('evidence_digest','')}\n")
+          PY
+
+      - name: Повторно проверить HEAD и target непосредственно перед публикацией ALLOW
+        if: steps.resolve.outputs.pr_number != '' && steps.evaluate.outputs.decision == 'ALLOW'
+        id: freshness
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+          EXPECTED_HEAD: ${{ steps.snapshot.outputs.head }}
+          EXPECTED_TARGET: ${{ steps.snapshot.outputs.target }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json
+          LIVE_HEAD="$(jq -r '.head.sha' final-pr.json)"
+          LIVE_TARGET="$(jq -r '.base.sha' final-pr.json)"
+          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ] || [ "$LIVE_TARGET" != "$EXPECTED_TARGET" ]; then
+            printf 'fresh=false\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'fresh=true\n' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Опубликовать теневой status context
+        if: steps.resolve.outputs.pr_number != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.snapshot.outputs.head }}
+          DECISION: ${{ steps.evaluate.outputs.decision }}
+          REASONS: ${{ steps.evaluate.outputs.reasons }}
+          FRESH: ${{ steps.freshness.outputs.fresh }}
+        run: |
+          set -euo pipefail
+          STATE=pending
+          DESCRIPTION="Ожидаются обязательные Evidence и exact owner mtd"
+          if [ "$DECISION" = "ALLOW" ] && [ "$FRESH" = "true" ]; then
+            STATE=success
+            DESCRIPTION="Exact action/evidence/authorization подтверждены"
+          elif [ "$DECISION" = "ALLOW" ]; then
+            STATE=failure
+            DESCRIPTION="STALE: HEAD или target изменился перед side effect"
+          elif [ "$DECISION" = "STALE" ]; then
+            STATE=failure
+            DESCRIPTION="STALE: ${REASONS}"
+          elif echo ",$REASONS," | grep -Eq ',(ACTION_HASH_MISMATCH|AUTHORIZATION_ACTION_MISMATCH|AUTHORIZATION_SUBJECT_MISMATCH|AUTHORIZATION_TARGET_MISMATCH|AUTHORIZATION_TARGET_REF_MISMATCH|AUTHORIZATION_EXPIRED|AUTHORIZATION_INVALID_WINDOW|AUTHORIZATION_TIME_INVALID|MALFORMED_INPUT|MALFORMED_ACTION|UNSUPPORTED_SCHEMA|UNSUPPORTED_OPERATION),'; then
+            STATE=failure
+            DESCRIPTION="Fail-closed: ${REASONS}"
+          fi
+          DESCRIPTION="${DESCRIPTION:0:140}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state="$STATE" \
+            -f context='KAT9I / final-action-gate' \
+            -f description="$DESCRIPTION" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
