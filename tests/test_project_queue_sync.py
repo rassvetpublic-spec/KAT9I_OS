@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 QUEUE_BEHAVIOR = ROOT / "tests" / "test_project_queue_sync.ps1"
 CONFIG = ROOT / "scripts" / "configure_project.ps1"
 SYNC = ROOT / "scripts" / "project_queue_sync.ps1"
+EVENT = ROOT / "scripts" / "project_queue_event.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "project-queue-sync.yml"
 
 
@@ -27,7 +28,9 @@ class ProjectQueueSyncTests(unittest.TestCase):
         ):
             self.assertIn(alias, sync)
         self.assertIn("'INBOX'", sync)
+        self.assertIn("'QA_READY'", sync)
         self.assertIn("'QUEUED'", sync)
+        self.assertIn("'Автопроверки пройдены'", sync)
         self.assertIn("'Проверка качества пройдена'", sync)
         self.assertIn("'В очереди'", sync)
         self.assertIn("--id $ItemId", sync)
@@ -37,16 +40,22 @@ class ProjectQueueSyncTests(unittest.TestCase):
         self.assertNotIn("gh pr merge", sync)
         self.assertNotIn("merge_pull_request", sync)
 
-    def test_workflow_is_trusted_and_never_merges(self):
+    def test_workflow_is_single_trusted_project_writer_for_qa_phases(self):
         text = WORKFLOW.read_text(encoding="utf-8")
+        event = EVENT.read_text(encoding="utf-8")
         self.assertIn("KAT9I_PROJECT_TOKEN", text)
         self.assertIn("project_queue_event.py", text)
         self.assertIn("project_queue_sync.ps1", text)
         self.assertNotIn("configure_project.ps1", text)
         self.assertIn("types: [closed, synchronize]", text)
+        self.assertIn("QA_READY", text)
+        self.assertIn("expected_head", text)
         self.assertIn("ITEM_WORKER", text)
         self.assertIn("ITEM_QA", text)
         self.assertIn("github.actor", text)
+        self.assertIn("KAT9I-EVIDENCE-SNAPSHOT/1", event)
+        self.assertIn("COMMAND_MARKER", event)
+        self.assertIn("parse_epoch_section", event)
         self.assertNotIn("-Worker 'ChatGPT' -QaWorker 'AGY'", text)
         self.assertNotIn("gh pr merge", text)
         self.assertNotIn("merge_pull_request", text)
