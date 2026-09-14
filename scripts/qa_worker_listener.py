@@ -9,7 +9,6 @@ import json
 import math
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import time
@@ -19,12 +18,27 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.qa_evidence_epoch import EvidenceEpochError, build_snapshot, parse_epoch_section
+from scripts.qa_result_bridge import (
+    COMMAND_FIELDS,
+    COMMAND_MARKER,
+    FOLLOW_UP_HEADER,
+    RESULT_FIELDS,
+    RESULT_MARKER,
+    REVIEW_STATES,
+    BridgeError,
+    _section_lines,
+    parse_envelope,
+    validate_command as validate_command_envelope,
+    validate_result as validate_result_envelope,
+)
+
 CONFIG_PATH = ROOT / "config" / "qa_worker.json"
-PROJECT_SYNC = ROOT / "scripts" / "qa_project_sync.py"
-COMMAND_HEADER = "KAT9I-CONTROL/1 | QA-COMMAND"
-RESULT_HEADER = "KAT9I-QA-RESULT/1"
-SHA40 = re.compile(r"^[0-9a-f]{40}$")
-FAST_HEAD = re.compile(r"\bhead=([0-9a-f]{40})\b")
+COMMAND_HEADER = COMMAND_MARKER
+RESULT_HEADER = RESULT_MARKER
 
 
 def load_config() -> dict[str, Any]:
@@ -33,6 +47,15 @@ def load_config() -> dict[str, Any]:
 
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def parse_time(value: str | None) -> dt.datetime:
+    if not value:
+        raise ValueError("Отсутствует timestamp")
+    parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed
 
 
 def state_path() -> Path:
@@ -143,22 +166,6 @@ class GitHub:
         return out
 
 
-def parse_fields(body: str, header: str) -> dict[str, str] | None:
-    lines = body.replace("\r\n", "\n").split("\n")
-    if not lines or lines[0].strip() != header:
-        return None
-    fields: dict[str, str] = {}
-    for line in lines[1:]:
-        line = line.strip()
-        if not line or line == "EVIDENCE_EPOCH" or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if key and key not in fields:
-            fields[key] = value.strip()
-    return fields
-
-
 def protocol_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -174,76 +181,157 @@ def is_trusted_owner_comment(comment: dict[str, Any], config: dict[str, Any]) ->
     return login in {x.lower() for x in config["trusted_controller_logins"]}
 
 
-def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, Any]) -> dict[str, str] | None:
+def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, Any]) -> dict[str, Any] | None:
     if not is_trusted_owner_comment(comment, config):
         return None
-    fields = parse_fields(comment.get("body") or "", COMMAND_HEADER)
-    if fields is None:
+    body = str(comment.get("body") or "")
+    try:
+        command = validate_command_envelope(parse_envelope(body, COMMAND_MARKER, COMMAND_FIELDS))
+        epoch = parse_epoch_section(body)
+    except (BridgeError, EvidenceEpochError):
         return None
-    required = {
-        "command_id", "target_pr", "controller", "executor", "role", "exact_head",
-        "qa_mode", "result_sink", "allow_issue_create", "allow_merge", "allow_fast_marker",
-        "allow_code_mutation", "project_lifecycle_mutation", "epoch_version",
-        "snapshot_head", "review_digest", "gate_digest", "policy_digest", "evidence_digest",
-    }
-    if not required.issubset(fields):
+    if command["target_pr"] != pr_number:
         return None
-    if fields["target_pr"] != str(pr_number):
+    if command["snapshot_head"] if "snapshot_head" in command else False:
         return None
-    if fields["controller"] != "ChatGPT" or fields["executor"] != "AGY":
+    if epoch["snapshot_head"] != command["exact_head"]:
         return None
-    if fields["role"] != "QA_EXECUTOR" or fields["result_sink"] != "PR_REVIEW":
-        return None
-    if not SHA40.fullmatch(fields["exact_head"]) or fields["snapshot_head"] != fields["exact_head"]:
-        return None
-    if fields["qa_mode"] not in {"FULL", "DELTA", "REUSE"}:
-        return None
-    if fields["allow_issue_create"].lower() not in {"true", "false"}:
-        return None
-    for key in ("allow_merge", "allow_fast_marker", "allow_code_mutation", "project_lifecycle_mutation"):
-        if fields[key].lower() != "false":
-            return None
-    return fields
+    return {**command, "epoch": epoch}
 
 
 def latest_authoritative_command_from_comments(
     comments: list[dict[str, Any]], pr_number: int, config: dict[str, Any]
-) -> tuple[dict[str, Any], dict[str, str]] | None:
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
     candidates = [
         c for c in comments
-        if is_trusted_owner_comment(c, config) and first_line(c.get("body") or "") == COMMAND_HEADER
+        if is_trusted_owner_comment(c, config) and first_line(c.get("body") or "") == COMMAND_MARKER
     ]
     if not candidates:
         return None
-    candidates.sort(key=lambda c: int(c.get("id") or 0))
+    candidates.sort(key=lambda c: (str(c.get("created_at") or ""), int(c.get("id") or 0)))
     latest = candidates[-1]
     fields = validate_command(latest, pr_number, config)
     if fields is None:
+        return None
+    command_id = fields["command_id"]
+    duplicates = 0
+    for candidate in candidates:
+        parsed = validate_command(candidate, pr_number, config)
+        if parsed and parsed["command_id"] == command_id:
+            duplicates += 1
+    if duplicates != 1:
         return None
     return latest, fields
 
 
 def latest_authoritative_command(
     gh: GitHub, pr_number: int, config: dict[str, Any]
-) -> tuple[dict[str, Any], dict[str, str]] | None:
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
     return latest_authoritative_command_from_comments(gh.paged(f"/issues/{pr_number}/comments"), pr_number, config)
 
 
-def result_for_command(gh: GitHub, pr_number: int, fields: dict[str, str]) -> dict[str, Any] | None:
-    matches = []
+def review_threads_payload(gh: GitHub, pr_number: int) -> dict[str, Any]:
+    owner, repo = gh.base.rsplit("/repos/", 1)[-1].split("/", 1)
+    query = """
+query($owner:String!,$repo:String!,$number:Int!){
+  repository(owner:$owner,name:$repo){pullRequest(number:$number){
+    reviewThreads(first:100){
+      nodes{id isResolved comments(first:100){nodes{id body path line startLine outdated} pageInfo{hasNextPage endCursor}}}
+      pageInfo{hasNextPage endCursor}
+    }
+  }}
+}
+"""
+    payload = gh.graphql(query, {"owner": owner, "repo": repo, "number": pr_number})
+    threads = (((payload.get("repository") or {}).get("pullRequest") or {}).get("reviewThreads") or {})
+    if (threads.get("pageInfo") or {}).get("hasNextPage"):
+        raise RuntimeError("Неполный inventory review threads")
+    for thread in threads.get("nodes") or []:
+        if ((thread.get("comments") or {}).get("pageInfo") or {}).get("hasNextPage"):
+            raise RuntimeError("Неполный inventory review comments")
+    return {"data": payload}
+
+
+def live_evidence_snapshot(gh: GitHub, pr_number: int, head: str) -> dict[str, str]:
+    reviews = gh.paged(f"/pulls/{pr_number}/reviews")
+    checks = gh.get(f"/commits/{head}/check-runs?per_page=100")
+    statuses = gh.get(f"/commits/{head}/status?per_page=100")
+    threads = review_threads_payload(gh, pr_number)
+    if int((checks or {}).get("total_count") or 0) > len((checks or {}).get("check_runs") or []):
+        raise RuntimeError("Неполный inventory check-runs")
+    status_rows = (statuses or {}).get("statuses") or []
+    if int((statuses or {}).get("total_count") or len(status_rows)) > len(status_rows):
+        raise RuntimeError("Неполный inventory commit statuses")
+    return build_snapshot(head, threads, reviews, checks, statuses, ROOT)
+
+
+def command_epoch_is_current(
+    gh: GitHub,
+    pr_number: int,
+    command: dict[str, Any],
+) -> tuple[bool, str]:
+    try:
+        current = live_evidence_snapshot(gh, pr_number, command["exact_head"])
+    except (RuntimeError, EvidenceEpochError, ValueError) as exc:
+        return False, f"EVIDENCE_UNAVAILABLE: {exc}"
+    expected = command["epoch"]
+    for key in ("snapshot_head", "review_digest", "gate_digest", "policy_digest", "evidence_digest"):
+        if expected.get(key) != current.get(key):
+            return False, f"EVIDENCE_DRIFT:{key}"
+    return True, "FRESH"
+
+
+def result_for_command(
+    gh: GitHub,
+    pr_number: int,
+    command_comment: dict[str, Any],
+    command: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any] | None:
+    matches: list[tuple[dt.datetime, int, dict[str, Any], dict[str, Any]]] = []
+    command_time = parse_time(command_comment.get("created_at"))
+    trusted = {x.lower() for x in config["trusted_controller_logins"]}
     for review in gh.paged(f"/pulls/{pr_number}/reviews"):
-        result = parse_fields(review.get("body") or "", RESULT_HEADER)
-        if result is None:
+        body = str(review.get("body") or "")
+        if first_line(body) != RESULT_MARKER:
             continue
-        if result.get("command_id") != fields["command_id"] or result.get("exact_head") != fields["exact_head"]:
+        if review.get("author_association") != "OWNER":
             continue
-        if (review.get("commit_id") or "").lower() != fields["exact_head"]:
+        login = ((review.get("user") or {}).get("login") or "").lower()
+        if login not in trusted:
             continue
-        matches.append((int(review.get("id") or 0), review, result))
+        try:
+            result = validate_result_envelope(parse_envelope(body, RESULT_MARKER, RESULT_FIELDS))
+            result_epoch = parse_epoch_section(body)
+            submitted = parse_time(review.get("submitted_at"))
+        except (BridgeError, EvidenceEpochError, ValueError):
+            continue
+        if submitted <= command_time:
+            continue
+        if str(review.get("state") or "").upper() not in REVIEW_STATES:
+            continue
+        if str(review.get("commit_id") or "").lower() != command["exact_head"]:
+            continue
+        if result["target_pr"] != pr_number or result["command_id"] != command["command_id"]:
+            continue
+        for field in ("controller", "role", "exact_head", "qa_mode", "result_sink"):
+            if result[field] != command[field]:
+                break
+        else:
+            if result["executor_canonical"] != command["executor_canonical"]:
+                continue
+            if result_epoch != command["epoch"]:
+                continue
+            follow_up = _section_lines(body, FOLLOW_UP_HEADER)
+            if follow_up is None:
+                continue
+            if result["follow_up_candidates"] > 0 and not follow_up:
+                continue
+            matches.append((submitted, int(review.get("id") or 0), review, result))
     if not matches:
         return None
-    matches.sort(key=lambda x: x[0])
-    return {"review": matches[-1][1], "fields": matches[-1][2]}
+    matches.sort(key=lambda item: (item[0], item[1]))
+    return {"review": matches[-1][2], "fields": matches[-1][3]}
 
 
 def status_from_result(result: dict[str, Any]) -> str:
@@ -256,21 +344,6 @@ def status_from_result(result: dict[str, Any]) -> str:
     }.get(verdict, "ABORTED")
 
 
-def sync_project(pr_number: int, state: str) -> dict[str, Any]:
-    if not PROJECT_SYNC.is_file():
-        return {"verdict": "DEGRADED", "reason": "Не найден qa_project_sync.py"}
-    proc = subprocess.run(
-        [sys.executable, str(PROJECT_SYNC), "--pr", str(pr_number), "--state", state],
-        cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", check=False,
-    )
-    if proc.returncode != 0:
-        return {"verdict": "DEGRADED", "reason": (proc.stderr or proc.stdout).strip()[:500]}
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        return {"verdict": "DEGRADED", "reason": "Project sync вернул не-JSON"}
-
-
 def project_priority_map(gh: GitHub, config: dict[str, Any]) -> tuple[dict[int, str], str]:
     policy = config["queue_policy"]
     field_name = str(policy["priority_field"])
@@ -281,10 +354,7 @@ query($login:String!,$number:Int!,$after:String){
     nodes{
       content{... on PullRequest{number repository{nameWithOwner}}}
       fieldValues(first:50){nodes{
-        ... on ProjectV2ItemFieldSingleSelectValue{
-          name
-          field{... on ProjectV2SingleSelectField{name}}
-        }
+        ... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2SingleSelectField{name}}}
       }}
     }
     pageInfo{hasNextPage endCursor}
@@ -303,10 +373,11 @@ query($login:String!,$number:Int!,$after:String){
                 repo = ((content.get("repository") or {}).get("nameWithOwner") or "")
                 if not number or repo.lower() != str(config["repository"]).lower():
                     continue
-                values = []
-                for value in ((node.get("fieldValues") or {}).get("nodes") or []):
-                    if ((value.get("field") or {}).get("name") or "") == field_name and value.get("name"):
-                        values.append(str(value["name"]))
+                values = [
+                    str(value["name"])
+                    for value in ((node.get("fieldValues") or {}).get("nodes") or [])
+                    if ((value.get("field") or {}).get("name") or "") == field_name and value.get("name")
+                ]
                 if len(values) > 1:
                     raise RuntimeError(f"Неоднозначный приоритет Project для PR #{number}")
                 if values:
@@ -364,13 +435,13 @@ def candidate_for_pr(
     latest = latest_authoritative_command(gh, pr_number, config)
     if latest is None:
         return None, None
-    comment, fields = latest
+    comment, command = latest
     live_head = (((pr.get("head") or {}).get("sha")) or "").lower()
     base = {
         "target_pr": pr_number,
-        "command_id": fields["command_id"],
-        "exact_head": fields["exact_head"],
-        "qa_mode": fields["qa_mode"],
+        "command_id": command["command_id"],
+        "exact_head": command["exact_head"],
+        "qa_mode": command["qa_mode"],
         "priority": priorities.get(pr_number),
         "command_created_at": comment.get("created_at"),
         "command_comment_id": int(comment.get("id") or 0),
@@ -378,26 +449,23 @@ def candidate_for_pr(
         "worker_profile": profile,
         "updated_at": utc_now(),
     }
-    if live_head != fields["exact_head"]:
-        terminal = dict(base, status="STALE", review_id=None)
-        sync_project(pr_number, "STALE")
-        return None, terminal
-    result = result_for_command(gh, pr_number, fields)
+    if live_head != command["exact_head"]:
+        return None, dict(base, status="STALE", review_id=None, reason="HEAD_DRIFT")
+    result = result_for_command(gh, pr_number, comment, command, config)
     if result:
-        terminal = dict(
+        return None, dict(
             base,
             status=status_from_result(result),
             review_id=(result.get("review") or {}).get("id"),
+            reason="VALID_QA_RESULT",
         )
-        return None, terminal
-    profile_policy = config["profiles"][profile]
-    candidate = dict(
+    return dict(
         base,
         status="READY",
         review_id=None,
-        review_mode=profile_policy["review_mode"],
-    )
-    return candidate, None
+        review_mode=config["profiles"][profile]["review_mode"],
+        epoch=command["epoch"],
+    ), None
 
 
 def bootstrap(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str, Any]) -> None:
@@ -426,8 +494,7 @@ def refresh_priorities(gh: GitHub, config: dict[str, Any], state: dict[str, Any]
     priorities, source = project_priority_map(gh, config)
     state["priority_source"] = source
     for candidate in (state.get("candidates") or {}).values():
-        pr_number = int(candidate["target_pr"])
-        candidate["priority"] = priorities.get(pr_number) if source == "PROJECT_V2" else None
+        candidate["priority"] = priorities.get(int(candidate["target_pr"])) if source == "PROJECT_V2" else None
     save_state(state)
 
 
@@ -439,8 +506,7 @@ def refresh_candidate(
         return None
     pr_number = int(current["target_pr"])
     pr = gh.get(f"/pulls/{pr_number}")
-    current_priority = current.get("priority")
-    priorities = {pr_number: current_priority} if current_priority else {}
+    priorities = {pr_number: current.get("priority")} if current.get("priority") else {}
     candidate, terminal = candidate_for_pr(gh, pr, config, profile, priorities)
     state["candidates"].pop(key, None)
     if terminal:
@@ -505,7 +571,7 @@ def render_table(state: dict[str, Any], config: dict[str, Any], *, force: bool =
 def packet_for_candidate(candidate: dict[str, Any], config: dict[str, Any], pending: int) -> dict[str, Any]:
     profile = candidate["worker_profile"]
     return {
-        "schema": 3,
+        "schema": 4,
         "event": "KAT9I-QA-WAKE/1",
         "authority": "DATA_ONLY",
         "target_pr": candidate["target_pr"],
@@ -545,10 +611,49 @@ def claim_next(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str
         if refreshed is None:
             ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
             continue
-        chosen = refreshed
-        key = candidate_key(chosen["target_pr"], chosen["command_id"], chosen["exact_head"])
-        sync_project(int(chosen["target_pr"]), "READY")
-        sync_project(int(chosen["target_pr"]), "IN_REVIEW")
+        pr_number = int(refreshed["target_pr"])
+        pr = gh.get(f"/pulls/{pr_number}")
+        latest = latest_authoritative_command(gh, pr_number, config)
+        if latest is None:
+            state["candidates"].pop(key, None)
+            save_state(state)
+            ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
+            continue
+        comment, command = latest
+        if command["command_id"] != refreshed["command_id"] or command["exact_head"] != refreshed["exact_head"]:
+            state["candidates"].pop(key, None)
+            save_state(state)
+            ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
+            continue
+        if str(((pr.get("head") or {}).get("sha") or "")).lower() != command["exact_head"]:
+            state["candidates"].pop(key, None)
+            add_history(state, dict(refreshed, status="STALE", reason="HEAD_DRIFT"), config)
+            save_state(state)
+            render_table(state, config)
+            ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
+            continue
+        fresh, reason = command_epoch_is_current(gh, pr_number, command)
+        if not fresh:
+            state["candidates"].pop(key, None)
+            add_history(state, dict(refreshed, status="STALE", reason=reason), config)
+            save_state(state)
+            render_table(state, config)
+            ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
+            continue
+        result = result_for_command(gh, pr_number, comment, command, config)
+        if result:
+            state["candidates"].pop(key, None)
+            add_history(state, dict(
+                refreshed,
+                status=status_from_result(result),
+                review_id=(result.get("review") or {}).get("id"),
+                reason="VALID_QA_RESULT",
+            ), config)
+            save_state(state)
+            render_table(state, config)
+            ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
+            continue
+        key = candidate_key(refreshed["target_pr"], refreshed["command_id"], refreshed["exact_head"])
         state["candidates"][key]["status"] = "RUNNING"
         state["candidates"][key]["updated_at"] = utc_now()
         save_state(state)
@@ -566,7 +671,7 @@ def comment_events(gh: GitHub, since: str, config: dict[str, Any]) -> list[int]:
         if not is_trusted_owner_comment(comment, config):
             continue
         line = first_line(comment.get("body") or "")
-        if line != COMMAND_HEADER and not line.startswith("FAST-QA-PASS") and not line.startswith("FAST-BLOCKED"):
+        if line != COMMAND_MARKER and not line.startswith("FAST-QA-PASS") and not line.startswith("FAST-BLOCKED"):
             continue
         try:
             pr_number = int((comment.get("issue_url") or "").rstrip("/").split("/")[-1])
@@ -590,7 +695,6 @@ def ingest_pr_event(gh: GitHub, config: dict[str, Any], profile: str, state: dic
     if candidate:
         key = candidate_key(candidate["target_pr"], candidate["command_id"], candidate["exact_head"])
         state["candidates"][key] = candidate
-        sync_project(pr_number, "READY")
     save_state(state)
     render_table(state, config)
 
@@ -695,5 +799,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         raise SystemExit(130)
     except Exception as exc:
-        print(json.dumps({"event": "KAT9I-QA-LISTENER-ERROR/1", "error": str(exc)[:1000]}, ensure_ascii=False), file=sys.stderr)
+        print(json.dumps({"event": "KAT9I-QA-LISTENER-ERROR/1", "ошибка": str(exc)[:1000]}, ensure_ascii=False), file=sys.stderr)
         raise SystemExit(2)
