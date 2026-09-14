@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 QUEUE_BEHAVIOR = ROOT / "tests" / "test_project_queue_sync.ps1"
 CONFIG = ROOT / "scripts" / "configure_project.ps1"
 SYNC = ROOT / "scripts" / "project_queue_sync.ps1"
+PREFLIGHT = ROOT / "scripts" / "project_credential_preflight.ps1"
 EVENT = ROOT / "scripts" / "project_queue_event.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "project-queue-sync.yml"
 
@@ -50,6 +51,19 @@ class ProjectQueueSyncTests(unittest.TestCase):
         edit_body = sync[edit_start:edit_end]
         self.assertNotIn("for($attempt", edit_body)
         self.assertNotIn("Start-Sleep", edit_body)
+
+    def test_preflight_coordinates_are_reused_by_workflow(self):
+        sync = SYNC.read_text(encoding="utf-8")
+        preflight = PREFLIGHT.read_text(encoding="utf-8")
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("[string]$PreflightPath=''", sync)
+        self.assertIn("Resolve-ProjectCoordinates", sync)
+        self.assertIn("Source='PREFLIGHT'", sync)
+        self.assertIn("[string]$OutputPath=''", preflight)
+        self.assertIn("ProjectId=$projectId", preflight)
+        self.assertIn("ItemId=$itemId", preflight)
+        self.assertIn("-OutputPath \"$PWD/project-preflight.json\"", workflow)
+        self.assertIn("-PreflightPath \"$PWD/project-preflight.json\"", workflow)
 
     def test_workflow_is_single_trusted_project_writer_for_qa_phases(self):
         text = WORKFLOW.read_text(encoding="utf-8")
