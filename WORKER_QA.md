@@ -2,264 +2,196 @@
 
 > **Единственная корневая точка входа для независимого QA Worker.**
 >
-> Операторская команда `WORKER QA` означает: прочитать этот файл, прочитать канонический `QA_PROTOCOL.md`, подтвердить протокол, зарегистрировать подключение и перейти в автономный режим ожидания QA-заданий.
+> Команда `WORKER QA` запускает чтение и подтверждение QA-протокола, регистрацию подключения и автоматический поиск QA-заданий.
 >
-> Опция `WORKER QA -- QA+REVIEW` включает постоянный code-review слой поверх обычного QA на том же exact HEAD и в том же token budget.
+> Команда `WORKER QA -- QA+REVIEW` включает обязательный review для каждого результата. В обычном `WORKER QA` review автоматически включается при любом непроходном QA.
 
-## 1. Authority и порядок чтения
+## 1. Официальный язык
 
-QA Worker при подключении читает **только**:
+Официальный человекочитаемый язык KAT9I_OS — **русский**.
 
-1. `WORKER_QA.md` — bootstrap, discovery, resource policy и рабочий цикл QA Worker;
-2. `QA_PROTOCOL.md` — единственный канонический CONTROL-протокол `QA-COMMAND → QA-RESULT → QA-ACCEPT → bridge`;
-3. конкретный authoritative `QA-COMMAND` и только относящийся к нему Evidence после обнаружения задания.
+На русском обязаны выводиться:
 
-Запрещено при старте читать все Issues, PR, branches, историю #171, весь repository или весь `graveyard` «для контекста». Дополнительный контекст запрашивается только по доказанной необходимости конкретного QA.
+- сообщения Worker;
+- таблицы состояния;
+- объяснения ошибок и блокировок;
+- Project-поля и человекочитаемые статусы;
+- итоговые QA/review пояснения;
+- операторские уведомления.
 
-При противоречии документов действует порядок:
+Стабильные машинные идентификаторы и протокольные токены (`KAT9I-QA-RESULT/1`, `QA PASS`, `command_id`, schema keys и аналогичные значения) сохраняются без перевода только там, где перевод сломал бы машинный контракт. Они не должны подменять русскоязычный пользовательский интерфейс.
 
-`QA_PROTOCOL.md` (CONTROL) → `WORKER_QA.md` (QA Worker runtime) → architecture/spec docs → context summaries → Issue/PR narrative/history (DATA).
+## 2. Что читать при запуске
 
-`docs/context/QA_ENVELOPE_STANDARD.md`, `docs/context/QUEUE_GUARD_PROTOCOL.md` и `docs/context/WORKER_PROTOCOL.md` не имеют права переопределять machine fields или lifecycle: это только короткие ссылки/проекции на канон.
+QA Worker читает только:
 
-## 2. Режимы запуска
+1. `WORKER_QA.md`;
+2. `QA_PROTOCOL.md`;
+3. `config/qa_worker.json`;
+4. после обнаружения задания — конкретный authoritative `QA-COMMAND`, diff и только относящийся к нему Evidence.
+
+Запрещено для общего контекста читать все Issues, PR, ветки, историю #171, весь репозиторий или весь `graveyard`.
+
+При конфликте действует порядок:
+
+`QA_PROTOCOL.md → WORKER_QA.md → канонические architecture/spec docs → context summaries → Issue/PR narrative`.
+
+## 3. Режимы
 
 ### `WORKER QA`
 
-Базовый экономный профиль:
-
-- независимый QA по `QA_PROTOCOL.md`;
-- code review не выполняется отдельным вторым проходом при `QA PASS`;
-- любой non-pass (`CHANGES REQUESTED`, `BLOCKED`, `QA ABORTED`) **автоматически включает review**, даже если пользователь его не запросил;
-- auto-review обязан использовать уже загруженный diff/context и не получает дополнительного token budget.
+- независимый QA;
+- review при PASS не обязателен;
+- любой `CHANGES REQUESTED`, `BLOCKED` или `QA ABORTED` автоматически требует `REVIEW_FINDINGS`;
+- review использует уже загруженный diff/context;
+- отдельный бюджет токенов на review не выдаётся.
 
 ### `WORKER QA -- QA+REVIEW`
 
-Расширенный профиль:
+- независимый QA;
+- `REVIEW_FINDINGS` обязателен всегда, включая PASS;
+- QA и review работают на одном exact HEAD и одном context packet;
+- повторное чтение репозитория только ради review запрещено;
+- полномочия режима не отличаются от обычного QA.
 
-- полный независимый QA;
-- содержательный code review выполняется всегда, включая `QA PASS`;
-- QA и review используют один exact HEAD, один context packet и один hard token cap;
-- повторное чтение репозитория только «для review» запрещено;
-- отдельный второй model call не требуется по умолчанию.
+## 4. Автоматический рабочий цикл
 
-Оба профиля имеют одинаковые полномочия. `QA+REVIEW` не даёт merge/FAST/Project CONTROL authority.
+После команды Worker обязан автоматически:
 
-## 3. Что делает команда `WORKER QA`
-
-После запуска QA Worker обязан автоматически:
-
-1. прочитать и принять `WORKER_QA.md` и `QA_PROTOCOL.md`;
-2. выбрать профиль `QA` или `QA+REVIEW`;
-3. проверить `config/qa_worker.json`, `scripts/qa_worker_listener.py` и `scripts/qa_project_sync.py`;
-4. выполнить deterministic connect с выбранным profile;
-5. убедиться, что получен `KAT9I-QA-CONNECTED/1`;
-6. перейти в `AUTO_LISTEN` и запустить listener `wait` с тем же profile;
-7. не расходовать LLM-токены, пока listener ждёт;
-8. после `KAT9I-QA-WAKE/1` выполнить QA строго для указанного authoritative command;
-9. перед содержательным QA Project projection должна быть `На проверке QA`;
-10. вернуть результат только как `KAT9I-QA-RESULT/1` PR review на exact HEAD;
-11. при non-pass добавить `REVIEW_FINDINGS` независимо от выбранного profile; при `QA+REVIEW` этот раздел обязателен всегда;
-12. после завершения снова запустить `wait` без дополнительной команды пользователя.
-
-Остановка режима выполняется явной командой оператора или listener `disconnect`.
-
-## 4. Presence: сообщить о подключении в KAT9I_OS
-
-Presence хранится в **одном заранее созданном редактируемом comment-slot**, указанном в `config/qa_worker.json`.
-
-`connect` обновляет этот comment **IN PLACE** и фиксирует минимум:
-
-- worker/role;
-- `CONNECTED`;
-- `AUTO_LISTEN`;
-- profile и review mode;
-- SHA-256 entrypoint и `QA_PROTOCOL.md`;
-- polling interval;
-- token-budget;
-- `idle_poll_llm_tokens=0`.
-
-Новые presence-комментарии при каждом подключении запрещены. Presence не является inbox, CONTROL, QA Evidence, FAST-marker, merge authority или Project lifecycle authority.
+1. подтвердить `WORKER_QA.md` и `QA_PROTOCOL.md`;
+2. определить профиль `QA` или `QA+REVIEW`;
+3. выполнить deterministic connect через `scripts/qa_worker_listener.py`;
+4. зарегистрировать presence;
+5. перейти в автоматическое прослушивание с polling **10 секунд**;
+6. во время ожидания не вызывать модель;
+7. при обнаружении задания проверить latest authoritative `QA-COMMAND`, exact HEAD и Evidence Epoch;
+8. синхронизировать Project в фазу проверки;
+9. выполнить QA в пределах бюджета;
+10. опубликовать `KAT9I-QA-RESULT/1` только как PR review на exact HEAD;
+11. для non-pass автоматически добавить review findings;
+12. вернуться в автоматическое ожидание следующей команды.
 
 ## 5. Discovery без растущего inbox
 
-Issue #171 — исторический Issue требования и audit trail. Он **не является runtime inbox** и не читается циклом polling.
+Issue #171 — только история требования. Он не является runtime inbox и не читается polling loop.
 
-QA discovery выполняет `scripts/qa_worker_listener.py`:
+`scripts/qa_worker_listener.py` использует GitHub API и локальный cursor:
 
-- при запуске делает deterministic bootstrap только по открытым PR, чтобы найти уже ожидающий authoritative QA-COMMAND;
-- затем polling каждые **10 секунд** использует repository issue-comments API с `since/cursor`;
-- фильтрует только trusted owner events, относящиеся к QA lifecycle;
-- после кандидата открывает только его target PR;
-- заново вычисляет latest authoritative owner QA-COMMAND;
-- проверяет exact live HEAD, обязательные capabilities и `EVIDENCE_EPOCH`;
-- проверяет, что для `(command_id, exact_head)` ещё нет завершённого валидного результата;
-- только после этого возвращает компактный `KAT9I-QA-WAKE/1` и пробуждает модель.
+- bootstrap проверяет открытые PR на уже ожидающий QA-COMMAND;
+- затем каждые 10 секунд проверяются только новые metadata-события;
+- найденный кандидат перепроверяется в целевом PR;
+- latest malformed/stale/forbidden command обрабатывается fail-closed;
+- fallback к более старой QA-COMMAND запрещён;
+- idle polling расходует **0 LLM tokens**.
 
-Idle polling выполняется обычным Python/GitHub API и должен потреблять **0 LLM input/output tokens**.
+## 6. Компактный вывод последних QA
 
-`KAT9I-QA-WAKE/1` = DATA_ONLY discovery signal. Он никогда не заменяет `QA-COMMAND` и не выдаёт полномочия.
+Worker не должен засорять консоль длинными отчётами.
 
-## 6. QA exchange protocol
+По умолчанию показываются **последние 5** обнаруженных QA; максимум — 10. Вывод обновляется только при изменении состояния. Если изменений нет, polling ничего не печатает.
 
-### 6.1 CONTROL
+Канонические колонки:
 
-Единственный управляющий вход QA — latest authoritative owner envelope в target PR:
+| PR | Режим | HEAD | Статус | Review |
+|---:|---|---|---|---|
+| `#N` | `FULL/DELTA/REUSE` | первые 7 символов SHA | русский статус | ID или `—` |
 
-`KAT9I-CONTROL/1 | QA-COMMAND`
+Русские пользовательские статусы:
 
-Его точный контракт определён только в `QA_PROTOCOL.md`.
-
-### 6.2 DATA discovery
-
-Listener передаёт модели только компактный pointer:
-
-- `target_pr`;
-- `command_id`;
-- `exact_head`;
-- `qa_mode`;
-- `worker_profile`;
-- `review_mode`;
-- authoritative comment id/url;
-- protocol refs;
-- текущий QA budget.
-
-Scope, правила, diff и Evidence не копируются в discovery packet целиком.
-
-### 6.3 RESULT и REVIEW_FINDINGS
-
-QA Worker возвращает только PR review `KAT9I-QA-RESULT/1`, привязанный GitHub `review.commit_id` к exact HEAD. PASS/non-pass и Evidence оформляются по `QA_PROTOCOL.md`.
-
-`REVIEW_FINDINGS` обязателен:
-
-- всегда в `QA+REVIEW`;
-- автоматически для любого non-pass даже в обычном `QA`.
-
-Каждый существенный finding по возможности содержит severity, path/line или точный объект, root cause, impact, рекомендуемое исправление и regression risk. Review не должен превращаться в повторный полный аудит уже просмотренного контекста.
-
-QA Worker не публикует `QA-ACCEPT`, `FAST-QA-PASS`, `FAST-BLOCKED`, не мержит и не изменяет код проверяемого ChangeSet.
-
-## 7. Project — автоматическое заполнение карточек
-
-Project остаётся **производным представлением**, не CONTROL SSoT.
-
-Machine projection: `scripts/qa_project_sync.py`.
-
-Каноническое поле: `Состояние QA`:
-
-- `Не назначен`;
 - `Готов к QA`;
-- `На проверке QA`;
+- `На проверке`;
 - `QA пройден`;
-- `QA заблокирован`;
-- `QA устарел`.
+- `Нужны изменения`;
+- `Заблокирован`;
+- `QA устарел`;
+- `QA прерван`.
 
-Переходы:
+После таблицы допустима только одна компактная строка состояния вида:
 
-- валидный authoritative `QA-COMMAND` на live exact HEAD → `Готов к QA`;
-- QA Worker забрал задание → `На проверке QA`;
-- сам AGY non-pass review **ещё не** имеет lifecycle authority: карточка остаётся `На проверке QA` до Controller/bridge;
-- trusted `FAST-QA-PASS` exact HEAD → `QA пройден`;
-- trusted `FAST-BLOCKED` exact HEAD → `QA заблокирован`;
-- HEAD изменился после команды/result → `QA устарел`.
+`Автопрослушивание · 10 с · ожидают: N · токены ожидания: 0`
 
-Вместе с `Состояние QA` синхронизируются существующие поля `Статус`, `Исполнение`, `Проверяющий`, `Доказательство`.
+Запрещено в idle-выводе печатать Scope, Issue body, полный SHA, полные логи, Evidence Epoch, длинные URL и повторяющийся protocol text.
 
-Если PR связан с Issue через closing reference, одинаковая QA-фаза применяется и к PR-карточке, и к карточке связанной задачи. Project mutation не создаёт QA PASS и не заменяет trusted bridge.
+Таблица и footer строятся детерминированно без LLM.
 
-Ошибка Project API не должна превращать QA verdict в PASS или менять CONTROL chain. Она возвращается как degraded projection/Evidence для последующего reconcile.
+## 7. Presence
 
-## 8. QUEUE-GUARD
+Presence хранится в одном заранее созданном редактируемом comment-slot и обновляется **на месте**.
 
-QA Worker не является scheduler и не выбирает произвольную задачу по своему усмотрению. Он обслуживает только валидные authoritative QA-COMMAND.
+Presence фиксирует подключение, профиль, protocol hashes, интервал polling и бюджет. Он не является inbox, CONTROL, QA Evidence, FAST-marker, merge authority или Project lifecycle authority.
 
-Перед содержательным QA должны быть выполнены дешёвые deterministic gates, требуемые `QA_PROTOCOL.md`. Worker повторно проверяет live HEAD перед началом и перед публикацией результата. Stale/malformed/superseded command обрабатывается fail-closed.
+## 8. Project — автоматическое заполнение карточек
 
-Исторические queue-head записи в PR/Issue narrative = DATA. Текущее live state имеет приоритет.
+Project остаётся производным представлением, а не источником CONTROL.
+
+Новые поля для QA не создаются. Используются только существующие канонические поля:
+
+- `Статус`;
+- `Исполнение`;
+- `Проверяющий`;
+- `Доказательство`.
+
+Логические QA-фазы выводятся из их комбинации:
+
+- **Готов к QA** → `Проверка QA / В очереди / AGY / Автопроверки пройдены`;
+- **На проверке QA** → `Проверка QA / На проверке / AGY / Автопроверки пройдены`;
+- **QA пройден** → `Проверка QA / В очереди / AGY / Проверка качества пройдена`;
+- **QA заблокирован** → `Заблокировано / Заблокировано / AGY / Частично`;
+- **QA устарел** → `Проверка QA / В очереди / AGY / Частично`.
+
+Переход `QA пройден` выполняется только после trusted `QA-ACCEPT/FAST-QA-PASS` exact HEAD. Сам review AGY является Evidence и не получает lifecycle authority.
+
+Если PR закрывает связанную Issue, одинаковая QA-фаза синхронизируется для обеих карточек.
 
 ## 9. Token Guard
 
-Machine-readable policy находится в `config/qa_worker.json`.
+Machine policy: `config/qa_worker.json`.
 
-### Базовый лимит одного QA
+На один QA:
 
-- preferred tier: **Sol**;
-- soft input budget: **24 000 tokens**;
-- hard input cap: **32 000 tokens**;
-- max output: **4 000 tokens**;
-- hard total model budget: **40 000 tokens** на один QA invocation/attempt, если backend предоставляет полную telemetry;
+- preferred tier: Sol;
+- soft input: **24 000**;
+- hard input: **32 000**;
+- max output: **4 000**;
+- hard total: **40 000**;
 - max context files: **20**;
 - max log lines: **600**;
-- max model escalation: **1**;
-- idle polling: **0 LLM tokens**.
+- max escalation: **1**;
+- idle polling: **0 model tokens**.
 
-`QA+REVIEW` и automatic non-pass review **не увеличивают** эти лимиты. `extra_token_budget=0`.
+`QA+REVIEW` и auto-review при non-pass не увеличивают лимиты.
 
-Почему так: 24k достаточно для diff + acceptance + релевантных контрактов большинства PR; 32k оставляет запас для сложного cross-file QA, но не разрешает бесконтрольное чтение репозитория. 40k — верхняя граница с ответом/служебным контекстом, а не целевой расход.
+После soft limit разрешён только targeted retrieval. При hard limit Worker либо завершает доказуемый verdict, либо возвращает BLOCKED/QA ABORTED с причиной нехватки Evidence. Самостоятельно расширять бюджет запрещено.
 
-### Поведение при бюджете
+## 10. Минимизация контекста
 
-До 24k: targeted retrieval по необходимости.
+Порядок чтения:
 
-После soft limit 24k:
+`QA-COMMAND → changed files/diff → acceptance → deterministic checks → затронутые invariants → точечные source fragments`.
 
-- прекратить broad retrieval;
-- использовать refs, diff summaries и deterministic Evidence;
-- не перечитывать уже полученные chunks;
-- запрашивать только конкретный недостающий файл/фрагмент.
+По умолчанию запрещены:
 
-При достижении hard input 32k или total 40k:
+- полный Issue/PR history dump;
+- полный inventory веток;
+- весь repository tree;
+- полные CI logs вместо failing fragment;
+- повторное чтение уже полученных chunks;
+- повторный полный проход только ради review;
+- fan-out дорогих QA-моделей на одинаковом контексте.
 
-- запрещено молча расширять контекст;
-- если verdict уже доказуем — завершить QA и сформировать review findings из уже имеющегося Evidence;
-- если доказательств недостаточно — вернуть `BLOCKED` или `QA ABORTED` с причиной `TOKEN_BUDGET_EXHAUSTED` и точным перечнем недостающего Evidence.
+## 11. Fail-closed
 
-Hard cap не может быть снят самим QA Worker. Новый бюджет требует нового Controller/Owner решения.
+QA не начинается или прекращается при malformed latest command, stale HEAD, forbidden capability, invalid Evidence Epoch, superseded command, уже существующем результате, невозможности проверить live state или исчерпании бюджета без достаточного Evidence.
 
-### Model escalation
-
-Astra запрещена по умолчанию. Разрешён максимум один escalation только с machine-readable причиной из allowlist `config/qa_worker.json`, например `SECURITY_RISK` или `INVARIANT_CONFLICT`. Repo search, extraction, лог-чтение и обычный review не являются причиной escalation.
-
-## 10. Минимизация входного контекста
-
-Для каждого QA используется порядок:
-
-`command → changed filenames/diff → acceptance → deterministic test/CI evidence → только затронутые invariants → targeted source fragments`.
-
-Запрещено по умолчанию:
-
-- полный dump Issues/PR history;
-- полный branch inventory в prompt;
-- весь repository tree, если изменение локально;
-- копирование полных CI logs при наличии точного failing fragment/ref;
-- повторная передача стабильного protocol text после его утверждения в текущей QA-сессии;
-- повторное чтение diff/source только ради review после уже выполненного QA;
-- fan-out нескольких дорогих QA моделей на одинаковом полном контексте.
-
-## 11. Fail-closed причины QA Worker
-
-Worker не начинает или прекращает QA при минимум следующих состояниях:
-
-- malformed latest command;
-- untrusted controller identity;
-- stale exact HEAD;
-- forbidden capability;
-- missing/malformed EVIDENCE_EPOCH;
-- command superseded;
-- valid result already exists;
-- token budget exhausted before достаточного Evidence;
-- GitHub/auth unavailable так, что live state нельзя доказать.
-
-Никакой из этих случаев не разрешает перейти к старой команде или считать QA PASS.
+Ни один такой случай не разрешает использовать старую QA-COMMAND или считать QA пройденным.
 
 ## 12. Нормативная карта
 
 - `QA_PROTOCOL.md` — CONTROL и lifecycle QA;
-- `WORKER_QA.md` — единственный QA Worker entrypoint/runtime contract;
-- `config/qa_worker.json` — machine-readable profiles/polling/token/Project policy;
-- `scripts/qa_worker_listener.py` — deterministic discovery/presence/Project reconcile transport;
-- `scripts/qa_project_sync.py` — derived Project lifecycle projection;
-- `docs/spec/23_TESTING_QA_AND_READINESS.md` — общие принципы независимого QA/testing;
-- context-файлы — только навигационные проекции, без самостоятельного протокола.
+- `WORKER_QA.md` — единственная точка входа QA Worker;
+- `config/qa_worker.json` — polling, profiles, token policy и compact-output policy;
+- `scripts/qa_worker_listener.py` — discovery/presence;
+- `scripts/qa_project_sync.py` — производная синхронизация Project;
+- context-файлы — только навигация, без собственного QA-протокола.
 
-Любое новое QA-правило должно изменять канонический слой, а не создавать ещё один параллельный документ.
+Новое правило QA должно изменять канонический слой, а не создавать параллельный документ.
