@@ -141,9 +141,22 @@ function Test-ProjectCredentialPreflight{
   return [pscustomobject]@{Code='OK';ProjectId=$projectId;ItemId=$itemId}
 }
 
+function Publish-ProjectPreflightOutputs($Result){
+  if([string]::IsNullOrWhiteSpace($env:GITHUB_OUTPUT)){return}
+  if($null -eq $Result){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Нельзя опубликовать пустой preflight result.'}
+  $projectId=[string](Get-PropertyValue $Result 'ProjectId')
+  $itemId=[string](Get-PropertyValue $Result 'ItemId')
+  if([string]::IsNullOrWhiteSpace($projectId) -or [string]::IsNullOrWhiteSpace($itemId)){
+    Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Preflight result не содержит exact ProjectId/ItemId для mutation handoff.'
+  }
+  Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "project_id=$projectId" -Encoding utf8
+  Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "item_id=$itemId" -Encoding utf8
+}
+
 if($LibraryMode){return}
 if(-not(Get-Command gh -ErrorAction SilentlyContinue)){
   Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'GitHub CLI (gh) не найден.'
 }
 $result=Test-ProjectCredentialPreflight
-Write-Host "KAT9I_PROJECT_PREFLIGHT=OK | Project #$ProjectNumber доступен, write capability и schema подтверждены без mutation."
+Publish-ProjectPreflightOutputs $result
+Write-Host "KAT9I_PROJECT_PREFLIGHT=OK | Project #$ProjectNumber доступен, write capability, schema и exact Project/Item IDs подтверждены без mutation."
