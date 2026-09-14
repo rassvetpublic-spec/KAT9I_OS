@@ -15,6 +15,9 @@ OWNER, REPOSITORY = REPO.split("/", 1)
 PROJECT_NUMBER = int(CONFIG["project"]["number"])
 MANAGED_FIELDS = set(CONFIG["project"]["managed_fields"])
 
+# Этот helper проецирует только переходные состояния QA Worker.
+# Финальные QA PASS/BLOCKED принадлежат trusted bridge/FAST и существующему
+# project-queue-sync workflow; их намеренно нельзя выставить этим CLI.
 STATE_MAP = {
     "READY": {
         "логическая_фаза": "Готов к QA",
@@ -29,20 +32,6 @@ STATE_MAP = {
         "Исполнение": "На проверке",
         "Проверяющий": "AGY",
         "Доказательство": "Автопроверки пройдены",
-    },
-    "PASS": {
-        "логическая_фаза": "QA пройден",
-        "Статус": "Проверка QA",
-        "Исполнение": "В очереди",
-        "Проверяющий": "AGY",
-        "Доказательство": "Проверка качества пройдена",
-    },
-    "BLOCKED": {
-        "логическая_фаза": "QA заблокирован",
-        "Статус": "Заблокировано",
-        "Исполнение": "Заблокировано",
-        "Проверяющий": "AGY",
-        "Доказательство": "Частично",
     },
     "STALE": {
         "логическая_фаза": "QA устарел",
@@ -185,7 +174,10 @@ def ensure_item(project_id: str, target: dict[str, Any], index: dict[str, str]) 
 
 def sync(pr: int, state: str) -> dict[str, Any]:
     if state not in STATE_MAP:
-        raise RuntimeError(f"Неподдерживаемое состояние QA: {state}")
+        raise RuntimeError(
+            f"Неподдерживаемое переходное состояние QA: {state}. "
+            "Финальные PASS/BLOCKED разрешены только trusted bridge/FAST workflow"
+        )
     project, targets = base_snapshot(pr)
     fields = select_fields(project)
     missing = sorted(MANAGED_FIELDS - set(fields))
@@ -217,7 +209,7 @@ def sync(pr: int, state: str) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Синхронизация QA-состояния с Project KAT9I_OS")
+    parser = argparse.ArgumentParser(description="Синхронизация переходной QA-фазы с Project KAT9I_OS")
     parser.add_argument("--pr", type=int, required=True)
     parser.add_argument("--state", choices=tuple(STATE_MAP), required=True)
     args = parser.parse_args()
