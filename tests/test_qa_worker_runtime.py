@@ -98,7 +98,7 @@ def test_human_output_language_is_russian():
     assert labels["PASS"] == "QA пройден"
 
 
-def test_project_projection_creates_no_second_qa_state_field():
+def test_project_projection_creates_no_second_qa_state_field_or_final_authority():
     assert CONFIG["project"]["schema_mode"] == "EXISTING_FIELDS_ONLY"
     assert set(CONFIG["project"]["managed_fields"]) == {
         "Статус", "Исполнение", "Проверяющий", "Доказательство"
@@ -106,8 +106,10 @@ def test_project_projection_creates_no_second_qa_state_field():
     source = (ROOT / "scripts" / "qa_project_sync.py").read_text(encoding="utf-8")
     assert "qa_state_field" not in source
     assert "createProjectV2Field" not in source
-    for state_name, profile in project_sync.STATE_MAP.items():
-        assert state_name in {"READY", "IN_REVIEW", "PASS", "BLOCKED", "STALE"}
+    assert set(project_sync.STATE_MAP) == {"READY", "IN_REVIEW", "STALE"}
+    assert "PASS" not in project_sync.STATE_MAP
+    assert "BLOCKED" not in project_sync.STATE_MAP
+    for profile in project_sync.STATE_MAP.values():
         assert set(profile) == {
             "логическая_фаза", "Статус", "Исполнение", "Проверяющий", "Доказательство"
         }
