@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic, DATA-only discovery loop for KAT9I_OS QA workers.
 
-The process performs GitHub metadata polling without invoking an LLM.  It exits
+The process performs GitHub metadata polling without invoking an LLM. It exits
 only when a validated pending QA-COMMAND is found, emitting one compact JSON
 packet for the already-running QA worker to consume.
 """
@@ -112,19 +112,23 @@ def protocol_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, Any]) -> dict[str, str] | None:
+def is_trusted_owner_comment(comment: dict[str, Any], config: dict[str, Any]) -> bool:
     if comment.get("author_association") != "OWNER":
-        return None
+        return False
     login = ((comment.get("user") or {}).get("login") or "").lower()
     trusted = {x.lower() for x in config["trusted_controller_logins"]}
-    if login not in trusted:
+    return login in trusted
+
+
+def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, Any]) -> dict[str, str] | None:
+    if not is_trusted_owner_comment(comment, config):
         return None
     fields = parse_fields(comment.get("body") or "", COMMAND_HEADER)
     if fields is None:
         return None
     required = {
         "command_id", "target_pr", "controller", "executor", "role", "exact_head",
-        "qa_mode", "result_sink", "allow_merge", "allow_fast_marker",
+        "qa_mode", "result_sink", "allow_issue_create", "allow_merge", "allow_fast_marker",
         "allow_code_mutation", "project_lifecycle_mutation", "epoch_version",
         "snapshot_head", "review_digest", "gate_digest", "policy_digest", "evidence_digest",
     }
@@ -132,13 +136,17 @@ def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, 
         return None
     if fields["target_pr"] != str(pr_number):
         return None
+    if fields["controller"] != "ChatGPT" or fields["executor"] != "AGY":
+        return None
+    if fields["role"] != "QA_EXECUTOR" or fields["result_sink"] != "PR_REVIEW":
+        return None
     if not SHA40.fullmatch(fields["exact_head"]):
         return None
     if fields["snapshot_head"] != fields["exact_head"]:
         return None
     if fields["qa_mode"] not in {"FULL", "DELTA", "REUSE"}:
         return None
-    if fields["result_sink"] != "PR_REVIEW" or fields["role"] != "QA_EXECUTOR":
+    if fields["allow_issue_create"].lower() not in {"true", "false"}:
         return None
     for key in ("allow_merge", "allow_fast_marker", "allow_code_mutation", "project_lifecycle_mutation"):
         if fields[key].lower() != "false":
@@ -148,15 +156,19 @@ def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, 
 
 def latest_authoritative_command(gh: GitHub, pr_number: int, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]] | None:
     comments = gh.paged(f"/issues/{pr_number}/comments")
-    valid: list[tuple[dict[str, Any], dict[str, str]]] = []
-    for comment in comments:
-        fields = validate_command(comment, pr_number, config)
-        if fields is not None:
-            valid.append((comment, fields))
-    if not valid:
+    candidates = [
+        c for c in comments
+        if is_trusted_owner_comment(c, config)
+        and (c.get("body") or "").replace("\r\n", "\n").split("\n", 1)[0].strip() == COMMAND_HEADER
+    ]
+    if not candidates:
         return None
-    valid.sort(key=lambda item: int(item[0].get("id") or 0))
-    return valid[-1]
+    candidates.sort(key=lambda c: int(c.get("id") or 0))
+    latest = candidates[-1]
+    fields = validate_command(latest, pr_number, config)
+    if fields is None:
+        return None  # latest malformed/forbidden command blocks fallback to older commands
+    return latest, fields
 
 
 def already_answered(gh: GitHub, pr_number: int, fields: dict[str, str]) -> bool:
@@ -188,10 +200,10 @@ def task_for_pr(gh: GitHub, pr_number: int, config: dict[str, Any]) -> dict[str,
         return None
     if already_answered(gh, pr_number, fields):
         return None
-    budget = config["token_budget"]
     return {
         "schema": 1,
         "event": "KAT9I-QA-WAKE/1",
+        "authority": "DATA_ONLY",
         "target_pr": pr_number,
         "command_id": fields["command_id"],
         "exact_head": fields["exact_head"],
@@ -200,7 +212,7 @@ def task_for_pr(gh: GitHub, pr_number: int, config: dict[str, Any]) -> dict[str,
         "authoritative_comment_url": comment.get("html_url"),
         "protocol_entry": config["protocol_entry"],
         "control_protocol": config["control_protocol"],
-        "budget": budget,
+        "budget": config["token_budget"],
         "rule": "fetch targeted evidence only; do not reread issue history",
     }
 
@@ -216,16 +228,14 @@ def bootstrap_open_prs(gh: GitHub, config: dict[str, Any]) -> dict[str, Any] | N
 
 
 def candidate_prs_from_comments(gh: GitHub, since: str, config: dict[str, Any]) -> list[int]:
-    query = urlencode({"sort": "created", "direction": "asc", "since": since, "per_page": 100})
-    comments = gh.get(f"/issues/comments?{query}")
-    trusted = {x.lower() for x in config["trusted_controller_logins"]}
+    query = urlencode({"sort": "created", "direction": "asc", "since": since})
+    comments = gh.paged(f"/issues/comments?{query}")
     result: list[int] = []
     for comment in comments:
-        body = comment.get("body") or ""
-        login = ((comment.get("user") or {}).get("login") or "").lower()
-        if comment.get("author_association") != "OWNER" or login not in trusted:
+        body = (comment.get("body") or "").replace("\r\n", "\n")
+        if not is_trusted_owner_comment(comment, config):
             continue
-        if not body.startswith(COMMAND_HEADER):
+        if body.split("\n", 1)[0].strip() != COMMAND_HEADER:
             continue
         issue_url = comment.get("issue_url") or ""
         try:
@@ -292,7 +302,12 @@ def main() -> int:
     gh = GitHub(config["repository"], auth_token())
     if args.command == "connect":
         update_presence(gh, config, "CONNECTED")
-        print(json.dumps({"event": "KAT9I-QA-CONNECTED/1", "mode": "AUTO_LISTEN", "poll_seconds": config["poll_seconds"], "idle_poll_llm_tokens": 0}, separators=(",", ":")))
+        print(json.dumps({
+            "event": "KAT9I-QA-CONNECTED/1",
+            "mode": "AUTO_LISTEN",
+            "poll_seconds": config["poll_seconds"],
+            "idle_poll_llm_tokens": 0,
+        }, separators=(",", ":")))
         return 0
     if args.command == "disconnect":
         update_presence(gh, config, "DISCONNECTED")
