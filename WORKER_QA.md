@@ -60,31 +60,69 @@ QA Worker читает только:
 
 1. подтвердить `WORKER_QA.md` и `QA_PROTOCOL.md`;
 2. определить профиль `QA` или `QA+REVIEW`;
-3. выполнить deterministic connect через `scripts/qa_worker_listener.py`;
-4. зарегистрировать presence;
-5. перейти в автоматическое прослушивание с polling **10 секунд**;
-6. во время ожидания не вызывать модель;
-7. при обнаружении задания проверить latest authoritative `QA-COMMAND`, exact HEAD и Evidence Epoch;
-8. синхронизировать Project в фазу проверки;
-9. выполнить QA в пределах бюджета;
-10. опубликовать `KAT9I-QA-RESULT/1` только как PR review на exact HEAD;
-11. для non-pass автоматически добавить review findings;
-12. вернуться в автоматическое ожидание следующей команды.
+3. выполнить детерминированное подключение через `scripts/qa_worker_listener.py`;
+4. зарегистрировать присутствие;
+5. выполнить первичный bootstrap очереди и сохранить bounded local state вне рабочего дерева репозитория;
+6. перейти в автоматическое прослушивание с polling **10 секунд**;
+7. во время ожидания не вызывать модель;
+8. выбрать только один фактический head QA-очереди;
+9. перепроверить latest authoritative `QA-COMMAND`, exact HEAD и Evidence Epoch;
+10. синхронизировать производную Project-фазу;
+11. выполнить QA в пределах бюджета;
+12. опубликовать `KAT9I-QA-RESULT/1` только как PR review на exact HEAD;
+13. для non-pass автоматически добавить review findings;
+14. вернуться в автоматическое ожидание следующего задания.
 
-## 5. Discovery без растущего inbox
+Одновременно Worker выполняет не более одного содержательного QA.
+
+## 5. Обнаружение заданий без растущего inbox
 
 Issue #171 — только история требования. Он не является runtime inbox и не читается polling loop.
 
 `scripts/qa_worker_listener.py` использует GitHub API и локальный cursor:
 
-- bootstrap проверяет открытые PR на уже ожидающий QA-COMMAND;
+- при подключении один раз выполняется bounded bootstrap открытых PR;
+- после bootstrap список ожидающих QA хранится в локальном state-файле вне репозитория;
 - затем каждые 10 секунд проверяются только новые metadata-события;
 - найденный кандидат перепроверяется в целевом PR;
 - latest malformed/stale/forbidden command обрабатывается fail-closed;
 - fallback к более старой QA-COMMAND запрещён;
-- idle polling расходует **0 LLM tokens**.
+- idle polling расходует **0 LLM tokens**;
+- при перезапуске Worker bootstrap восстанавливает очередь из live GitHub state, а не доверяет старому локальному кэшу как SSoT.
 
-## 6. Компактный вывод последних QA
+Локальный state — только кэш/проекция. Он не имеет CONTROL authority.
+
+## 6. Порядок большой QA-очереди
+
+QA Worker **не придумывает приоритет сам** и не выбирает «первый обновлённый PR».
+
+До появления активного канонического PromotionStore из #98 действует детерминированная политика:
+
+`Project.Приоритет → FIFO authoritative QA-COMMAND`.
+
+Порядок:
+
+1. `P0`;
+2. `P1`;
+3. `P2`;
+4. `P3`;
+5. задания без заданного приоритета.
+
+Внутри одного приоритета используется FIFO по времени создания authoritative `QA-COMMAND`; при полном равенстве — comment id, затем номер PR как технический tie-breaker.
+
+Правила безопасности:
+
+- источник приоритета — существующее управляемое поле Project `Приоритет`;
+- заголовок PR не является authority для приоритета;
+- `FULL`, `DELTA` и `REUSE` не переставляют задания в очереди;
+- нет скрытого aging и автоматического повышения P3→P2→P1;
+- изменение Project-приоритета учитывается перед захватом следующего задания;
+- если Project временно нельзя прочитать, Worker не угадывает приоритет и использует чистый FIFO QA-COMMAND;
+- выбор очереди выполняется обычным кодом/API и не расходует LLM-токены.
+
+Когда #98 реализует и активирует единственный канонический PromotionStore/FIFO, отдельная QA-очередь не создаётся: selector должен брать следующий QA-eligible ChangeSet из порядка PromotionStore. Переключение выполняется только явным каноническим adapter/policy change.
+
+## 7. Компактный вывод последних QA
 
 Worker не должен засорять консоль длинными отчётами.
 
@@ -92,9 +130,9 @@ Worker не должен засорять консоль длинными отч
 
 Канонические колонки:
 
-| PR | Режим | HEAD | Статус | Review |
-|---:|---|---|---|---|
-| `#N` | `FULL/DELTA/REUSE` | первые 7 символов SHA | русский статус | ID или `—` |
+| PR | Приоритет | Режим | HEAD | Статус | Ревью |
+|---:|:---:|:---:|:---:|---|:---:|
+| `#N` | `P0…P3` или `—` | `FULL/DELTA/REUSE` | первые 7 символов SHA | русский статус | ID или `—` |
 
 Русские пользовательские статусы:
 
@@ -106,21 +144,21 @@ Worker не должен засорять консоль длинными отч
 - `QA устарел`;
 - `QA прерван`.
 
-После таблицы допустима только одна компактная строка состояния вида:
+После таблицы допустима только одна компактная строка:
 
-`Автопрослушивание · 10 с · ожидают: N · токены ожидания: 0`
+`Ожидают: N · опрос: 10 с · токены ожидания: 0`
 
 Запрещено в idle-выводе печатать Scope, Issue body, полный SHA, полные логи, Evidence Epoch, длинные URL и повторяющийся protocol text.
 
-Таблица и footer строятся детерминированно без LLM.
+Таблица и строка состояния строятся детерминированно без LLM. Команда listener `status` только показывает локальную bounded-проекцию и сама не запускает QA.
 
-## 7. Presence
+## 8. Присутствие Worker
 
-Presence хранится в одном заранее созданном редактируемом comment-slot и обновляется **на месте**.
+Присутствие хранится в одном заранее созданном редактируемом comment-slot и обновляется **на месте**.
 
-Presence фиксирует подключение, профиль, protocol hashes, интервал polling и бюджет. Он не является inbox, CONTROL, QA Evidence, FAST-marker, merge authority или Project lifecycle authority.
+Presence фиксирует подключение, профиль, protocol hashes, интервал polling, политику очереди и бюджет. Он не является inbox, CONTROL, QA Evidence, FAST-marker, merge authority или Project lifecycle authority.
 
-## 8. Project — автоматическое заполнение карточек
+## 9. Project — автоматическое заполнение карточек
 
 Project остаётся производным представлением, а не источником CONTROL.
 
@@ -139,13 +177,15 @@ Project остаётся производным представлением, а
 - **QA заблокирован** → `Заблокировано / Заблокировано / AGY / Частично`;
 - **QA устарел** → `Проверка QA / В очереди / AGY / Частично`.
 
-Переход `QA пройден` выполняется только после trusted `QA-ACCEPT/FAST-QA-PASS` exact HEAD. Сам review AGY является Evidence и не получает lifecycle authority.
+Переход `QA пройден` выполняется только после trusted `QA-ACCEPT/FAST-QA-PASS` exact HEAD. Сам review AGY является Evidence и не получает lifecycle authority. Аналогично raw non-pass review сам по себе не создаёт trusted `FAST-BLOCKED`.
 
 Если PR закрывает связанную Issue, одинаковая QA-фаза синхронизируется для обеих карточек.
 
-## 9. Token Guard
+`scripts/qa_project_sync.py` — только детерминированная производная проекция. Поле `Состояние QA` не создаётся и вторым SSoT не является.
 
-Machine policy: `config/qa_worker.json`.
+## 10. Ограничение токенов
+
+Машинная политика: `config/qa_worker.json`.
 
 На один QA:
 
@@ -163,7 +203,7 @@ Machine policy: `config/qa_worker.json`.
 
 После soft limit разрешён только targeted retrieval. При hard limit Worker либо завершает доказуемый verdict, либо возвращает BLOCKED/QA ABORTED с причиной нехватки Evidence. Самостоятельно расширять бюджет запрещено.
 
-## 10. Минимизация контекста
+## 11. Минимизация контекста
 
 Порядок чтения:
 
@@ -179,19 +219,23 @@ Machine policy: `config/qa_worker.json`.
 - повторный полный проход только ради review;
 - fan-out дорогих QA-моделей на одинаковом контексте.
 
-## 11. Fail-closed
+## 12. Fail-closed
 
 QA не начинается или прекращается при malformed latest command, stale HEAD, forbidden capability, invalid Evidence Epoch, superseded command, уже существующем результате, невозможности проверить live state или исчерпании бюджета без достаточного Evidence.
 
 Ни один такой случай не разрешает использовать старую QA-COMMAND или считать QA пройденным.
 
-## 12. Нормативная карта
+Недоступность Project-приоритета не делает QA PASS/BLOCKED и не выдаёт новых полномочий: selector деградирует только к FIFO authoritative QA-COMMAND.
+
+## 13. Нормативная карта
 
 - `QA_PROTOCOL.md` — CONTROL и lifecycle QA;
 - `WORKER_QA.md` — единственная точка входа QA Worker;
-- `config/qa_worker.json` — polling, profiles, token policy и compact-output policy;
-- `scripts/qa_worker_listener.py` — discovery/presence;
-- `scripts/qa_project_sync.py` — производная синхронизация Project;
+- `config/qa_worker.json` — polling, profiles, queue policy, token policy и compact-output policy;
+- `scripts/qa_worker_listener.py` — discovery, local queue projection и presence;
+- `scripts/qa_project_sync.py` — производная синхронизация Project существующими полями;
+- `docs/architecture/36_CHANGE_PROMOTION_PROTOCOL.md` — архитектурный контракт будущего PromotionStore;
+- Issue #98 — текущая реализационная задача PromotionStore/Promotion Bridge, пока не runtime SSoT;
 - context-файлы — только навигация, без собственного QA-протокола.
 
 Новое правило QA должно изменять канонический слой, а не создавать параллельный документ.
