@@ -6,6 +6,8 @@ param(
   [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','QA','QUEUED','BLOCKED','DONE')][string]$State,
   [string]$Worker='',
   [string]$QaWorker='',
+  [string]$ProjectId='',
+  [string]$ItemId='',
   [switch]$LibraryMode
 )
 
@@ -180,11 +182,27 @@ function Invoke-ProjectEdit([string]$ProjectId,[string]$ItemId,$Binding){
 
 function Sync-ProjectQueueState{
   Assert-ItemUrl
-  $project=Assert-ProjectAccess
-  $projectId=[string](Get-PropertyValue $project 'id')
-  $itemId=Resolve-ProjectItemId
+
+  $hasProjectId=-not [string]::IsNullOrWhiteSpace($ProjectId)
+  $hasItemId=-not [string]::IsNullOrWhiteSpace($ItemId)
+  if($hasProjectId -xor $hasItemId){
+    throw 'Project preflight handoff обязан передавать ProjectId и ItemId вместе; lifecycle не синхронизирован.'
+  }
+
+  if($hasProjectId){
+    # Канонический workflow передаёт exact opaque IDs, уже проверенные read-only preflight.
+    # Это устраняет повторное owner-name разрешение между preflight и mutation и закрывает TOCTOU/CLI race.
+    $resolvedProjectId=$ProjectId.Trim()
+    $resolvedItemId=$ItemId.Trim()
+  } else {
+    # Fallback сохраняется для локального/ручного вызова и остаётся fail-closed.
+    $project=Assert-ProjectAccess
+    $resolvedProjectId=[string](Get-PropertyValue $project 'id')
+    $resolvedItemId=Resolve-ProjectItemId
+  }
+
   $profile=QueueProfile $State $Worker $QaWorker
-  $fields=Get-ProjectSelectFields $projectId
+  $fields=Get-ProjectSelectFields $resolvedProjectId
 
   # Все ID и option ID разрешаются до первой записи. Это не даёт частично
   # продвинуть stage из-за неизвестного поля/значения.
@@ -195,9 +213,9 @@ function Sync-ProjectQueueState{
 
   # Вспомогательные поля — первыми, Статус — последним как commit marker стадии.
   foreach($field in @('Исполнитель','Проверяющий','Доказательство','Исполнение')){
-    if($bindings.Contains($field)){Invoke-ProjectEdit $projectId $itemId $bindings[$field]}
+    if($bindings.Contains($field)){Invoke-ProjectEdit $resolvedProjectId $resolvedItemId $bindings[$field]}
   }
-  Invoke-ProjectEdit $projectId $itemId $bindings['Статус']
+  Invoke-ProjectEdit $resolvedProjectId $resolvedItemId $bindings['Статус']
   Write-Host "Project queue synced: state=$State; url=$Url; worker=$Worker; qa=$(Normalize-QaWorker $QaWorker)"
 }
 
