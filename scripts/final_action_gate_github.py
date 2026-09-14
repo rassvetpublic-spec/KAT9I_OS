@@ -72,10 +72,51 @@ def find_qa_pass(comments: Iterable[Dict[str, Any]], head: str) -> Optional[Dict
     return max(matches, key=lambda c: (str(c.get("created_at") or ""), int(c.get("id") or 0)))
 
 
-def quality_pass(check_runs_payload: Any, head: str, target_revision: str) -> Dict[str, Any]:
+def _check_binds_exact_pr_target(
+    check_run: Dict[str, Any], *, pr_number: int, head: str, target_ref: str, target_revision: str
+) -> bool:
+    if str(check_run.get("head_sha") or "").lower() != head.lower():
+        return False
+    for association in check_run.get("pull_requests") or []:
+        try:
+            number = int(association.get("number") or 0)
+        except (TypeError, ValueError):
+            continue
+        assoc_head = association.get("head") or {}
+        assoc_base = association.get("base") or {}
+        if (
+            number == pr_number
+            and str(assoc_head.get("sha") or "").lower() == head.lower()
+            and str(assoc_base.get("ref") or "") == target_ref
+            and str(assoc_base.get("sha") or "").lower() == target_revision.lower()
+        ):
+            return True
+    return False
+
+
+def quality_pass(
+    check_runs_payload: Any,
+    *,
+    pr_number: int,
+    head: str,
+    target_ref: str,
+    target_revision: str,
+) -> Dict[str, Any]:
     payload = check_runs_payload if isinstance(check_runs_payload, dict) else {}
     runs = payload.get("check_runs") or []
-    matches = [r for r in runs if r.get("name") == QUALITY_CHECK and r.get("conclusion") == "success"]
+    matches = [
+        r
+        for r in runs
+        if r.get("name") == QUALITY_CHECK
+        and r.get("conclusion") == "success"
+        and _check_binds_exact_pr_target(
+            r,
+            pr_number=pr_number,
+            head=head,
+            target_ref=target_ref,
+            target_revision=target_revision,
+        )
+    ]
     if not matches:
         return {
             "verdict": "BLOCKED",
@@ -147,7 +188,13 @@ def build_snapshot(pr: Dict[str, Any], comments_payload: Any, check_runs_payload
     comments = _flatten(comments_payload)
 
     qa = find_qa_pass(comments, head)
-    integration = quality_pass(check_runs_payload, head, target_revision)
+    integration = quality_pass(
+        check_runs_payload,
+        pr_number=number,
+        head=head,
+        target_ref=target_ref,
+        target_revision=target_revision,
+    )
     evidence_digest_value = evidence_digest(qa, integration)
     payload = canonical_action_payload(
         operation=OPERATION_PROMOTE_CHANGE,
