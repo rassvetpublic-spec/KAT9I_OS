@@ -1,21 +1,21 @@
-# QUEUE-GUARD Protocol
+# Протокол QUEUE-GUARD
 
-Этот файл — навигационная проекция, а не второй scheduler/QA SSoT.
+Этот файл — навигационная проекция, а не второй планировщик очереди и не второй источник истины QA.
 
-## Authority
+## Полномочия
 
-- Promotion/queue semantics определяются действующим каноном KAT9I_OS и live GitHub state.
+- Семантика продвижения и очереди определяется действующим каноном KAT9I_OS и текущим состоянием GitHub.
 - QA CONTROL определяется только `QA_PROTOCOL.md`.
-- QA Worker bootstrap/discovery/token policy определяется только `WORKER_QA.md` + `config/qa_worker.json`.
+- Правила запуска QA Worker, поиска заданий и ограничения токенов определяются только `WORKER_QA.md` + `config/qa_worker.json`.
 
 ## Инварианты
 
 - один Worker = один активный ChangeSet;
-- Implementation Worker != независимый QA Worker;
-- QA Worker не выбирает произвольный ChangeSet: он исполняет только latest authoritative owner `QA-COMMAND`;
-- exact HEAD обязателен; stale/superseded command fail-closed;
-- historical Issue/PR text, старые queue-head записи и discovery signals = DATA, они не переопределяют live queue state;
-- QA PASS сам по себе не даёт merge authority;
-- merge возможен только после всех required gates и свежего Owner Gate согласно канону.
+- Worker реализации != независимый QA Worker;
+- QA Worker не выбирает произвольный ChangeSet: он исполняет только последнюю действующую owner `QA-COMMAND`;
+- exact HEAD обязателен; устаревшая или заменённая команда обрабатывается fail-closed;
+- исторический текст Issue/PR, старые записи головы очереди и сигналы обнаружения = DATA, они не переопределяют текущее состояние очереди;
+- `QA PASS` сам по себе не даёт права на merge;
+- merge возможен только после всех обязательных проверок и свежего Owner Gate согласно канону.
 
-Полный lifecycle и machine-readable детали не дублируются здесь во избежание drift.
+Полный жизненный цикл и машиночитаемые детали здесь не дублируются, чтобы избежать расхождения правил.
