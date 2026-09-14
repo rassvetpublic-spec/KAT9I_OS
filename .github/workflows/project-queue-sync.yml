@@ -79,8 +79,8 @@ jobs:
         if: steps.resolve.outputs.state == ''
         run: echo "Событие не содержит доверенного перехода Project queue; изменений нет."
 
-      - name: Проверить exact HEAD перед QA или QUEUED
-        if: steps.resolve.outputs.state == 'QUEUED' || (steps.resolve.outputs.state == 'QA' && steps.resolve.outputs.expected_head != '')
+      - name: Проверить exact HEAD перед QA_READY, QA или QUEUED
+        if: steps.resolve.outputs.state == 'QUEUED' || steps.resolve.outputs.state == 'QA_READY' || (steps.resolve.outputs.state == 'QA' && steps.resolve.outputs.expected_head != '')
         shell: bash
         env:
           ITEM_URL: ${{ steps.resolve.outputs.url }}
