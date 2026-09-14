@@ -110,7 +110,7 @@ class FinalActionGateTests(unittest.TestCase):
                 f"exact_head={HEAD}",
                 "target_ref=main",
                 f"target_revision={TARGET}",
-                f"evidence_digest={snapshot['evidence_digest']}",
+                f"gate_evidence_digest={snapshot['evidence_digest']}",
                 f"action_hash={action_hash}",
                 "issued_at=2026-09-14T09:10:00Z",
                 "expires_at=2026-09-14T21:10:00Z",
@@ -133,7 +133,7 @@ class FinalActionGateTests(unittest.TestCase):
                 f"exact_head={HEAD}",
                 "target_ref=main",
                 f"target_revision={TARGET}",
-                f"evidence_digest={base['evidence_digest']}",
+                f"gate_evidence_digest={base['evidence_digest']}",
                 f"action_hash={base['action_hash']}",
             ]),
         }
@@ -154,7 +154,7 @@ class FinalActionGateTests(unittest.TestCase):
                 f"exact_head={HEAD}",
                 "target_ref=main",
                 f"target_revision={TARGET}",
-                f"evidence_digest={base['evidence_digest']}",
+                f"gate_evidence_digest={base['evidence_digest']}",
                 f"action_hash={base['action_hash']}",
             ]),
         }
@@ -163,6 +163,14 @@ class FinalActionGateTests(unittest.TestCase):
         refreshed = build_snapshot(pr, [qa, mtd], checks)
         self.assertIsNone(refreshed["authorization"])
         self.assertNotEqual(base["evidence_digest"], refreshed["evidence_digest"])
+
+    def test_fast_marker_without_agy_is_not_qa_evidence(self):
+        pr = {"number": 195, "head": {"sha": HEAD}, "base": {"ref": "main", "sha": TARGET}}
+        checks = {"check_runs": [{"name": "Базовые проверки качества и целостности", "conclusion": "success"}]}
+        fake_fast = {"id": 1, "author_association": "OWNER", "created_at": "2026-09-14T09:00:00Z", "body": f"FAST-QA-PASS | worker=ChatGPT | qa=OTHER | head={HEAD}"}
+        snapshot = build_snapshot(pr, [fake_fast], checks)
+        self.assertEqual(snapshot["qa"]["verdict"], "BLOCKED")
+        self.assertEqual(evaluate(snapshot, now=NOW)["decision"], "DENY")
 
     def test_workflow_uses_trusted_default_branch_and_no_pr_checkout(self):
         workflow = ROOT / ".github" / "workflows" / "final-action-gate.yml"
