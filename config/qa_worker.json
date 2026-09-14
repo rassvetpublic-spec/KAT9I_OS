@@ -1,12 +1,12 @@
 {
-  "schema": 5,
+  "schema": 6,
   "repository": "rassvetpublic-spec/KAT9I_OS",
   "trusted_controller_logins": ["rassvetpublic-spec"],
   "presence_issue": 171,
   "presence_comment_id": 5662182662,
   "poll_seconds": 10,
-  "bootstrap_open_pr_limit": 100,
-  "local_seen_limit": 128,
+  "bootstrap_open_pr_limit": 1000,
+  "local_seen_limit": 512,
   "protocol_entry": "WORKER_QA.md",
   "control_protocol": "QA_PROTOCOL.md",
   "human_output_language": "ru",
@@ -31,12 +31,23 @@
       "require_review_findings_section": true
     }
   },
+  "queue_policy": {
+    "mode": "PROJECT_PRIORITY_COMMAND_FIFO",
+    "priority_source": "PROJECT_V2",
+    "priority_field": "Приоритет",
+    "priority_order": ["P0", "P1", "P2", "P3"],
+    "fallback": "COMMAND_FIFO",
+    "allow_title_priority": false,
+    "single_active_qa": true,
+    "promotion_store_adapter": "DISABLED_UNTIL_ISSUE_98"
+  },
   "recent_qa_output": {
     "default_limit": 5,
     "max_limit": 10,
+    "history_limit": 10,
     "print_only_on_change": true,
     "idle_silence": true,
-    "table_columns": ["PR", "Режим", "HEAD", "Статус", "Review"],
+    "table_columns": ["PR", "Приоритет", "Режим", "HEAD", "Статус", "Review"],
     "status_labels": {
       "READY": "Готов к QA",
       "RUNNING": "На проверке",
@@ -46,7 +57,7 @@
       "STALE": "QA устарел",
       "ABORTED": "QA прерван"
     },
-    "footer_template": "Автопрослушивание · 10 с · ожидают: {pending} · токены ожидания: 0"
+    "footer_template": "Ожидают: {pending} · опрос: 10 с · токены ожидания: 0"
   },
   "project": {
     "owner": "rassvetpublic-spec",
