@@ -85,7 +85,10 @@ jobs:
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > current-pr.json
           HEAD_SHA="$(jq -r '.head.sha' current-pr.json)"
-          TARGET_SHA="$(jq -r '.base.sha' current-pr.json)"
+          TARGET_REF="$(jq -r '.base.ref' current-pr.json)"
+          TARGET_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${TARGET_REF}" --jq '.object.sha')"
+          jq --arg target_sha "$TARGET_SHA" '.base.sha = $target_sha' current-pr.json > current-pr-live.json
+          mv current-pr-live.json current-pr.json
           gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" > issue-comments.json
           gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?per_page=100" > check-runs.json
           if [ "$(jq -r '.total_count // 0' check-runs.json)" -gt "$(jq '.check_runs | length' check-runs.json)" ]; then
@@ -93,6 +96,7 @@ jobs:
             exit 1
           fi
           printf 'head=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'target_ref=%s\n' "$TARGET_REF" >> "$GITHUB_OUTPUT"
           printf 'target=%s\n' "$TARGET_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Вычислить переносимое решение Final Action Gate
@@ -116,7 +120,7 @@ jobs:
               out.write(f"decision={gate.get('decision','DENY')}\n")
               out.write(f"reasons={','.join(gate.get('reason_codes') or [])}\n")
               out.write(f"action_hash={snap.get('action_hash','')}\n")
-              out.write(f"evidence_digest={snap.get('evidence_digest','')}\n")
+              out.write(f"gate_evidence_digest={snap.get('evidence_digest','')}\n")
           PY
 
       - name: Повторно проверить HEAD и target непосредственно перед публикацией ALLOW
@@ -127,13 +131,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
           EXPECTED_HEAD: ${{ steps.snapshot.outputs.head }}
+          EXPECTED_TARGET_REF: ${{ steps.snapshot.outputs.target_ref }}
           EXPECTED_TARGET: ${{ steps.snapshot.outputs.target }}
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json
           LIVE_HEAD="$(jq -r '.head.sha' final-pr.json)"
-          LIVE_TARGET="$(jq -r '.base.sha' final-pr.json)"
-          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ] || [ "$LIVE_TARGET" != "$EXPECTED_TARGET" ]; then
+          LIVE_TARGET_REF="$(jq -r '.base.ref' final-pr.json)"
+          LIVE_TARGET="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${LIVE_TARGET_REF}" --jq '.object.sha')"
+          if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ] || [ "$LIVE_TARGET_REF" != "$EXPECTED_TARGET_REF" ] || [ "$LIVE_TARGET" != "$EXPECTED_TARGET" ]; then
             printf 'fresh=false\n' >> "$GITHUB_OUTPUT"
           else
             printf 'fresh=true\n' >> "$GITHUB_OUTPUT"
