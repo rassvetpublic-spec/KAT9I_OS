@@ -17,7 +17,7 @@ on:
         description: Состояние очереди
         required: true
         type: choice
-        options: [INBOX, READY, ACTIVE, QA, QUEUED, BLOCKED, DONE]
+        options: [INBOX, READY, ACTIVE, QA_READY, QA, QUEUED, BLOCKED, DONE]
 
 permissions:
   contents: read
@@ -79,21 +79,22 @@ jobs:
         if: steps.resolve.outputs.state == ''
         run: echo "Событие не содержит доверенного перехода Project queue; изменений нет."
 
-      - name: Проверить exact HEAD перед QUEUED
-        if: steps.resolve.outputs.state == 'QUEUED'
+      - name: Проверить exact HEAD перед QA или QUEUED
+        if: steps.resolve.outputs.state == 'QUEUED' || (steps.resolve.outputs.state == 'QA' && steps.resolve.outputs.expected_head != '')
         shell: bash
         env:
           ITEM_URL: ${{ steps.resolve.outputs.url }}
+          ITEM_STATE: ${{ steps.resolve.outputs.state }}
           EXPECTED_HEAD: ${{ steps.resolve.outputs.expected_head }}
         run: |
           set -euo pipefail
           if [ -z "$EXPECTED_HEAD" ]; then
-            echo "::error::FAST-QA-PASS не содержит exact HEAD; QUEUED запрещён."
+            echo "::error::Для состояния $ITEM_STATE отсутствует exact HEAD; переход запрещён."
             exit 1
           fi
           LIVE_HEAD="$(gh pr view "$ITEM_URL" --json headRefOid --jq '.headRefOid')"
           if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
-            echo "::error::STALE_QA: live PR HEAD=$LIVE_HEAD, QA HEAD=$EXPECTED_HEAD; QUEUED запрещён."
+            echo "::error::Устаревший QA: live PR HEAD=$LIVE_HEAD, ожидаемый HEAD=$EXPECTED_HEAD; переход запрещён."
             exit 1
           fi
 
@@ -107,7 +108,7 @@ jobs:
           ITEM_QA: ${{ steps.resolve.outputs.qa }}
         run: ./scripts/project_credential_preflight.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA"
 
-      - name: Синхронизировать lifecycle карточки
+      - name: Синхронизировать состояние карточки
         if: steps.resolve.outputs.state != ''
         shell: pwsh
         env:
