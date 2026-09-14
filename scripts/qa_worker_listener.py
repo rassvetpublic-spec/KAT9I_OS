@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Deterministic, DATA-only discovery loop for KAT9I_OS QA workers."""
+"""Детерминированный DATA-only listener независимого QA Worker KAT9I_OS."""
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -24,10 +25,61 @@ COMMAND_HEADER = "KAT9I-CONTROL/1 | QA-COMMAND"
 RESULT_HEADER = "KAT9I-QA-RESULT/1"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 FAST_HEAD = re.compile(r"\bhead=([0-9a-f]{40})\b")
+TERMINAL_STATUSES = {"PASS", "NONPASS", "BLOCKED", "STALE", "ABORTED"}
 
 
 def load_config() -> dict[str, Any]:
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+
+
+def utc_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def state_path() -> Path:
+    override = os.environ.get("KAT9I_QA_STATE_PATH")
+    if override:
+        return Path(override).expanduser()
+    if os.environ.get("LOCALAPPDATA"):
+        return Path(os.environ["LOCALAPPDATA"]) / "KAT9I_OS" / "qa_worker_state.json"
+    base = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
+    return base / "KAT9I_OS" / "qa_worker_state.json"
+
+
+def empty_state() -> dict[str, Any]:
+    return {
+        "schema": 1,
+        "bootstrapped": False,
+        "cursor": None,
+        "candidates": {},
+        "history": [],
+        "last_table_digest": "",
+        "priority_source": "COMMAND_FIFO",
+    }
+
+
+def load_state() -> dict[str, Any]:
+    path = state_path()
+    if not path.is_file():
+        return empty_state()
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return empty_state()
+    if value.get("schema") != 1 or not isinstance(value.get("candidates"), dict):
+        return empty_state()
+    value.setdefault("history", [])
+    value.setdefault("last_table_digest", "")
+    value.setdefault("priority_source", "COMMAND_FIFO")
+    return value
+
+
+def save_state(state: dict[str, Any]) -> None:
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(state, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    tmp.replace(path)
 
 
 def auth_token() -> str:
@@ -40,7 +92,7 @@ def auth_token() -> str:
             return proc.stdout.strip()
     except (OSError, subprocess.SubprocessError):
         pass
-    raise RuntimeError("GitHub auth unavailable: set GH_TOKEN/GITHUB_TOKEN or authenticate gh")
+    raise RuntimeError("Недоступна авторизация GitHub: задайте GH_TOKEN/GITHUB_TOKEN или авторизуйте gh")
 
 
 class GitHub:
@@ -53,16 +105,19 @@ class GitHub:
             "User-Agent": "KAT9I-QA-WORKER/1",
         }
 
-    def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+    def _request_url(self, method: str, url: str, payload: dict[str, Any] | None = None) -> Any:
         data = None if payload is None else json.dumps(payload).encode("utf-8")
-        req = Request(self.base + path, data=data, headers=self.headers, method=method)
+        req = Request(url, data=data, headers=self.headers, method=method)
         try:
             with urlopen(req, timeout=25) as response:
                 raw = response.read()
                 return json.loads(raw.decode("utf-8")) if raw else None
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:800]
-            raise RuntimeError(f"GitHub API {exc.code} {method} {path}: {detail}") from exc
+            raise RuntimeError(f"GitHub API {exc.code}: {detail}") from exc
+
+    def request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+        return self._request_url(method, self.base + path, payload)
 
     def get(self, path: str) -> Any:
         return self.request("GET", path)
@@ -70,13 +125,19 @@ class GitHub:
     def patch(self, path: str, payload: dict[str, Any]) -> Any:
         return self.request("PATCH", path, payload)
 
+    def graphql(self, query: str, variables: dict[str, Any]) -> Any:
+        result = self._request_url("POST", "https://api.github.com/graphql", {"query": query, "variables": variables})
+        if not isinstance(result, dict) or result.get("errors"):
+            raise RuntimeError("GitHub GraphQL вернул ошибку")
+        return result.get("data") or {}
+
     def paged(self, path: str, limit_pages: int = 20) -> list[Any]:
         sep = "&" if "?" in path else "?"
         out: list[Any] = []
         for page in range(1, limit_pages + 1):
             batch = self.get(f"{path}{sep}per_page=100&page={page}")
             if not isinstance(batch, list):
-                raise RuntimeError(f"Expected list from {path}")
+                raise RuntimeError(f"GitHub API должен вернуть список: {path}")
             out.extend(batch)
             if len(batch) < 100:
                 break
@@ -146,7 +207,9 @@ def validate_command(comment: dict[str, Any], pr_number: int, config: dict[str, 
     return fields
 
 
-def latest_authoritative_command_from_comments(comments: list[dict[str, Any]], pr_number: int, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]] | None:
+def latest_authoritative_command_from_comments(
+    comments: list[dict[str, Any]], pr_number: int, config: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, str]] | None:
     candidates = [
         c for c in comments
         if is_trusted_owner_comment(c, config) and first_line(c.get("body") or "") == COMMAND_HEADER
@@ -161,7 +224,9 @@ def latest_authoritative_command_from_comments(comments: list[dict[str, Any]], p
     return latest, fields
 
 
-def latest_authoritative_command(gh: GitHub, pr_number: int, config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]] | None:
+def latest_authoritative_command(
+    gh: GitHub, pr_number: int, config: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, str]] | None:
     return latest_authoritative_command_from_comments(gh.paged(f"/issues/{pr_number}/comments"), pr_number, config)
 
 
@@ -182,9 +247,19 @@ def result_for_command(gh: GitHub, pr_number: int, fields: dict[str, str]) -> di
     return {"review": matches[-1][1], "fields": matches[-1][2]}
 
 
+def status_from_result(result: dict[str, Any]) -> str:
+    verdict = str((result.get("fields") or {}).get("verdict") or "")
+    return {
+        "QA PASS": "PASS",
+        "CHANGES REQUESTED": "NONPASS",
+        "BLOCKED": "BLOCKED",
+        "QA ABORTED": "ABORTED",
+    }.get(verdict, "ABORTED")
+
+
 def sync_project(pr_number: int, state: str) -> dict[str, Any]:
     if not PROJECT_SYNC.is_file():
-        return {"verdict": "DEGRADED", "reason": "qa_project_sync.py missing"}
+        return {"verdict": "DEGRADED", "reason": "Не найден qa_project_sync.py"}
     proc = subprocess.run(
         [sys.executable, str(PROJECT_SYNC), "--pr", str(pr_number), "--state", state],
         cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", check=False,
@@ -194,104 +269,294 @@ def sync_project(pr_number: int, state: str) -> dict[str, Any]:
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError:
-        return {"verdict": "DEGRADED", "reason": "project sync returned non-JSON"}
+        return {"verdict": "DEGRADED", "reason": "Project sync вернул не-JSON"}
 
 
-def derive_project_state(gh: GitHub, pr_number: int, config: dict[str, Any]) -> str | None:
-    pr = gh.get(f"/pulls/{pr_number}")
+def project_priority_map(gh: GitHub, config: dict[str, Any]) -> tuple[dict[int, str], str]:
+    policy = config["queue_policy"]
+    field_name = str(policy["priority_field"])
+    project = config["project"]
+    query = """
+query($login:String!,$number:Int!,$after:String){
+  user(login:$login){projectV2(number:$number){items(first:100,after:$after){
+    nodes{
+      content{... on PullRequest{number repository{nameWithOwner}}}
+      fieldValues(first:50){nodes{
+        ... on ProjectV2ItemFieldSingleSelectValue{
+          name
+          field{... on ProjectV2SingleSelectField{name}}
+        }
+      }}
+    }
+    pageInfo{hasNextPage endCursor}
+  }}}
+}
+"""
+    result: dict[int, str] = {}
+    after: str | None = None
+    try:
+        while True:
+            data = gh.graphql(query, {"login": project["owner"], "number": int(project["number"]), "after": after})
+            page = (((data.get("user") or {}).get("projectV2") or {}).get("items") or {})
+            for node in page.get("nodes") or []:
+                content = node.get("content") or {}
+                number = content.get("number")
+                repo = ((content.get("repository") or {}).get("nameWithOwner") or "")
+                if not number or repo.lower() != str(config["repository"]).lower():
+                    continue
+                values = []
+                for value in ((node.get("fieldValues") or {}).get("nodes") or []):
+                    if ((value.get("field") or {}).get("name") or "") == field_name and value.get("name"):
+                        values.append(str(value["name"]))
+                if len(values) > 1:
+                    raise RuntimeError(f"Неоднозначный приоритет Project для PR #{number}")
+                if values:
+                    result[int(number)] = values[0]
+            info = page.get("pageInfo") or {}
+            if not info.get("hasNextPage"):
+                break
+            after = info.get("endCursor")
+        return result, "PROJECT_V2"
+    except Exception:
+        return {}, "COMMAND_FIFO"
+
+
+def priority_rank(priority: str | None, config: dict[str, Any]) -> int:
+    order = list(config["queue_policy"]["priority_order"])
+    try:
+        return order.index(priority)
+    except ValueError:
+        return len(order)
+
+
+def candidate_key(pr_number: int, command_id: str, exact_head: str) -> str:
+    return f"{pr_number}:{command_id}:{exact_head}"
+
+
+def candidate_sort_key(candidate: dict[str, Any], config: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        priority_rank(candidate.get("priority"), config),
+        str(candidate.get("command_created_at") or "9999-12-31T23:59:59Z"),
+        int(candidate.get("command_comment_id") or 0),
+        int(candidate["target_pr"]),
+    )
+
+
+def add_history(state: dict[str, Any], record: dict[str, Any], config: dict[str, Any]) -> None:
+    record = dict(record)
+    record["updated_at"] = utc_now()
+    key = candidate_key(int(record["target_pr"]), str(record["command_id"]), str(record["exact_head"]))
+    history = [x for x in state.get("history", []) if x.get("key") != key]
+    record["key"] = key
+    history.insert(0, record)
+    state["history"] = history[: int(config["recent_qa_output"]["history_limit"])]
+
+
+def candidate_for_pr(
+    gh: GitHub,
+    pr: dict[str, Any],
+    config: dict[str, Any],
+    profile: str,
+    priorities: dict[int, str],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    pr_number = int(pr["number"])
     if pr.get("state") != "open":
-        return None
-    comments = gh.paged(f"/issues/{pr_number}/comments")
-    latest = latest_authoritative_command_from_comments(comments, pr_number, config)
-    if latest is None:
-        return None
-    command_comment, fields = latest
-    live_head = (((pr.get("head") or {}).get("sha")) or "").lower()
-    if live_head != fields["exact_head"]:
-        return "STALE"
-    after_command = [
-        c for c in comments
-        if is_trusted_owner_comment(c, config) and int(c.get("id") or 0) > int(command_comment.get("id") or 0)
-    ]
-    after_command.sort(key=lambda c: int(c.get("id") or 0))
-    for comment in reversed(after_command):
-        line = first_line(comment.get("body") or "")
-        if line.startswith("FAST-QA-PASS"):
-            match = FAST_HEAD.search(line)
-            if match and match.group(1) == fields["exact_head"]:
-                return "PASS"
-        if line.startswith("FAST-BLOCKED"):
-            match = FAST_HEAD.search(line)
-            if not match or match.group(1) == fields["exact_head"]:
-                return "BLOCKED"
-    if result_for_command(gh, pr_number, fields):
-        return "IN_REVIEW"
-    return "READY"
-
-
-def reconcile_project(gh: GitHub, pr_number: int, config: dict[str, Any]) -> dict[str, Any]:
-    state = derive_project_state(gh, pr_number, config)
-    if not state:
-        return {"verdict": "SKIP", "reason": "no active authoritative QA command"}
-    return sync_project(pr_number, state)
-
-
-def task_for_pr(gh: GitHub, pr_number: int, config: dict[str, Any], profile: str) -> dict[str, Any] | None:
-    pr = gh.get(f"/pulls/{pr_number}")
-    if pr.get("state") != "open":
-        return None
+        return None, None
     latest = latest_authoritative_command(gh, pr_number, config)
     if latest is None:
-        return None
+        return None, None
     comment, fields = latest
     live_head = (((pr.get("head") or {}).get("sha")) or "").lower()
-    if live_head != fields["exact_head"]:
-        sync_project(pr_number, "STALE")
-        return None
-    if result_for_command(gh, pr_number, fields):
-        reconcile_project(gh, pr_number, config)
-        return None
-    project_ready = sync_project(pr_number, "READY")
-    profile_policy = config["profiles"][profile]
-    return {
-        "schema": 2,
-        "event": "KAT9I-QA-WAKE/1",
-        "authority": "DATA_ONLY",
+    base = {
         "target_pr": pr_number,
         "command_id": fields["command_id"],
         "exact_head": fields["exact_head"],
         "qa_mode": fields["qa_mode"],
-        "worker_profile": profile,
-        "review_mode": profile_policy["review_mode"],
-        "reuse_same_context": bool(profile_policy.get("reuse_same_context", True)),
-        "authoritative_comment_id": comment.get("id"),
+        "priority": priorities.get(pr_number),
+        "command_created_at": comment.get("created_at"),
+        "command_comment_id": int(comment.get("id") or 0),
         "authoritative_comment_url": comment.get("html_url"),
+        "worker_profile": profile,
+        "updated_at": utc_now(),
+    }
+    if live_head != fields["exact_head"]:
+        terminal = dict(base, status="STALE", review_id=None)
+        sync_project(pr_number, "STALE")
+        return None, terminal
+    result = result_for_command(gh, pr_number, fields)
+    if result:
+        terminal = dict(
+            base,
+            status=status_from_result(result),
+            review_id=(result.get("review") or {}).get("id"),
+        )
+        return None, terminal
+    profile_policy = config["profiles"][profile]
+    candidate = dict(
+        base,
+        status="READY",
+        review_id=None,
+        review_mode=profile_policy["review_mode"],
+    )
+    return candidate, None
+
+
+def bootstrap(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str, Any]) -> None:
+    scan_cursor = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
+    limit = int(config.get("bootstrap_open_pr_limit", 1000))
+    pages = max(1, math.ceil(limit / 100))
+    pulls = gh.paged("/pulls?state=open&sort=created&direction=asc", limit_pages=pages)[:limit]
+    priorities, source = project_priority_map(gh, config)
+    new_candidates: dict[str, Any] = {}
+    for pr in pulls:
+        candidate, terminal = candidate_for_pr(gh, pr, config, profile, priorities)
+        if terminal:
+            add_history(state, terminal, config)
+        if candidate:
+            key = candidate_key(candidate["target_pr"], candidate["command_id"], candidate["exact_head"])
+            previous = (state.get("candidates") or {}).get(key) or {}
+            if previous.get("status") == "RUNNING":
+                candidate["status"] = "READY"
+            new_candidates[key] = candidate
+    state["candidates"] = new_candidates
+    state["bootstrapped"] = True
+    state["cursor"] = scan_cursor
+    state["priority_source"] = source
+    save_state(state)
+
+
+def refresh_candidate(
+    gh: GitHub, config: dict[str, Any], profile: str, state: dict[str, Any], key: str
+) -> dict[str, Any] | None:
+    current = (state.get("candidates") or {}).get(key)
+    if not current:
+        return None
+    pr_number = int(current["target_pr"])
+    pr = gh.get(f"/pulls/{pr_number}")
+    priorities, source = project_priority_map(gh, config)
+    state["priority_source"] = source
+    candidate, terminal = candidate_for_pr(gh, pr, config, profile, priorities)
+    state["candidates"].pop(key, None)
+    if terminal:
+        add_history(state, terminal, config)
+        save_state(state)
+        return None
+    if candidate:
+        new_key = candidate_key(candidate["target_pr"], candidate["command_id"], candidate["exact_head"])
+        candidate["status"] = current.get("status", "READY") if new_key == key else "READY"
+        state["candidates"][new_key] = candidate
+        save_state(state)
+        return candidate
+    save_state(state)
+    return None
+
+
+def sorted_candidates(state: dict[str, Any], config: dict[str, Any]) -> list[dict[str, Any]]:
+    return sorted((state.get("candidates") or {}).values(), key=lambda item: candidate_sort_key(item, config))
+
+
+def recent_rows(state: dict[str, Any], config: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+    active = list((state.get("candidates") or {}).values())
+    history = list(state.get("history") or [])
+    rows = active + history
+    rows.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+    return rows[:limit]
+
+
+def table_text(state: dict[str, Any], config: dict[str, Any], limit: int | None = None) -> str:
+    output = config["recent_qa_output"]
+    limit = int(limit or output["default_limit"])
+    limit = max(1, min(limit, int(output["max_limit"])))
+    labels = output["status_labels"]
+    rows = recent_rows(state, config, limit)
+    lines = [
+        "Последние QA:",
+        "| PR | Приоритет | Режим | HEAD | Статус | Review |",
+        "|---:|:---:|:---:|:---:|---|:---:|",
+    ]
+    if rows:
+        for item in rows:
+            review = f"#{item['review_id']}" if item.get("review_id") else "—"
+            lines.append(
+                f"| #{item['target_pr']} | {item.get('priority') or '—'} | {item.get('qa_mode') or '—'} | "
+                f"{str(item.get('exact_head') or '')[:7]} | {labels.get(item.get('status'), item.get('status') or '—')} | {review} |"
+            )
+    else:
+        lines.append("| — | — | — | — | Нет заданий | — |")
+    pending = sum(1 for item in (state.get("candidates") or {}).values() if item.get("status") in {"READY", "RUNNING"})
+    lines.append(output["footer_template"].format(pending=pending))
+    return "\n".join(lines)
+
+
+def render_table(state: dict[str, Any], config: dict[str, Any], *, force: bool = False, stream: Any = sys.stderr) -> None:
+    text = table_text(state, config)
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if not force and config["recent_qa_output"].get("print_only_on_change") and state.get("last_table_digest") == digest:
+        return
+    print(text, file=stream)
+    state["last_table_digest"] = digest
+    save_state(state)
+
+
+def packet_for_candidate(candidate: dict[str, Any], config: dict[str, Any], pending: int) -> dict[str, Any]:
+    profile = candidate["worker_profile"]
+    return {
+        "schema": 3,
+        "event": "KAT9I-QA-WAKE/1",
+        "authority": "DATA_ONLY",
+        "target_pr": candidate["target_pr"],
+        "command_id": candidate["command_id"],
+        "exact_head": candidate["exact_head"],
+        "qa_mode": candidate["qa_mode"],
+        "priority": candidate.get("priority"),
+        "queue_policy": config["queue_policy"]["mode"],
+        "queue_position": 1,
+        "queue_pending": pending,
+        "worker_profile": profile,
+        "review_mode": config["profiles"][profile]["review_mode"],
+        "reuse_same_context": bool(config["review_policy"]["reuse_same_context"]),
+        "authoritative_comment_id": candidate["command_comment_id"],
+        "authoritative_comment_url": candidate["authoritative_comment_url"],
         "protocol_entry": config["protocol_entry"],
         "control_protocol": config["control_protocol"],
         "budget": config["token_budget"],
-        "project_ready": project_ready,
-        "rule": "fetch targeted evidence only; do not reread issue history",
+        "rule": "Получать только целевое Evidence; историю Issue целиком не перечитывать",
     }
 
 
-def bootstrap_open_prs(gh: GitHub, config: dict[str, Any], profile: str) -> dict[str, Any] | None:
-    limit = int(config.get("bootstrap_open_pr_limit", 100))
-    pulls = gh.get(f"/pulls?state=open&sort=updated&direction=desc&per_page={min(limit, 100)}")
-    first_packet = None
-    for pr in pulls[:limit]:
-        pr_number = int(pr["number"])
-        reconcile_project(gh, pr_number, config)
-        if first_packet is None:
-            first_packet = task_for_pr(gh, pr_number, config, profile)
-    if first_packet:
-        first_packet["project_claim"] = sync_project(int(first_packet["target_pr"]), "IN_REVIEW")
-    return first_packet
+def claim_next(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    running = [x for x in sorted_candidates(state, config) if x.get("status") == "RUNNING"]
+    if running:
+        key = candidate_key(running[0]["target_pr"], running[0]["command_id"], running[0]["exact_head"])
+        refresh_candidate(gh, config, profile, state, key)
+        running = [x for x in sorted_candidates(state, config) if x.get("status") == "RUNNING"]
+        if running:
+            return None
+    ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
+    while ready:
+        chosen = ready[0]
+        key = candidate_key(chosen["target_pr"], chosen["command_id"], chosen["exact_head"])
+        refreshed = refresh_candidate(gh, config, profile, state, key)
+        if refreshed is None:
+            ready = [x for x in sorted_candidates(state, config) if x.get("status") == "READY"]
+            continue
+        chosen = refreshed
+        key = candidate_key(chosen["target_pr"], chosen["command_id"], chosen["exact_head"])
+        sync_project(int(chosen["target_pr"]), "READY")
+        sync_project(int(chosen["target_pr"]), "IN_REVIEW")
+        state["candidates"][key]["status"] = "RUNNING"
+        state["candidates"][key]["updated_at"] = utc_now()
+        save_state(state)
+        render_table(state, config)
+        pending = sum(1 for x in state["candidates"].values() if x.get("status") in {"READY", "RUNNING"})
+        return packet_for_candidate(state["candidates"][key], config, pending)
+    return None
 
 
-def comment_events(gh: GitHub, since: str, config: dict[str, Any]) -> list[tuple[int, str]]:
+def comment_events(gh: GitHub, since: str, config: dict[str, Any]) -> list[int]:
     query = urlencode({"sort": "created", "direction": "asc", "since": since})
     comments = gh.paged(f"/issues/comments?{query}")
-    events: list[tuple[int, str]] = []
+    events: list[int] = []
     for comment in comments:
         if not is_trusted_owner_comment(comment, config):
             continue
@@ -302,11 +567,30 @@ def comment_events(gh: GitHub, since: str, config: dict[str, Any]) -> list[tuple
             pr_number = int((comment.get("issue_url") or "").rstrip("/").split("/")[-1])
         except ValueError:
             continue
-        events.append((pr_number, line))
+        if pr_number not in events:
+            events.append(pr_number)
     return events
 
 
-def update_presence(gh: GitHub, config: dict[str, Any], state: str, profile: str) -> None:
+def ingest_pr_event(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str, Any], pr_number: int) -> None:
+    pr = gh.get(f"/pulls/{pr_number}")
+    priorities, source = project_priority_map(gh, config)
+    state["priority_source"] = source
+    candidate, terminal = candidate_for_pr(gh, pr, config, profile, priorities)
+    for key, old in list(state["candidates"].items()):
+        if int(old.get("target_pr") or -1) == pr_number:
+            state["candidates"].pop(key, None)
+    if terminal:
+        add_history(state, terminal, config)
+    if candidate:
+        key = candidate_key(candidate["target_pr"], candidate["command_id"], candidate["exact_head"])
+        state["candidates"][key] = candidate
+        sync_project(pr_number, "READY")
+    save_state(state)
+    render_table(state, config)
+
+
+def update_presence(gh: GitHub, config: dict[str, Any], state_name: str, profile: str) -> None:
     entry = ROOT / config["protocol_entry"]
     control = ROOT / config["control_protocol"]
     budget = config["token_budget"]
@@ -314,77 +598,90 @@ def update_presence(gh: GitHub, config: dict[str, Any], state: str, profile: str
         "KAT9I-QA-WORKER/1 | PRESENCE",
         "worker=AGY",
         "role=QA_EXECUTOR",
-        f"state={state}",
-        "mode=AUTO_LISTEN" if state == "CONNECTED" else "mode=OFFLINE",
+        f"state={state_name}",
+        "mode=AUTO_LISTEN" if state_name == "CONNECTED" else "mode=OFFLINE",
         f"profile={profile}",
         f"review_mode={config['profiles'][profile]['review_mode']}",
-        "protocol_ack=ACK" if state == "CONNECTED" else "protocol_ack=NONE",
+        "protocol_ack=ACK" if state_name == "CONNECTED" else "protocol_ack=NONE",
         f"protocol_sha256={protocol_hash(entry)}",
         f"control_protocol_sha256={protocol_hash(control)}",
         f"poll_seconds={config['poll_seconds']}",
+        f"queue_policy={config['queue_policy']['mode']}",
         f"soft_input_tokens={budget['soft_input_tokens']}",
         f"max_input_tokens={budget['max_input_tokens']}",
         f"hard_total_model_tokens={budget['hard_total_model_tokens']}",
         "idle_poll_llm_tokens=0",
         "authority=PRESENCE_ONLY",
         "",
-        "Updated in place. This slot is not an inbox and grants no QA/FAST/merge/Project authority.",
+        "Слот обновляется на месте. Это не inbox и не источник полномочий QA/FAST/merge/Project.",
     ])
     gh.patch(f"/issues/comments/{int(config['presence_comment_id'])}", {"body": body})
 
 
-def wait_for_task(gh: GitHub, config: dict[str, Any], profile: str, once: bool = False) -> int:
-    packet = bootstrap_open_prs(gh, config, profile)
+def wait_for_task(gh: GitHub, config: dict[str, Any], profile: str, state: dict[str, Any], once: bool = False) -> int:
+    if not state.get("bootstrapped"):
+        bootstrap(gh, config, profile, state)
+    packet = claim_next(gh, config, profile, state)
     if packet:
         print(json.dumps(packet, ensure_ascii=False, separators=(",", ":")))
         return 0
     if once:
+        render_table(state, config)
         return 10
     poll = max(10, int(config.get("poll_seconds", 10)))
-    cursor = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
+    cursor = state.get("cursor") or (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)).isoformat().replace("+00:00", "Z")
     while True:
         time.sleep(poll)
         next_cursor = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=2)).isoformat().replace("+00:00", "Z")
-        seen: set[int] = set()
-        for pr_number, _ in comment_events(gh, cursor, config):
-            if pr_number in seen:
-                continue
-            seen.add(pr_number)
-            reconcile_project(gh, pr_number, config)
-            packet = task_for_pr(gh, pr_number, config, profile)
-            if packet:
-                packet["project_claim"] = sync_project(pr_number, "IN_REVIEW")
-                print(json.dumps(packet, ensure_ascii=False, separators=(",", ":")))
-                return 0
+        for pr_number in comment_events(gh, cursor, config):
+            ingest_pr_event(gh, config, profile, state, pr_number)
+        state["cursor"] = next_cursor
+        save_state(state)
+        packet = claim_next(gh, config, profile, state)
+        if packet:
+            print(json.dumps(packet, ensure_ascii=False, separators=(",", ":")))
+            return 0
         cursor = next_cursor
 
 
 def main() -> int:
     config = load_config()
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("connect", "wait", "once", "disconnect"))
+    parser = argparse.ArgumentParser(description="Автономный listener QA Worker KAT9I_OS")
+    parser.add_argument("command", choices=("connect", "wait", "once", "status", "disconnect"))
     parser.add_argument("--profile", choices=tuple(config["profiles"]), default=config["default_profile"])
+    parser.add_argument("--limit", type=int, default=int(config["recent_qa_output"]["default_limit"]))
     args = parser.parse_args()
+
     for path_key in ("protocol_entry", "control_protocol"):
         path = ROOT / config[path_key]
         if not path.is_file():
-            raise RuntimeError(f"Required protocol file missing: {path}")
+            raise RuntimeError(f"Не найден обязательный файл протокола: {path}")
+
+    state = load_state()
+    if args.command == "status":
+        print(table_text(state, config, args.limit))
+        return 0
+
     gh = GitHub(config["repository"], auth_token())
     if args.command == "connect":
         update_presence(gh, config, "CONNECTED", args.profile)
+        bootstrap(gh, config, args.profile, state)
+        render_table(state, config, force=True)
         print(json.dumps({
             "event": "KAT9I-QA-CONNECTED/1",
             "mode": "AUTO_LISTEN",
             "profile": args.profile,
             "review_mode": config["profiles"][args.profile]["review_mode"],
+            "queue_policy": config["queue_policy"]["mode"],
+            "priority_source": state.get("priority_source"),
             "poll_seconds": config["poll_seconds"],
             "idle_poll_llm_tokens": 0,
-        }, separators=(",", ":")))
+        }, ensure_ascii=False, separators=(",", ":")))
         return 0
     if args.command == "disconnect":
         update_presence(gh, config, "DISCONNECTED", args.profile)
         return 0
-    return wait_for_task(gh, config, args.profile, once=args.command == "once")
+    return wait_for_task(gh, config, args.profile, state, once=args.command == "once")
 
 
 if __name__ == "__main__":
