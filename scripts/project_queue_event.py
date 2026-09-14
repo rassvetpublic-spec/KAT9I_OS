@@ -1,7 +1,20 @@
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from qa_result_bridge import (  # noqa: E402
+    BridgeError,
+    COMMAND_FIELDS,
+    COMMAND_MARKER,
+    parse_envelope,
+    validate_command,
+)
 
 
 CONTROL_MARKERS = {
@@ -16,8 +29,13 @@ IDENTITY_KEYS = {"worker", "qa"}
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
+def _first_line(body: str) -> str:
+    lines = (body or "").splitlines()
+    return lines[0].strip() if lines else ""
+
+
 def _control_parts(body: str) -> tuple[str | None, dict[str, str]]:
-    first_line = (body or "").splitlines()[0].strip()
+    first_line = _first_line(body)
     if not first_line:
         return None, {}
     parts = [part.strip() for part in first_line.split("|")]
@@ -56,12 +74,40 @@ def marker_from_body(body: str) -> str | None:
     return state
 
 
+def _qa_command_projection(event: dict, body: str) -> dict | None:
+    if _first_line(body) != COMMAND_MARKER:
+        return None
+    issue = event.get("issue") or {}
+    if not issue.get("pull_request"):
+        raise ValueError("QA-COMMAND разрешена только в обсуждении PR")
+    try:
+        command = validate_command(parse_envelope(body, COMMAND_MARKER, COMMAND_FIELDS))
+    except BridgeError as exc:
+        raise ValueError(f"QA-COMMAND отклонена каноническим валидатором: {exc}") from exc
+    issue_number = int(issue.get("number") or 0)
+    if command["target_pr"] != issue_number:
+        raise ValueError("QA-COMMAND target_pr не совпадает с номером PR")
+    url = issue.get("html_url")
+    if not url:
+        raise ValueError("QA-COMMAND не содержит PR html_url в событии")
+    return {
+        "url": url,
+        "state": "QA",
+        "qa": command["executor_canonical"],
+        "expected_head": command["exact_head"],
+    }
+
+
 def resolve(event_name: str, action: str, event: dict) -> dict | None:
     if event_name == "issue_comment" and action == "created":
         comment = event.get("comment") or {}
         if comment.get("author_association") != "OWNER":
             return None
-        state, meta = _control_parts(comment.get("body") or "")
+        body = comment.get("body") or ""
+        qa_projection = _qa_command_projection(event, body)
+        if qa_projection is not None:
+            return qa_projection
+        state, meta = _control_parts(body)
         if not state:
             return None
         issue = event.get("issue") or {}
