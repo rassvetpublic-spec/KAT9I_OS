@@ -13,40 +13,39 @@ CONFIG = json.loads((ROOT / "config" / "qa_worker.json").read_text(encoding="utf
 REPO = CONFIG["repository"]
 OWNER, REPOSITORY = REPO.split("/", 1)
 PROJECT_NUMBER = int(CONFIG["project"]["number"])
-QA_FIELD = str(CONFIG["project"]["qa_state_field"])
-QA_STATES = list(CONFIG["project"]["states"])
+MANAGED_FIELDS = set(CONFIG["project"]["managed_fields"])
 
 STATE_MAP = {
     "READY": {
-        QA_FIELD: "Готов к QA",
+        "логическая_фаза": "Готов к QA",
         "Статус": "Проверка QA",
         "Исполнение": "В очереди",
         "Проверяющий": "AGY",
         "Доказательство": "Автопроверки пройдены",
     },
     "IN_REVIEW": {
-        QA_FIELD: "На проверке QA",
+        "логическая_фаза": "На проверке QA",
         "Статус": "Проверка QA",
         "Исполнение": "На проверке",
         "Проверяющий": "AGY",
         "Доказательство": "Автопроверки пройдены",
     },
     "PASS": {
-        QA_FIELD: "QA пройден",
+        "логическая_фаза": "QA пройден",
         "Статус": "Проверка QA",
         "Исполнение": "В очереди",
         "Проверяющий": "AGY",
         "Доказательство": "Проверка качества пройдена",
     },
     "BLOCKED": {
-        QA_FIELD: "QA заблокирован",
+        "логическая_фаза": "QA заблокирован",
         "Статус": "Заблокировано",
         "Исполнение": "Заблокировано",
         "Проверяющий": "AGY",
         "Доказательство": "Частично",
     },
     "STALE": {
-        QA_FIELD: "QA устарел",
+        "логическая_фаза": "QA устарел",
         "Статус": "Проверка QA",
         "Исполнение": "В очереди",
         "Проверяющий": "AGY",
@@ -54,13 +53,6 @@ STATE_MAP = {
     },
 }
 
-CREATE_FIELD = """
-mutation($input:CreateProjectV2FieldInput!){
-  createProjectV2Field(input:$input){
-    projectV2Field{... on ProjectV2SingleSelectField{id name options{id name}}}
-  }
-}
-"""
 ADD_ITEM = """
 mutation($input:AddProjectV2ItemByIdInput!){
   addProjectV2ItemById(input:$input){item{id}}
@@ -105,19 +97,16 @@ query($login:String!,$number:Int!,$after:String){
 
 def gh_json(args: list[str], payload: dict[str, Any] | None = None) -> Any:
     data = None if payload is None else json.dumps(payload, ensure_ascii=False)
-    proc = subprocess.run(
-        ["gh", *args], input=data, text=True, encoding="utf-8",
-        capture_output=True, check=False,
-    )
+    proc = subprocess.run(["gh", *args], input=data, text=True, encoding="utf-8", capture_output=True, check=False)
     if proc.returncode != 0:
-        raise RuntimeError(f"gh failed ({proc.returncode})")
+        raise RuntimeError(f"Команда GitHub завершилась с кодом {proc.returncode}")
     return json.loads(proc.stdout) if proc.stdout.strip() else None
 
 
 def gql(query: str, variables: dict[str, Any]) -> Any:
     result = gh_json(["api", "graphql", "--input", "-"], {"query": query, "variables": variables})
     if result.get("errors"):
-        raise RuntimeError("GraphQL returned errors")
+        raise RuntimeError("GitHub GraphQL вернул ошибку")
     return result["data"]
 
 
@@ -126,18 +115,18 @@ def base_snapshot(pr: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     project = ((data.get("user") or {}).get("projectV2") or {})
     pull = ((data.get("repository") or {}).get("pullRequest") or {})
     if not project.get("id"):
-        raise RuntimeError(f"Project #{PROJECT_NUMBER} not found")
+        raise RuntimeError(f"Project #{PROJECT_NUMBER} не найден")
     if (project.get("fields") or {}).get("pageInfo", {}).get("hasNextPage"):
-        raise RuntimeError("Project fields exceed 100; refusing partial schema")
+        raise RuntimeError("В Project больше 100 полей; частичная схема запрещена")
     if not pull.get("id") or not pull.get("url"):
-        raise RuntimeError(f"PR #{pr} not found")
+        raise RuntimeError(f"PR #{pr} не найден")
     closing = pull.get("closingIssuesReferences") or {}
     if (closing.get("pageInfo") or {}).get("hasNextPage"):
-        raise RuntimeError("PR closes more than 50 Issues; refusing partial Project sync")
-    targets = [{"kind": "PR", "id": pull["id"], "url": pull["url"], "number": pr}]
+        raise RuntimeError("PR закрывает больше 50 задач; частичная синхронизация запрещена")
+    targets = [{"тип": "PR", "id": pull["id"], "url": pull["url"], "номер": pr}]
     for issue in closing.get("nodes") or []:
         if issue.get("id") and issue.get("url"):
-            targets.append({"kind": "ISSUE", "id": issue["id"], "url": issue["url"], "number": issue.get("number")})
+            targets.append({"тип": "ISSUE", "id": issue["id"], "url": issue["url"], "номер": issue.get("number")})
     return project, targets
 
 
@@ -151,34 +140,9 @@ def select_fields(project: dict[str, Any]) -> dict[str, dict[str, Any]]:
             name = "Статус"
         if name:
             if name in result:
-                raise RuntimeError(f"Ambiguous Project field: {name}")
+                raise RuntimeError(f"Неоднозначное поле Project: {name}")
             result[name] = field
     return result
-
-
-def ensure_qa_field(project: dict[str, Any]) -> dict[str, Any]:
-    fields = select_fields(project)
-    existing = fields.get(QA_FIELD)
-    if existing:
-        actual = [str(o.get("name") or "") for o in existing.get("options") or []]
-        if sorted(actual) != sorted(QA_STATES):
-            raise RuntimeError(f"{QA_FIELD} options drift: {actual}")
-        return existing
-    colors = ["GRAY", "BLUE", "PURPLE", "GREEN", "RED", "YELLOW"]
-    options = [
-        {"name": name, "color": colors[i], "description": f"KAT9I QA state: {name}"}
-        for i, name in enumerate(QA_STATES)
-    ]
-    data = gql(CREATE_FIELD, {"input": {
-        "projectId": project["id"],
-        "name": QA_FIELD,
-        "dataType": "SINGLE_SELECT",
-        "singleSelectOptions": options,
-    }})
-    created = ((data.get("createProjectV2Field") or {}).get("projectV2Field") or {})
-    if not created.get("id"):
-        raise RuntimeError(f"Failed to create {QA_FIELD}")
-    return created
 
 
 def item_index() -> dict[str, str]:
@@ -192,7 +156,7 @@ def item_index() -> dict[str, str]:
             if not url:
                 continue
             if url in result:
-                raise RuntimeError(f"Duplicate Project card: {url}")
+                raise RuntimeError(f"Дублирующая карточка Project: {url}")
             result[url] = str(node["id"])
         info = page.get("pageInfo") or {}
         if not info.get("hasNextPage"):
@@ -203,7 +167,7 @@ def item_index() -> dict[str, str]:
 def option_id(field: dict[str, Any], name: str) -> str:
     matches = [str(o.get("id")) for o in field.get("options") or [] if o.get("name") == name]
     if len(matches) != 1:
-        raise RuntimeError(f"Project option missing/ambiguous: {field.get('name')}={name}")
+        raise RuntimeError(f"Нет однозначного значения Project: {field.get('name')}={name}")
     return matches[0]
 
 
@@ -214,49 +178,46 @@ def ensure_item(project_id: str, target: dict[str, Any], index: dict[str, str]) 
     data = gql(ADD_ITEM, {"input": {"projectId": project_id, "contentId": target["id"]}})
     item_id = str((((data.get("addProjectV2ItemById") or {}).get("item") or {}).get("id") or ""))
     if not item_id:
-        raise RuntimeError(f"Failed to add Project card: {url}")
+        raise RuntimeError(f"Не удалось добавить карточку Project: {url}")
     index[url] = item_id
     return item_id
 
 
 def sync(pr: int, state: str) -> dict[str, Any]:
     if state not in STATE_MAP:
-        raise RuntimeError(f"Unsupported QA Project state: {state}")
-    project, targets = base_snapshot(pr)
-    ensure_qa_field(project)
+        raise RuntimeError(f"Неподдерживаемое состояние QA: {state}")
     project, targets = base_snapshot(pr)
     fields = select_fields(project)
-    required = {QA_FIELD, "Статус", "Исполнение", "Проверяющий", "Доказательство"}
-    missing = sorted(required - set(fields))
+    missing = sorted(MANAGED_FIELDS - set(fields))
     if missing:
-        raise RuntimeError(f"Project fields missing: {missing}")
+        raise RuntimeError(f"В Project отсутствуют обязательные поля: {', '.join(missing)}")
+    projection = STATE_MAP[state]
     index = item_index()
     changed_targets = []
     for target in targets:
         item_id = ensure_item(str(project["id"]), target, index)
         edits = []
-        for field_name, value in STATE_MAP[state].items():
+        for field_name in sorted(MANAGED_FIELDS):
+            value = projection[field_name]
             field = fields[field_name]
             gql(UPDATE_ITEM, {
-                "project": project["id"],
-                "item": item_id,
-                "field": field["id"],
-                "option": option_id(field, value),
+                "project": project["id"], "item": item_id,
+                "field": field["id"], "option": option_id(field, value),
             })
-            edits.append({"field": field_name, "value": value})
-        changed_targets.append({"kind": target["kind"], "number": target.get("number"), "url": target["url"], "edits": edits})
+            edits.append({"поле": field_name, "значение": value})
+        changed_targets.append({"тип": target["тип"], "номер": target.get("номер"), "изменения": edits})
     return {
         "schema": "KAT9I_QA_PROJECT_SYNC/1",
-        "target_pr": pr,
-        "state": state,
-        "qa_state": STATE_MAP[state][QA_FIELD],
+        "pr": pr,
+        "состояние": state,
+        "фаза_QA": projection["логическая_фаза"],
         "authority": "DERIVED_PROJECT_PROJECTION",
-        "targets": changed_targets,
+        "карточки": changed_targets,
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Синхронизация QA-состояния с Project KAT9I_OS")
     parser.add_argument("--pr", type=int, required=True)
     parser.add_argument("--state", choices=tuple(STATE_MAP), required=True)
     args = parser.parse_args()
@@ -264,7 +225,7 @@ def main() -> int:
         print(json.dumps(sync(args.pr, args.state), ensure_ascii=False, separators=(",", ":")))
         return 0
     except Exception as exc:
-        print(json.dumps({"schema": "KAT9I_QA_PROJECT_SYNC/1", "verdict": "ERROR", "error": str(exc)[:800]}, ensure_ascii=False), file=sys.stderr)
+        print(json.dumps({"schema": "KAT9I_QA_PROJECT_SYNC/1", "вердикт": "ОШИБКА", "ошибка": str(exc)[:800]}, ensure_ascii=False), file=sys.stderr)
         return 2
 
 
