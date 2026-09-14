@@ -1,12 +1,12 @@
-# QA Envelope Standard
+# Стандарт структурированного QA-сообщения
 
 Этот файл не является самостоятельным QA-протоколом.
 
 Канон:
 - `QA_PROTOCOL.md` — единственный CONTROL-контракт `QA-COMMAND → QA-RESULT → QA-ACCEPT → bridge`;
-- `WORKER_QA.md` — единственная точка входа и runtime/discovery/token policy для независимого QA Worker;
-- `config/qa_worker.json` — machine-readable budget/polling policy.
+- `WORKER_QA.md` — единственная точка входа и правила запуска, поиска заданий и ограничения токенов для независимого QA Worker;
+- `config/qa_worker.json` — машиночитаемые настройки бюджета и опроса.
 
-QA обязан фиксировать exact HEAD, scope, risks/findings, verdict и Evidence в формате, определённом `QA_PROTOCOL.md`.
+QA обязан фиксировать exact HEAD, область проверки, риски/находки, итог и доказательства в формате, определённом `QA_PROTOCOL.md`.
 
-CI PASS не заменяет независимый QA. Context summary не может переопределять machine fields, EVIDENCE_EPOCH, Owner Gate или lifecycle.
+Успешный CI не заменяет независимый QA. Краткое описание контекста не может переопределять машинные поля, снимок доказательств (`EVIDENCE_EPOCH` — машинное имя блока), Owner Gate или жизненный цикл.
