@@ -6,6 +6,7 @@ param(
   [Parameter(Mandatory=$true)][ValidateSet('INBOX','READY','ACTIVE','QA_READY','QA','QUEUED','BLOCKED','DONE')][string]$State,
   [string]$Worker='',
   [string]$QaWorker='',
+  [string]$OutputPath='',
   [switch]$LibraryMode
 )
 
@@ -72,7 +73,7 @@ query($id:ID!){
   }
 }
 '@
-  $data=Invoke-PreflightGh @('api','graphql','-f',"query=$query",'-f',"id=$ProjectId") 'PROJECT_READ' 'Чтение Project permissions/schema'
+  $data=Invoke-PreflightGh @('api','graphql','-f',"query=$query",'-f',"id=$ProjectId") 'PROJECT_READ' 'Чтение прав и схемы Project'
   $errors=Get-PropertyValue $data 'errors'
   if($null -ne $errors){
     $errorText=($errors | ConvertTo-Json -Depth 20 -Compress)
@@ -125,7 +126,7 @@ function Test-ProjectCredentialPreflight{
 
   $snapshot=Get-PreflightProjectSnapshot $projectId
 
-  $items=Invoke-PreflightGh @('project','item-list',"$ProjectNumber",'--owner',$Owner,'--limit','1000','--format','json') 'RUNTIME' 'Чтение Project items'
+  $items=Invoke-PreflightGh @('project','item-list',"$ProjectNumber",'--owner',$Owner,'--limit','1000','--format','json') 'RUNTIME' 'Чтение карточек Project'
   $itemsProperty=$items.PSObject.Properties['items']
   if($null -eq $itemsProperty){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Project item-list не вернул items.'}
   $matches=@(@($itemsProperty.Value)|Where-Object{[string](Get-PropertyValue (Get-PropertyValue $_ 'content') 'url') -ceq $Url})
@@ -138,7 +139,13 @@ function Test-ProjectCredentialPreflight{
     $null=Resolve-PreflightBinding $snapshot.Fields $field ([string]$profile[$field])
   }
 
-  return [pscustomobject]@{Code='OK';ProjectId=$projectId;ItemId=$itemId}
+  return [pscustomobject]@{
+    Code='OK'
+    Url=$Url
+    State=$State
+    ProjectId=$projectId
+    ItemId=$itemId
+  }
 }
 
 if($LibraryMode){return}
@@ -146,4 +153,7 @@ if(-not(Get-Command gh -ErrorAction SilentlyContinue)){
   Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'GitHub CLI (gh) не найден.'
 }
 $result=Test-ProjectCredentialPreflight
-Write-Host "KAT9I_PROJECT_PREFLIGHT=OK | Project #$ProjectNumber доступен, write capability и schema подтверждены без mutation."
+if(-not [string]::IsNullOrWhiteSpace($OutputPath)){
+  $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+}
+Write-Host "KAT9I_PROJECT_PREFLIGHT=OK | Project #$ProjectNumber доступен, право записи и схема подтверждены без мутации."
