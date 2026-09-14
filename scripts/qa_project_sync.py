@@ -85,7 +85,12 @@ query($login:String!,$number:Int!,$repo:String!,$pr:Int!){
       } pageInfo{hasNextPage}}
     }
   }
-  repository(owner:$login,name:$repo){pullRequest(number:$pr){id url}}
+  repository(owner:$login,name:$repo){
+    pullRequest(number:$pr){
+      id url
+      closingIssuesReferences(first:50){nodes{id url number} pageInfo{hasNextPage}}
+    }
+  }
 }
 """
 ITEMS_QUERY = """
@@ -116,7 +121,7 @@ def gql(query: str, variables: dict[str, Any]) -> Any:
     return result["data"]
 
 
-def base_snapshot(pr: int) -> tuple[dict[str, Any], dict[str, Any]]:
+def base_snapshot(pr: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     data = gql(BASE_QUERY, {"login": OWNER, "number": PROJECT_NUMBER, "repo": REPOSITORY, "pr": pr})
     project = ((data.get("user") or {}).get("projectV2") or {})
     pull = ((data.get("repository") or {}).get("pullRequest") or {})
@@ -126,7 +131,14 @@ def base_snapshot(pr: int) -> tuple[dict[str, Any], dict[str, Any]]:
         raise RuntimeError("Project fields exceed 100; refusing partial schema")
     if not pull.get("id") or not pull.get("url"):
         raise RuntimeError(f"PR #{pr} not found")
-    return project, pull
+    closing = pull.get("closingIssuesReferences") or {}
+    if (closing.get("pageInfo") or {}).get("hasNextPage"):
+        raise RuntimeError("PR closes more than 50 Issues; refusing partial Project sync")
+    targets = [{"kind": "PR", "id": pull["id"], "url": pull["url"], "number": pr}]
+    for issue in closing.get("nodes") or []:
+        if issue.get("id") and issue.get("url"):
+            targets.append({"kind": "ISSUE", "id": issue["id"], "url": issue["url"], "number": issue.get("number")})
+    return project, targets
 
 
 def select_fields(project: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -149,7 +161,7 @@ def ensure_qa_field(project: dict[str, Any]) -> dict[str, Any]:
     existing = fields.get(QA_FIELD)
     if existing:
         actual = [str(o.get("name") or "") for o in existing.get("options") or []]
-        if actual != QA_STATES:
+        if sorted(actual) != sorted(QA_STATES):
             raise RuntimeError(f"{QA_FIELD} options drift: {actual}")
         return existing
     colors = ["GRAY", "BLUE", "PURPLE", "GREEN", "RED", "YELLOW"]
@@ -169,17 +181,22 @@ def ensure_qa_field(project: dict[str, Any]) -> dict[str, Any]:
     return created
 
 
-def find_item(project_id: str, url: str) -> str | None:
+def item_index() -> dict[str, str]:
+    result: dict[str, str] = {}
     after = None
     while True:
         data = gql(ITEMS_QUERY, {"login": OWNER, "number": PROJECT_NUMBER, "after": after})
         page = (((data.get("user") or {}).get("projectV2") or {}).get("items") or {})
         for node in page.get("nodes") or []:
-            if str((node.get("content") or {}).get("url") or "") == url:
-                return str(node["id"])
+            url = str((node.get("content") or {}).get("url") or "")
+            if not url:
+                continue
+            if url in result:
+                raise RuntimeError(f"Duplicate Project card: {url}")
+            result[url] = str(node["id"])
         info = page.get("pageInfo") or {}
         if not info.get("hasNextPage"):
-            return None
+            return result
         after = info.get("endCursor")
 
 
@@ -190,40 +207,51 @@ def option_id(field: dict[str, Any], name: str) -> str:
     return matches[0]
 
 
+def ensure_item(project_id: str, target: dict[str, Any], index: dict[str, str]) -> str:
+    url = str(target["url"])
+    if url in index:
+        return index[url]
+    data = gql(ADD_ITEM, {"input": {"projectId": project_id, "contentId": target["id"]}})
+    item_id = str((((data.get("addProjectV2ItemById") or {}).get("item") or {}).get("id") or ""))
+    if not item_id:
+        raise RuntimeError(f"Failed to add Project card: {url}")
+    index[url] = item_id
+    return item_id
+
+
 def sync(pr: int, state: str) -> dict[str, Any]:
     if state not in STATE_MAP:
         raise RuntimeError(f"Unsupported QA Project state: {state}")
-    project, pull = base_snapshot(pr)
+    project, targets = base_snapshot(pr)
     ensure_qa_field(project)
-    project, pull = base_snapshot(pr)
+    project, targets = base_snapshot(pr)
     fields = select_fields(project)
     required = {QA_FIELD, "Статус", "Исполнение", "Проверяющий", "Доказательство"}
     missing = sorted(required - set(fields))
     if missing:
         raise RuntimeError(f"Project fields missing: {missing}")
-    item_id = find_item(str(project["id"]), str(pull["url"]))
-    if not item_id:
-        data = gql(ADD_ITEM, {"input": {"projectId": project["id"], "contentId": pull["id"]}})
-        item_id = str((((data.get("addProjectV2ItemById") or {}).get("item") or {}).get("id") or ""))
-        if not item_id:
-            raise RuntimeError("Failed to add PR to Project")
-    edits = []
-    for field_name, value in STATE_MAP[state].items():
-        field = fields[field_name]
-        gql(UPDATE_ITEM, {
-            "project": project["id"],
-            "item": item_id,
-            "field": field["id"],
-            "option": option_id(field, value),
-        })
-        edits.append({"field": field_name, "value": value})
+    index = item_index()
+    changed_targets = []
+    for target in targets:
+        item_id = ensure_item(str(project["id"]), target, index)
+        edits = []
+        for field_name, value in STATE_MAP[state].items():
+            field = fields[field_name]
+            gql(UPDATE_ITEM, {
+                "project": project["id"],
+                "item": item_id,
+                "field": field["id"],
+                "option": option_id(field, value),
+            })
+            edits.append({"field": field_name, "value": value})
+        changed_targets.append({"kind": target["kind"], "number": target.get("number"), "url": target["url"], "edits": edits})
     return {
         "schema": "KAT9I_QA_PROJECT_SYNC/1",
         "target_pr": pr,
         "state": state,
         "qa_state": STATE_MAP[state][QA_FIELD],
         "authority": "DERIVED_PROJECT_PROJECTION",
-        "edits": edits,
+        "targets": changed_targets,
     }
 
 
