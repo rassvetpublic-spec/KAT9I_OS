@@ -47,7 +47,7 @@
     "history_limit": 10,
     "print_only_on_change": true,
     "idle_silence": true,
-    "table_columns": ["PR", "Приоритет", "Режим", "HEAD", "Статус", "Review"],
+    "table_columns": ["PR", "Приоритет", "Режим", "HEAD", "Статус", "Ревью"],
     "status_labels": {
       "READY": "Готов к QA",
       "RUNNING": "На проверке",
