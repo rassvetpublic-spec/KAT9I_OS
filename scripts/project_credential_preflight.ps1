@@ -14,7 +14,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
 $syncPath=Join-Path $PSScriptRoot 'project_queue_sync.ps1'
+$preflightLibraryMode=[bool]$LibraryMode
 . $syncPath -LibraryMode -Url $Url -State $State -Worker $Worker -QaWorker $QaWorker
+$LibraryMode=$preflightLibraryMode
 
 function Fail-ProjectPreflight([string]$Code,[string]$Message){
   throw "KAT9I_PROJECT_PREFLIGHT=$Code | $Message"

@@ -108,6 +108,11 @@ jobs:
           ITEM_QA: ${{ steps.resolve.outputs.qa }}
         run: ./scripts/project_credential_preflight.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA" -OutputPath "$PWD/project-preflight.json"
 
+      - name: Подтвердить пакет preflight
+        if: steps.resolve.outputs.state != ''
+        shell: pwsh
+        run: ./scripts/project_preflight_diagnostic.ps1 -Path "$PWD/project-preflight.json"
+
       - name: Синхронизировать состояние карточки
         if: steps.resolve.outputs.state != ''
         shell: pwsh
