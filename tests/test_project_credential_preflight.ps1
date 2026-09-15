@@ -8,6 +8,7 @@ function Assert-Equal($Expected,$Actual,[string]$Message){if($Expected -cne $Act
 
 $script:Mode='OK'
 $script:Calls=@()
+$script:AllowSync=$false
 $script:Secret='SUPER_SECRET_DO_NOT_PRINT'
 $env:GH_TOKEN=$script:Secret
 
@@ -49,7 +50,10 @@ function gh {
     $global:LASTEXITCODE=0
     return ([pscustomobject]@{items=@([pscustomobject]@{id='PVTI_ITEM';content=[pscustomobject]@{url='https://github.com/rassvetpublic-spec/KAT9I_OS/issues/116'}})} | ConvertTo-Json -Depth 10 -Compress)
   }
-  if($parts.Count -gt 1 -and $parts[0] -eq 'project' -and $parts[1] -eq 'item-edit'){throw 'Preflight не должен выполнять mutation.'}
+  if($parts.Count -gt 1 -and $parts[0] -eq 'project' -and $parts[1] -eq 'item-edit'){
+    if(-not $script:AllowSync){throw 'Preflight не должен выполнять mutation.'}
+    $global:LASTEXITCODE=0;return '{}'
+  }
   throw "Неожиданный gh вызов: $($parts -join ' ')"
 }
 
@@ -85,5 +89,36 @@ $result=Test-ProjectCredentialPreflight
 Assert-Equal 'OK' $result.Code 'После исправления credential повторный preflight должен пройти.'
 Assert-Equal 'PVTI_ITEM' $result.ItemId 'Позитивный preflight должен разрешить существующую карточку.'
 Assert-True (-not (@($script:Calls|Where-Object{$_.Count -gt 1 -and $_[0] -eq 'project' -and $_[1] -eq 'item-edit'}).Count)) 'Позитивный preflight не должен мутировать Project.'
+
+# Проверяем реальные точки входа, а не только функцию из LibraryMode.
+# GitHub заменён только на границе gh: реальные карточки тест не изменяет.
+$tempDir=Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+$null=New-Item -ItemType Directory -Path $tempDir
+$handoffPath=Join-Path $tempDir 'project-preflight.json'
+$syncScript=Join-Path $PSScriptRoot '..' 'scripts' 'project_queue_sync.ps1'
+$diagnosticScript=Join-Path $PSScriptRoot '..' 'scripts' 'project_preflight_diagnostic.ps1'
+try {
+  $script:Calls=@()
+  & $scriptPath -Url 'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/116' -State ACTIVE -Worker ChatGPT -QaWorker AGY -OutputPath $handoffPath
+  Assert-True (Test-Path -LiteralPath $handoffPath -PathType Leaf) 'Обычный запуск preflight не создал файл.'
+  $handoff=Get-Content -LiteralPath $handoffPath -Raw | ConvertFrom-Json
+  Assert-Equal 'PVTI_ITEM' $handoff.ItemId 'Файл должен содержать разрешённую карточку.'
+  & $diagnosticScript -Path $handoffPath
+  $script:Calls=@();$script:AllowSync=$true
+  & $syncScript -Url $handoff.Url -State ACTIVE -Worker ChatGPT -QaWorker AGY -PreflightPath $handoffPath
+  $writes=@($script:Calls|Where-Object{$_[0] -eq 'project' -and $_[1] -eq 'item-edit'})
+  Assert-Equal 5 $writes.Count 'Sync должен записать все пять полей ACTIVE.'
+  Assert-True ($writes[-1] -contains 'F_STATUS') 'Статус должен записываться последним.'
+  Assert-Equal 0 (@($script:Calls|Where-Object{$_[0] -eq 'project' -and $_[1] -in @('view','item-list')}).Count) 'Sync должен использовать файл, без повторного поиска карточки.'
+  $script:Calls=@()
+  $failed=$false
+  try { & $syncScript -Url $handoff.Url -State ACTIVE -PreflightPath (Join-Path $tempDir 'missing.json') }
+  catch { $failed=$true }
+  Assert-True $failed 'Отсутствующий файл должен остановить sync.'
+  Assert-Equal 0 $script:Calls.Count 'Отсутствующий файл должен блокировать любые gh-вызовы.'
+} finally {
+  $script:AllowSync=$false
+  Remove-Item -LiteralPath $tempDir -Recurse -Force
+}
 
 Write-Host 'PASS: Project credential preflight diagnostics'
