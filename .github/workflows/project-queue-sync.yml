@@ -17,7 +17,7 @@ on:
         description: Состояние очереди
         required: true
         type: choice
-        options: [INBOX, READY, ACTIVE, QA, QUEUED, BLOCKED, DONE]
+        options: [INBOX, READY, ACTIVE, QA_READY, QA, QUEUED, BLOCKED, DONE]
 
 permissions:
   contents: read
@@ -25,7 +25,7 @@ permissions:
   pull-requests: read
 
 # Сериализуем переходы только одной и той же карточки. Глобальная группа
-# заменяла pending run другой карточки при burst-событиях и теряла lifecycle updates.
+# заменяла ожидающий запуск другой карточки при всплеске событий и теряла обновления жизненного цикла.
 concurrency:
   group: kat9i-project-queue-${{ github.event.issue.number || github.event.pull_request.number || inputs.url || github.run_id }}
   cancel-in-progress: false
@@ -77,27 +77,28 @@ jobs:
 
       - name: Нет управляющего перехода
         if: steps.resolve.outputs.state == ''
-        run: echo "Событие не содержит доверенного перехода Project queue; изменений нет."
+        run: echo "Событие не содержит доверенного перехода очереди Project; изменений нет."
 
-      - name: Проверить exact HEAD перед QUEUED
-        if: steps.resolve.outputs.state == 'QUEUED'
+      - name: Проверить exact HEAD перед QA_READY, QA или QUEUED
+        if: steps.resolve.outputs.state == 'QUEUED' || steps.resolve.outputs.state == 'QA_READY' || (steps.resolve.outputs.state == 'QA' && steps.resolve.outputs.expected_head != '')
         shell: bash
         env:
           ITEM_URL: ${{ steps.resolve.outputs.url }}
+          ITEM_STATE: ${{ steps.resolve.outputs.state }}
           EXPECTED_HEAD: ${{ steps.resolve.outputs.expected_head }}
         run: |
           set -euo pipefail
           if [ -z "$EXPECTED_HEAD" ]; then
-            echo "::error::FAST-QA-PASS не содержит exact HEAD; QUEUED запрещён."
+            echo "::error::Для состояния $ITEM_STATE отсутствует exact HEAD; переход запрещён."
             exit 1
           fi
           LIVE_HEAD="$(gh pr view "$ITEM_URL" --json headRefOid --jq '.headRefOid')"
           if [ "$LIVE_HEAD" != "$EXPECTED_HEAD" ]; then
-            echo "::error::STALE_QA: live PR HEAD=$LIVE_HEAD, QA HEAD=$EXPECTED_HEAD; QUEUED запрещён."
+            echo "::error::Устаревший QA: текущий PR HEAD=$LIVE_HEAD, ожидаемый HEAD=$EXPECTED_HEAD; переход запрещён."
             exit 1
           fi
 
-      - name: Диагностический preflight Project credential
+      - name: Проверить доступ и схему Project
         if: steps.resolve.outputs.state != ''
         shell: pwsh
         env:
@@ -105,9 +106,14 @@ jobs:
           ITEM_STATE: ${{ steps.resolve.outputs.state }}
           ITEM_WORKER: ${{ steps.resolve.outputs.worker }}
           ITEM_QA: ${{ steps.resolve.outputs.qa }}
-        run: ./scripts/project_credential_preflight.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA"
+        run: ./scripts/project_credential_preflight.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA" -OutputPath "$PWD/project-preflight.json"
 
-      - name: Синхронизировать lifecycle карточки
+      - name: Подтвердить пакет preflight
+        if: steps.resolve.outputs.state != ''
+        shell: pwsh
+        run: ./scripts/project_preflight_diagnostic.ps1 -Path "$PWD/project-preflight.json"
+
+      - name: Синхронизировать состояние карточки
         if: steps.resolve.outputs.state != ''
         shell: pwsh
         env:
@@ -115,4 +121,4 @@ jobs:
           ITEM_STATE: ${{ steps.resolve.outputs.state }}
           ITEM_WORKER: ${{ steps.resolve.outputs.worker }}
           ITEM_QA: ${{ steps.resolve.outputs.qa }}
-        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA"
+        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA" -PreflightPath "$PWD/project-preflight.json"

@@ -1,9 +1,51 @@
 import unittest
 
 from scripts.project_queue_event import marker_from_body, resolve
+from scripts.qa_evidence_epoch import aggregate_digest
 
 
 HEAD = "a" * 40
+
+
+def epoch_section(head=HEAD):
+    review = "1" * 64
+    gate = "2" * 64
+    policy = "3" * 64
+    evidence = aggregate_digest(head, review, gate, policy)
+    return "\n".join(
+        [
+            "EVIDENCE_EPOCH",
+            "epoch_version=1",
+            f"snapshot_head={head}",
+            f"review_digest={review}",
+            f"gate_digest={gate}",
+            f"policy_digest={policy}",
+            f"evidence_digest={evidence}",
+        ]
+    )
+
+
+def qa_command(pr=199, head=HEAD):
+    return "\n".join(
+        [
+            "KAT9I-CONTROL/1 | QA-COMMAND",
+            "command_id=qa-project-test-001",
+            f"target_pr={pr}",
+            "controller=ChatGPT",
+            "executor=AGY",
+            "role=QA_EXECUTOR",
+            f"exact_head={head}",
+            "qa_mode=FULL",
+            "result_sink=PR_REVIEW",
+            "allow_issue_create=false",
+            "allow_merge=false",
+            "allow_fast_marker=false",
+            "allow_code_mutation=false",
+            "project_lifecycle_mutation=false",
+            "",
+            epoch_section(head),
+        ]
+    )
 
 
 class ProjectQueueEventTests(unittest.TestCase):
@@ -34,6 +76,99 @@ class ProjectQueueEventTests(unittest.TestCase):
             {"url": event["issue"]["html_url"], "state": "READY"},
             resolve("issue_comment", "created", event),
         )
+
+    def test_trusted_snapshot_projects_qa_ready_with_exact_head(self):
+        body = "\n".join(
+            [
+                "KAT9I-EVIDENCE-SNAPSHOT/1",
+                "target_pr=199",
+                f"exact_head={HEAD}",
+                "controller=ChatGPT",
+                "authority=DATA_ONLY",
+                "",
+                epoch_section(),
+            ]
+        )
+        event = {
+            "comment": {
+                "author_association": "NONE",
+                "user": {"login": "github-actions[bot]"},
+                "body": body,
+            },
+            "issue": {
+                "number": 199,
+                "html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/199",
+                "pull_request": {"url": "https://api.github.com/repos/rassvetpublic-spec/KAT9I_OS/pulls/199"},
+            },
+        }
+        self.assertEqual(
+            {
+                "url": event["issue"]["html_url"],
+                "state": "QA_READY",
+                "qa": "AGY",
+                "expected_head": HEAD,
+            },
+            resolve("issue_comment", "created", event),
+        )
+
+    def test_snapshot_marker_from_untrusted_author_is_data(self):
+        event = {
+            "comment": {
+                "author_association": "CONTRIBUTOR",
+                "user": {"login": "someone-else"},
+                "body": "KAT9I-EVIDENCE-SNAPSHOT/1\ntarget_pr=199\nexact_head=" + HEAD,
+            },
+            "issue": {
+                "number": 199,
+                "html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/199",
+                "pull_request": {"url": "x"},
+            },
+        }
+        self.assertIsNone(resolve("issue_comment", "created", event))
+
+    def test_valid_owner_qa_command_projects_in_review(self):
+        event = {
+            "comment": {"author_association": "OWNER", "body": qa_command()},
+            "issue": {
+                "number": 199,
+                "html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/199",
+                "pull_request": {"url": "x"},
+            },
+        }
+        self.assertEqual(
+            {
+                "url": event["issue"]["html_url"],
+                "state": "QA",
+                "qa": "AGY",
+                "expected_head": HEAD,
+            },
+            resolve("issue_comment", "created", event),
+        )
+
+    def test_qa_command_without_complete_snapshot_fails_closed(self):
+        body = qa_command().split("\n\nEVIDENCE_EPOCH", 1)[0]
+        event = {
+            "comment": {"author_association": "OWNER", "body": body},
+            "issue": {
+                "number": 199,
+                "html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/199",
+                "pull_request": {"url": "x"},
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "каноническим валидатором"):
+            resolve("issue_comment", "created", event)
+
+    def test_qa_command_for_other_pr_fails_closed(self):
+        event = {
+            "comment": {"author_association": "OWNER", "body": qa_command(pr=198)},
+            "issue": {
+                "number": 199,
+                "html_url": "https://github.com/rassvetpublic-spec/KAT9I_OS/pull/199",
+                "pull_request": {"url": "x"},
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "target_pr"):
+            resolve("issue_comment", "created", event)
 
     def test_owner_qa_pass_requires_and_preserves_exact_head(self):
         event = {
