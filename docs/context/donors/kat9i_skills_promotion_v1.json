@@ -1,0 +1,243 @@
+{
+  "schema_version": "1.0",
+  "promotion_issue": 196,
+  "kat9i_baseline": "a2093403cffffa5545de3386c4c7051f9c42d412",
+  "donor": {
+    "repository": "NewDeep67/kat9i_skills",
+    "commit": "8961475c045dddc1bad117d9e6e02fd5aa4b6c4d",
+    "tree": "4af4341d0f7fbaad304cb5b2724124ab6a2153a7",
+    "ci_state_at_audit": "RED",
+    "release_state_at_audit": "v1.2.0 points to red donor main while canonical version mirrors remain 1.1.0"
+  },
+  "classification_values": [
+    "PROMOTE_AS_CODE",
+    "PROMOTE_AS_CONTEXT",
+    "PRESERVE_AS_DONOR_REFERENCE",
+    "DEFER",
+    "REJECT_ANTIPATTERN"
+  ],
+  "summary": {
+    "inventory_count": 20,
+    "classified_count": 20,
+    "unclassified_count": 0,
+    "PROMOTE_AS_CODE": 0,
+    "PROMOTE_AS_CONTEXT": 7,
+    "PRESERVE_AS_DONOR_REFERENCE": 8,
+    "DEFER": 3,
+    "REJECT_ANTIPATTERN": 2
+  },
+  "items": [
+    {
+      "id": "QA_NATIVE_EXACT_HEAD",
+      "sources": [{"path": "src/skill_platform/github_qa.py", "blob": "ebe4bef29e8864741c51b15d5b0450d649839fe8"}],
+      "value": "Authoritative GitHub PR metadata, submitted native review evidence, exact review commit/head binding and required checks.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "QA_PROTOCOL.md",
+      "reason": "KAT9I already has a stronger QA chain with EVIDENCE_EPOCH, anti-replay and Controller attestation; donor implementation remains pinned provenance rather than a parallel QA authority.",
+      "verification": "Semantic diff against QA_PROTOCOL.md"
+    },
+    {
+      "id": "GOVERNANCE_EXACT_BASE_RACE_THREADS",
+      "sources": [{"path": "src/skill_platform/governance_gate.py", "blob": "70b2f273a5134daa25f7f230df8e414c08f8b439"}],
+      "value": "Exact expected base SHA, zero unresolved review threads and second PR snapshot after evidence collection to detect head/base races.",
+      "classification": "PROMOTE_AS_CONTEXT",
+      "destination": "docs/context/QUEUE_GUARD_PROTOCOL.md",
+      "reason": "Adds missing explicit merge-candidate/base race invariants without replacing KAT9I QA authority.",
+      "verification": "QUEUE-GUARD contract diff + Antigravity QA"
+    },
+    {
+      "id": "ATOMIC_GOVERNED_MERGE",
+      "sources": [{"path": "src/skill_platform/governed_merge_transport.py", "blob": "4a0fc43d9f58c8f7c22fb5a9173b1efd4103e8ea"}],
+      "value": "Eligibility gate immediately precedes an exact-candidate atomic merge transport.",
+      "classification": "PROMOTE_AS_CONTEXT",
+      "destination": "docs/context/QUEUE_GUARD_PROTOCOL.md",
+      "reason": "KAT9I should have one governed merge authority; direct GitHub merge paths must not become an alternate authority.",
+      "verification": "QUEUE-GUARD contract diff + exact-head/base check before MTD"
+    },
+    {
+      "id": "CONTAMINATION_AND_ISSUE_TRACEABILITY",
+      "sources": [{"path": "scripts/check_engine_contamination.py", "blob": "696fc6c6b6d9f7917b28b04597c91a5a090f6843"}],
+      "value": "Fail-closed Engine/Knowledge boundary checks and explicit Issue traceability.",
+      "classification": "PROMOTE_AS_CONTEXT",
+      "destination": "docs/context/DONOR_PROMOTION_PROTOCOL.md",
+      "reason": "The boundary and traceability invariant is useful; donor path patterns are repository-specific and must not be copied blindly.",
+      "verification": "Issue #196 linkage + donor protocol exact-pin requirements"
+    },
+    {
+      "id": "EFFECTIVE_RULESET_HASHED_ENVELOPE",
+      "sources": [
+        {"path": "src/skill_platform/effective_ruleset_contract.py", "blob": "f6ede5e6fe0ebcdd6f5db0fd56c4f1be6e09b2eb"},
+        {"path": "src/skill_platform/rule_manager.py", "blob": "f9ff2d2b93f05098b4c8357f3073ff7da4f4482f"}
+      ],
+      "value": "Deterministic Effective Ruleset envelope, stable hash, applied/deduplicated/suppressed provenance and fail-closed conflict result.",
+      "classification": "DEFER",
+      "destination": "future Context/Policy runtime implementation",
+      "reason": "Architecture is valuable but current KAT9I rules/context architecture must remain the authority; direct code port before a runtime gap is defined would create duplicate policy engines.",
+      "verification": "Pinned blob identities retained for future implementation issue"
+    },
+    {
+      "id": "SIP_PROPOSAL_FSM",
+      "sources": [{"path": "src/skill_platform/proposals.py", "blob": "244b371573331caf9b9171e5dbc355b323f0c18f"}],
+      "value": "DRAFT→VALIDATED→APPROVED→APPLIED→VERIFIED lifecycle, rollback snapshots, event ledger and permission gates.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "docs/architecture/06_LEARNING_SELF_IMPROVEMENT.md",
+      "reason": "KAT9I already has its own self-improvement canon; donor FSM is retained as implementation evidence/benchmark, not a second canonical lifecycle.",
+      "verification": "Pinned source/blob + future semantic diff if learning runtime is implemented"
+    },
+    {
+      "id": "TRUTHFUL_RUNTIME_ADAPTER",
+      "sources": [{"path": "src/skill_platform/adapter.py", "blob": "6c11ba593434088a3be99086794a44f7cc7fae76"}],
+      "value": "Provider-neutral runtime adapter boundary, active capability probe and execution evidence owned by the actual subprocess lifecycle rather than caller claims.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "KAT9I worker/runtime architecture",
+      "reason": "Useful implementation donor; activation waits for a proven runtime gap and KAT9I-native adapter contract.",
+      "verification": "Pinned blob + adapter invariants recorded in this manifest"
+    },
+    {
+      "id": "PROTECTED_BATCH_FAMILY",
+      "sources": [
+        {"path": "src/skill_platform/protected_batch.py", "blob": "d58916ac68f21eb52e0cef494bbca735850c2bf0"},
+        {"path": "src/skill_platform/protected_batch_atomic.py", "blob": "1cad1290b0f4cb4859d673b2206a8faa10696749"},
+        {"path": "src/skill_platform/protected_batch_github.py", "blob": "ba48bcd2b4a95b832be4e367ac320b1fbc0cdfbe"},
+        {"path": "src/skill_platform/protected_batch_journal.py", "blob": "f2b4bf0dda86373f2293d1b93bcd0492ed96ef0c"},
+        {"path": "src/skill_platform/protected_batch_remote_lock.py", "blob": "7958c437f48152cd322cf09a08bebc7a311ac9f9"}
+      ],
+      "value": "Atomic protected batches, remote lock, journal and GitHub coordination patterns.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "QUEUE/Worker implementation donors",
+      "reason": "Potentially useful for future queue concurrency work, but current QUEUE-GUARD must remain the authority and duplicated locking would be dangerous.",
+      "verification": "Pinned family blobs retained"
+    },
+    {
+      "id": "ROUTER_AND_BENCHMARK",
+      "sources": [
+        {"path": "src/skill_platform/router.py", "blob": "34cc535695a37626aa5831700dfa917361a320b5"},
+        {"path": "src/skill_platform/router_core.py", "blob": "d315e25d3d851e18db0bbbc5c08e457ccfee21df"},
+        {"path": "src/skill_platform/routing_benchmark.py", "blob": "9497fd4633cd7c5543923abc23584700e9fd2846"},
+        {"path": "src/skill_platform/local_ai.py", "blob": "1e260378d5e8e48eff417174acebda6602a41795"}
+      ],
+      "value": "Routing, local-AI fallback and benchmark implementation ideas.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "docs/architecture/10_INFERENCE_AND_DECISION_ROUTING_RU.md",
+      "reason": "KAT9I already has a routing architecture and active architecture QA; donor runtime naming/versioning is not authoritative.",
+      "verification": "Pinned blobs retained for future architecture tournament"
+    },
+    {
+      "id": "TELEMETRY",
+      "sources": [{"path": "src/skill_platform/telemetry.py", "blob": "ec7af550b37b6658011dd2438ac0638df1ae6b7d"}],
+      "value": "Execution telemetry implementation patterns for measurable runtime behavior.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "future KAT9I metrics/runtime work",
+      "reason": "Useful implementation donor; no standalone authority value requiring immediate port.",
+      "verification": "Pinned blob retained"
+    },
+    {
+      "id": "THREAT_MODEL_UNTRUSTED_DATA",
+      "sources": [{"path": "src/skill_platform/threat_model.py", "blob": "e02778f1f9cbb9dc1cf0c85acb9f3a6b46306ef4"}],
+      "value": "Explicit treatment of untrusted observations/patches and path safety.",
+      "classification": "PROMOTE_AS_CONTEXT",
+      "destination": "QA_PROTOCOL.md + docs/context/DONOR_PROMOTION_PROTOCOL.md",
+      "reason": "Matches KAT9I CONTROL/DATA and fail-closed model; donor implementation remains non-authoritative.",
+      "verification": "Existing QA_PROTOCOL CONTROL/DATA model retained; donor promotion cannot treat DATA as authority"
+    },
+    {
+      "id": "KNOWLEDGE_ENGINE",
+      "sources": [{"path": "src/skill_platform/knowledge.py", "blob": "68cd80017200d5ca7bc3da03fbb997d2654f5044"}],
+      "value": "Knowledge retrieval/handling implementation ideas.",
+      "classification": "DEFER",
+      "destination": "docs/architecture/08_KNOWLEDGE_BASE.md",
+      "reason": "Donor currently contains legacy Engine knowledge contamination; only clean concepts may be reconsidered after a dedicated knowledge semantic diff.",
+      "verification": "Pinned source retained; no donor Knowledge becomes KAT9I CONTROL"
+    },
+    {
+      "id": "SUPPORTING_PLATFORM_CONTRACTS",
+      "sources": [
+        {"path": "src/skill_platform/registry.py", "blob": "70698100df6e56a713f46199759811e0163267a6"},
+        {"path": "src/skill_platform/error_contract.json", "blob": "a9ea2ce1b0734d0b206493d9914654c62ea84d06"},
+        {"path": "src/skill_platform/models.py", "blob": "730d229e74e21465ac8cf4f46c2a66c93c3e0ea7"},
+        {"path": "src/skill_platform/db.py", "blob": "3f1e1da4445ce9a0c2f0ed0301b292e3d6fc10c2"},
+        {"path": "src/skill_platform/cli.py", "blob": "1d778b930d54e930b7a603d1f89d7edcbd7ee656"}
+      ],
+      "value": "Registry, error contract, models, persistence and CLI supporting patterns.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "implementation donor pool",
+      "reason": "Supporting internals are useful only together with a selected KAT9I subsystem and should not be copied independently.",
+      "verification": "Pinned blobs retained"
+    },
+    {
+      "id": "TEAMWORK_SUBSYSTEM",
+      "sources": [{"path": "src/skill_platform/teamwork", "tree": "2c03d27e63a93e37cb60fd3af519aa0853fc95d9"}],
+      "value": "Multi-agent/teamwork implementation family.",
+      "classification": "PRESERVE_AS_DONOR_REFERENCE",
+      "destination": "KAT9I worker/coworker architecture",
+      "reason": "KAT9I already defines worker roles and authority; donor teamwork is reference material only until a concrete capability gap is proven.",
+      "verification": "Pinned subtree identity retained"
+    },
+    {
+      "id": "CANONICAL_TEST_REGISTRY",
+      "sources": [{"path": "tests/run_all_tests.py", "blob": "239de07f75c55af3ac0ec40562f13df942d1b16f"}],
+      "value": "Machine-owned suite registry with real exit codes and runtime-derived test counts.",
+      "classification": "PROMOTE_AS_CONTEXT",
+      "destination": "KAT9I CI/evidence design",
+      "reason": "The invariant that documented coverage must derive from executable registry/evidence is portable; donor test inventory itself is not.",
+      "verification": "Recorded as donor invariant; any KAT9I implementation must use KAT9I-native checks"
+    },
+    {
+      "id": "RELEASE_LINEAGE",
+      "sources": [{"path": "release-lineage.json", "blob": "67f2068f971d804bf8d88296d6c8725aad65a1bb"}],
+      "value": "Version SSoT, mirrors, immutable historical tags and publication gates tied to current-head CI/independent QA.",
+      "classification": "PROMOTE_AS_CONTEXT",
+      "destination": "KAT9I release governance",
+      "reason": "Portable release invariants are valuable even though donor currently violates its own contract.",
+      "verification": "Anti-pattern entries below explicitly prohibit copying donor live release state"
+    },
+    {
+      "id": "PLANE_SEPARATION",
+      "sources": [{"path": "scripts/check_engine_contamination.py", "blob": "696fc6c6b6d9f7917b28b04597c91a5a090f6843"}],
+      "value": "Engine, Knowledge, derived local state and execution artifacts must not collapse into one authority plane.",
+      "classification": "PROMOTE_AS_CONTEXT",
+      "destination": "docs/architecture/07_CONTEXT.md + docs/architecture/08_KNOWLEDGE_BASE.md",
+      "reason": "This is consistent with current KAT9I DATA/CONTROL separation and protects context hygiene.",
+      "verification": "Current architecture remains canonical; donor patterns are evidence only"
+    },
+    {
+      "id": "KB_ONBOARDING_BOOTSTRAP",
+      "sources": [{"path": "scripts/kb_adapter.js", "blob": "cc61b260f578673c3d5e972627ab22cb7bb33bcf"}],
+      "value": "Clean-template, read-only existing-vault, taxonomy/backup, gateway and no-vault onboarding concepts.",
+      "classification": "DEFER",
+      "destination": "future KAT9I bootstrap/onboarding work",
+      "reason": "This feature landed in donor PR #165 whose exact main is red, and its JS tests are outside donor canonical CI; concepts are preserved but implementation is not production-qualified.",
+      "verification": "Pinned blob retained; future port requires KAT9I-native tests and Antigravity QA"
+    },
+    {
+      "id": "DONOR_DIRECT_MERGE_BYPASS",
+      "sources": [
+        {"path": "src/skill_platform/governance_gate.py", "blob": "70b2f273a5134daa25f7f230df8e414c08f8b439"},
+        {"path": "src/skill_platform/governed_merge_transport.py", "blob": "4a0fc43d9f58c8f7c22fb5a9173b1efd4103e8ea"}
+      ],
+      "value": "Negative evidence: correct internal gate is ineffective if alternate GitHub merge paths remain authoritative.",
+      "classification": "REJECT_ANTIPATTERN",
+      "destination": "docs/context/QUEUE_GUARD_PROTOCOL.md",
+      "reason": "PR #165 and earlier incidents demonstrate that declarative governance without exclusive merge authority is bypassable.",
+      "verification": "QUEUE-GUARD explicitly forbids direct merge bypass"
+    },
+    {
+      "id": "DONOR_RELEASE_AND_COVERAGE_DRIFT",
+      "sources": [
+        {"path": "release-lineage.json", "blob": "67f2068f971d804bf8d88296d6c8725aad65a1bb"},
+        {"path": "tests/run_all_tests.py", "blob": "239de07f75c55af3ac0ec40562f13df942d1b16f"},
+        {"path": "scripts/kb_adapter.js", "blob": "cc61b260f578673c3d5e972627ab22cb7bb33bcf"}
+      ],
+      "value": "Negative evidence: release from red exact commit, version-mirror drift, stale docs and feature tests outside canonical CI cannot qualify publication.",
+      "classification": "REJECT_ANTIPATTERN",
+      "destination": "KAT9I release/CI governance",
+      "reason": "KAT9I must derive release truth from exact publication commit and required machine evidence, not release notes or manual test claims.",
+      "verification": "Donor live state recorded in manifest header; no donor release state imported"
+    }
+  ],
+  "completion_gate": {
+    "formula": "inventory_count == classified_count && unclassified_count == 0",
+    "result": true,
+    "note": "This proves classification completeness for the valuable capability families identified by the 2026-09-14 audit. It does not certify donor production correctness; every activated port still requires KAT9I-native tests and independent QA."
+  }
+}

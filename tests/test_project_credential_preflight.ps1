@@ -24,6 +24,15 @@ function ProjectSnapshot([bool]$CanUpdate=$true,[string]$MissingOption=''){
   if($MissingOption){foreach($f in $fields){$f.options=@($f.options|Where-Object{$_.name -cne $MissingOption})}}
   [pscustomobject]@{data=[pscustomobject]@{node=[pscustomobject]@{viewerCanUpdate=$CanUpdate;fields=[pscustomobject]@{nodes=$fields}}}}
 }
+function ProjectOwnerSnapshot{
+  [pscustomobject]@{data=[pscustomobject]@{user=[pscustomobject]@{projectV2=[pscustomobject]@{id='PVT_PROJECT'}};organization=$null}}
+}
+function ProjectItemsSnapshot{
+  [pscustomobject]@{data=[pscustomobject]@{node=[pscustomobject]@{items=[pscustomobject]@{
+    nodes=@([pscustomobject]@{id='PVTI_ITEM';content=[pscustomobject]@{__typename='Issue';url='https://github.com/rassvetpublic-spec/KAT9I_OS/issues/116'}})
+    pageInfo=[pscustomobject]@{hasNextPage=$false;endCursor=$null}
+  }}}}
+}
 
 function gh {
   $parts=@($args|ForEach-Object{[string]$_})
@@ -33,23 +42,24 @@ function gh {
     if($script:Mode -eq 'AUTH_RUNTIME'){$global:LASTEXITCODE=1;return 'connection reset by peer'}
     $global:LASTEXITCODE=0;return 'rassvetpublic-spec'
   }
-  if($parts[0] -eq 'project' -and $parts[1] -eq 'view'){
-    if($script:Mode -eq 'ACCESS_DENIED'){$global:LASTEXITCODE=1;return 'HTTP 403: Resource not accessible'}
-    if($script:Mode -eq 'PROJECT_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
-    $global:LASTEXITCODE=0;return '{"id":"PVT_PROJECT"}'
-  }
   if($parts[0] -eq 'api' -and $parts[1] -eq 'graphql'){
+    $joined=$parts -join ' '
+    if($joined -match 'projectV2\(number:\$number\)'){
+      if($script:Mode -eq 'ACCESS_DENIED'){$global:LASTEXITCODE=1;return 'HTTP 403: Resource not accessible'}
+      if($script:Mode -eq 'PROJECT_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
+      $global:LASTEXITCODE=0;return (ProjectOwnerSnapshot | ConvertTo-Json -Depth 20 -Compress)
+    }
+    if($joined -match 'items\(first:100'){
+      if($script:Mode -eq 'ITEM_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
+      $global:LASTEXITCODE=0;return (ProjectItemsSnapshot | ConvertTo-Json -Depth 20 -Compress)
+    }
     $global:LASTEXITCODE=0
     if($script:Mode -eq 'WRITE_DENIED'){return (ProjectSnapshot $false | ConvertTo-Json -Depth 20 -Compress)}
     if($script:Mode -eq 'SCHEMA_MISMATCH'){return (ProjectSnapshot $true 'Частично' | ConvertTo-Json -Depth 20 -Compress)}
     return (ProjectSnapshot $true | ConvertTo-Json -Depth 20 -Compress)
   }
-  if($parts[0] -eq 'project' -and $parts[1] -eq 'item-list'){
-    if($script:Mode -eq 'ITEM_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
-    $global:LASTEXITCODE=0
-    return ([pscustomobject]@{items=@([pscustomobject]@{id='PVTI_ITEM';content=[pscustomobject]@{url='https://github.com/rassvetpublic-spec/KAT9I_OS/issues/116'}})} | ConvertTo-Json -Depth 10 -Compress)
-  }
   if($parts.Count -gt 1 -and $parts[0] -eq 'project' -and $parts[1] -eq 'item-edit'){throw 'Preflight не должен выполнять mutation.'}
+  if($parts.Count -gt 1 -and $parts[0] -eq 'project' -and $parts[1] -in @('view','item-list')){throw 'Preflight не должен зависеть от owner-name gh project lookup.'}
   throw "Неожиданный gh вызов: $($parts -join ' ')"
 }
 
@@ -83,7 +93,21 @@ try{$null=Test-ProjectCredentialPreflight}catch{}
 $script:Mode='OK';$script:Calls=@()
 $result=Test-ProjectCredentialPreflight
 Assert-Equal 'OK' $result.Code 'После исправления credential повторный preflight должен пройти.'
+Assert-Equal 'PVT_PROJECT' $result.ProjectId 'Позитивный preflight должен разрешить exact Project ID.'
 Assert-Equal 'PVTI_ITEM' $result.ItemId 'Позитивный preflight должен разрешить существующую карточку.'
 Assert-True (-not (@($script:Calls|Where-Object{$_.Count -gt 1 -and $_[0] -eq 'project' -and $_[1] -eq 'item-edit'}).Count)) 'Позитивный preflight не должен мутировать Project.'
+Assert-True (-not (@($script:Calls|Where-Object{$_.Count -gt 1 -and $_[0] -eq 'project' -and $_[1] -in @('view','item-list')}).Count)) 'Позитивный preflight не должен использовать owner-name gh project lookup.'
+
+$tmp=Join-Path ([System.IO.Path]::GetTempPath()) ("kat9i-preflight-$([guid]::NewGuid().ToString('N')).out")
+try{
+  $env:GITHUB_OUTPUT=$tmp
+  Publish-ProjectPreflightOutputs $result
+  $published=Get-Content -LiteralPath $tmp -Raw -Encoding utf8
+  Assert-True ($published -match 'project_id=PVT_PROJECT') 'Preflight обязан публиковать exact project_id в GITHUB_OUTPUT.'
+  Assert-True ($published -match 'item_id=PVTI_ITEM') 'Preflight обязан публиковать exact item_id в GITHUB_OUTPUT.'
+}finally{
+  Remove-Item Env:GITHUB_OUTPUT -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+}
 
 Write-Host 'PASS: Project credential preflight diagnostics'

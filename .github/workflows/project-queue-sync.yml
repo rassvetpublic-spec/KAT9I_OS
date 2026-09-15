@@ -98,6 +98,7 @@ jobs:
           fi
 
       - name: Диагностический preflight Project credential
+        id: project_preflight
         if: steps.resolve.outputs.state != ''
         shell: pwsh
         env:
@@ -115,4 +116,6 @@ jobs:
           ITEM_STATE: ${{ steps.resolve.outputs.state }}
           ITEM_WORKER: ${{ steps.resolve.outputs.worker }}
           ITEM_QA: ${{ steps.resolve.outputs.qa }}
-        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA"
+          PROJECT_ID: ${{ steps.project_preflight.outputs.project_id }}
+          PROJECT_ITEM_ID: ${{ steps.project_preflight.outputs.item_id }}
+        run: ./scripts/project_queue_sync.ps1 -Url "$env:ITEM_URL" -State "$env:ITEM_STATE" -Worker "$env:ITEM_WORKER" -QaWorker "$env:ITEM_QA" -ProjectId "$env:PROJECT_ID" -ItemId "$env:PROJECT_ITEM_ID"

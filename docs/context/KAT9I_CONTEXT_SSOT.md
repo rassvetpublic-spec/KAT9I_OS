@@ -18,3 +18,10 @@ GitHub является источником истины (SSoT).
 ## Правило mtd
 
 Merge разрешается только после QA PASS и явной команды владельца проекта mtd.
+
+## Donor knowledge / code
+
+Внешний donor никогда не становится вторым SSoT автоматически.
+Любое заимствование проходит `DONOR_PROMOTION_PROTOCOL.md`: exact source pin, semantic diff, явная классификация каждого ценного элемента, KAT9I-native verification и сохранение более сильных действующих controls.
+
+Machine-readable результаты donor-аудитов хранятся в `docs/context/donors/`. Для завершённой классификации обязательно `unclassified_count = 0`.

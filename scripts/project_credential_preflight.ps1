@@ -12,8 +12,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
+# Dot-source дочернего script в PowerShell выполняется в текущем scope и может
+# перезаписать одноимённые параметры. Сохраняем режим вызывающего preflight явно.
+$preflightLibraryMode=[bool]$LibraryMode
 $syncPath=Join-Path $PSScriptRoot 'project_queue_sync.ps1'
-. $syncPath -LibraryMode -Url $Url -State $State -Worker $Worker -QaWorker $QaWorker
+. $syncPath -Owner $Owner -Repository $Repository -ProjectNumber $ProjectNumber -LibraryMode -Url $Url -State $State -Worker $Worker -QaWorker $QaWorker
 
 function Fail-ProjectPreflight([string]$Code,[string]$Message){
   throw "KAT9I_PROJECT_PREFLIGHT=$Code | $Message"
@@ -52,6 +55,94 @@ function Invoke-PreflightGh([string[]]$Arguments,[ValidateSet('AUTH','PROJECT_RE
   return (Convert-PreflightJson $raw $Purpose)
 }
 
+function Assert-NoGraphQlErrors($Data,[string]$Purpose){
+  $errors=Get-PropertyValue $Data 'errors'
+  if($null -eq $errors){return}
+  $errorText=($errors | ConvertTo-Json -Depth 20 -Compress)
+  if(Test-ConfirmedProjectDenied $errorText){
+    Fail-ProjectPreflight 'PROJECT_ACCESS_DENIED' "$Purpose: GitHub GraphQL запретил доступ к Project #$ProjectNumber."
+  }
+  Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' "$Purpose: GitHub GraphQL вернул errors."
+}
+
+function Resolve-PreflightProjectId{
+  $query=@'
+query($login:String!,$number:Int!){
+  user(login:$login){projectV2(number:$number){id}}
+  organization(login:$login){projectV2(number:$number){id}}
+}
+'@
+  $data=Invoke-PreflightGh @('api','graphql','-f',"query=$query",'-f',"login=$Owner",'-F',"number=$ProjectNumber") 'PROJECT_READ' "Разрешение Project #$ProjectNumber по owner"
+  Assert-NoGraphQlErrors $data 'Разрешение Project owner'
+  $root=Get-PropertyValue $data 'data'
+  $ids=@()
+  foreach($ownerNodeName in @('user','organization')){
+    $ownerNode=Get-PropertyValue $root $ownerNodeName
+    $projectNode=Get-PropertyValue $ownerNode 'projectV2'
+    $candidate=[string](Get-PropertyValue $projectNode 'id')
+    if(-not [string]::IsNullOrWhiteSpace($candidate)){$ids+=,$candidate}
+  }
+  $ids=@($ids|Select-Object -Unique)
+  if($ids.Count -eq 0){Fail-ProjectPreflight 'PROJECT_ACCESS_DENIED' "Project #$ProjectNumber для owner '$Owner' не найден или недоступен."}
+  if($ids.Count -gt 1){Fail-ProjectPreflight 'PROJECT_SCHEMA_MISMATCH' "Project #$ProjectNumber для owner '$Owner' разрешился неоднозначно."}
+  return [string]$ids[0]
+}
+
+function Resolve-PreflightProjectItemId([string]$ProjectId){
+  $query=@'
+query($id:ID!,$after:String){
+  node(id:$id){
+    ... on ProjectV2{
+      items(first:100,after:$after){
+        nodes{
+          id
+          content{
+            __typename
+            ... on Issue{url}
+            ... on PullRequest{url}
+          }
+        }
+        pageInfo{hasNextPage endCursor}
+      }
+    }
+  }
+}
+'@
+  $matches=@()
+  $after=''
+  $seen=@{}
+  do{
+    $arguments=@('api','graphql','-f',"query=$query",'-f',"id=$ProjectId")
+    if(-not [string]::IsNullOrWhiteSpace($after)){$arguments+=@('-f',"after=$after")}
+    $data=Invoke-PreflightGh $arguments 'PROJECT_READ' 'Чтение Project items через GraphQL'
+    Assert-NoGraphQlErrors $data 'Чтение Project items'
+    $root=Get-PropertyValue (Get-PropertyValue $data 'data') 'node'
+    $items=Get-PropertyValue $root 'items'
+    if($null -eq $items){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Project GraphQL не вернул items.'}
+    foreach($item in @((Get-PropertyValue $items 'nodes'))){
+      $content=Get-PropertyValue $item 'content'
+      $itemUrl=[string](Get-PropertyValue $content 'url')
+      if($itemUrl -ceq $Url){$matches+=,$item}
+    }
+    $pageInfo=Get-PropertyValue $items 'pageInfo'
+    if($null -eq $pageInfo){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Project GraphQL не вернул pageInfo.'}
+    $hasNext=(Get-PropertyValue $pageInfo 'hasNextPage') -eq $true
+    if($hasNext){
+      $next=[string](Get-PropertyValue $pageInfo 'endCursor')
+      if([string]::IsNullOrWhiteSpace($next)){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Project pagination требует продолжение, но endCursor пуст.'}
+      if($seen.ContainsKey($next)){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Project pagination повторила endCursor; чтение остановлено fail-closed.'}
+      $seen[$next]=$true
+      $after=$next
+    }
+  }while($hasNext)
+
+  if($matches.Count -eq 0){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' "Карточка для $Url не найдена в Project #$ProjectNumber."}
+  if($matches.Count -gt 1){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' "Для $Url найдено несколько Project items; mutation запрещена."}
+  $itemId=[string](Get-PropertyValue $matches[0] 'id')
+  if([string]::IsNullOrWhiteSpace($itemId)){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' "Карточка $Url не вернула item id."}
+  return $itemId
+}
+
 function Get-PreflightProjectSnapshot([string]$ProjectId){
   $query=@'
 query($id:ID!){
@@ -73,14 +164,7 @@ query($id:ID!){
 }
 '@
   $data=Invoke-PreflightGh @('api','graphql','-f',"query=$query",'-f',"id=$ProjectId") 'PROJECT_READ' 'Чтение Project permissions/schema'
-  $errors=Get-PropertyValue $data 'errors'
-  if($null -ne $errors){
-    $errorText=($errors | ConvertTo-Json -Depth 20 -Compress)
-    if(Test-ConfirmedProjectDenied $errorText){
-      Fail-ProjectPreflight 'PROJECT_ACCESS_DENIED' "Credential аутентифицирован, но GraphQL запретил чтение Project #$ProjectNumber."
-    }
-    Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'GitHub GraphQL вернул ошибку, которую нельзя безопасно классифицировать точнее.'
-  }
+  Assert-NoGraphQlErrors $data 'Чтение Project permissions/schema'
   $root=Get-PropertyValue (Get-PropertyValue $data 'data') 'node'
   if($null -eq $root){Fail-ProjectPreflight 'PROJECT_ACCESS_DENIED' "Project #$ProjectNumber недоступен для credential."}
   if((Get-PropertyValue $root 'viewerCanUpdate') -ne $true){
@@ -116,22 +200,9 @@ function Test-ProjectCredentialPreflight{
   }
 
   $null=Invoke-PreflightGh @('api','user','--jq','.login') 'AUTH' 'Проверка GitHub credential'
-
-  $project=Invoke-PreflightGh @('project','view',"$ProjectNumber",'--owner',$Owner,'--format','json') 'PROJECT_READ' "Чтение Project #$ProjectNumber"
-  $projectId=[string](Get-PropertyValue $project 'id')
-  if([string]::IsNullOrWhiteSpace($projectId)){
-    Fail-ProjectPreflight 'PROJECT_ACCESS_DENIED' "Project #$ProjectNumber не вернул GraphQL id."
-  }
-
+  $projectId=Resolve-PreflightProjectId
   $snapshot=Get-PreflightProjectSnapshot $projectId
-
-  $items=Invoke-PreflightGh @('project','item-list',"$ProjectNumber",'--owner',$Owner,'--limit','1000','--format','json') 'RUNTIME' 'Чтение Project items'
-  $itemsProperty=$items.PSObject.Properties['items']
-  if($null -eq $itemsProperty){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Project item-list не вернул items.'}
-  $matches=@(@($itemsProperty.Value)|Where-Object{[string](Get-PropertyValue (Get-PropertyValue $_ 'content') 'url') -ceq $Url})
-  if($matches.Count -ne 1){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' "Для $Url должна существовать ровно одна карточка Project."}
-  $itemId=[string](Get-PropertyValue $matches[0] 'id')
-  if([string]::IsNullOrWhiteSpace($itemId)){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' "Карточка $Url не вернула item id."}
+  $itemId=Resolve-PreflightProjectItemId $projectId
 
   $profile=QueueProfile $State $Worker $QaWorker
   foreach($field in $profile.Keys){
@@ -141,9 +212,22 @@ function Test-ProjectCredentialPreflight{
   return [pscustomobject]@{Code='OK';ProjectId=$projectId;ItemId=$itemId}
 }
 
-if($LibraryMode){return}
+function Publish-ProjectPreflightOutputs($Result){
+  if([string]::IsNullOrWhiteSpace($env:GITHUB_OUTPUT)){return}
+  if($null -eq $Result){Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Нельзя опубликовать пустой preflight result.'}
+  $projectId=[string](Get-PropertyValue $Result 'ProjectId')
+  $itemId=[string](Get-PropertyValue $Result 'ItemId')
+  if([string]::IsNullOrWhiteSpace($projectId) -or [string]::IsNullOrWhiteSpace($itemId)){
+    Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'Preflight result не содержит exact ProjectId/ItemId для mutation handoff.'
+  }
+  Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "project_id=$projectId" -Encoding utf8
+  Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "item_id=$itemId" -Encoding utf8
+}
+
+if($preflightLibraryMode){return}
 if(-not(Get-Command gh -ErrorAction SilentlyContinue)){
   Fail-ProjectPreflight 'PROJECT_SYNC_FAILED' 'GitHub CLI (gh) не найден.'
 }
 $result=Test-ProjectCredentialPreflight
-Write-Host "KAT9I_PROJECT_PREFLIGHT=OK | Project #$ProjectNumber доступен, write capability и schema подтверждены без mutation."
+Publish-ProjectPreflightOutputs $result
+Write-Host "KAT9I_PROJECT_PREFLIGHT=OK | Project #$ProjectNumber доступен, write capability, schema и exact Project/Item IDs подтверждены без mutation."
