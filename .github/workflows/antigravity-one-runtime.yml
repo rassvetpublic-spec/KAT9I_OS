@@ -18,7 +18,7 @@ jobs:
     name: Проверка runtime-контракта Antigravity ONE
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Проверить manifest и сигнатуры
         run: python scripts/antigravity_one_contract.py --check
       - name: Запустить regression-тесты Antigravity ONE
@@ -38,7 +38,7 @@ jobs:
     name: Проверка PowerShell на Windows
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Проверить синтаксис PowerShell runtime
         shell: pwsh
         run: |

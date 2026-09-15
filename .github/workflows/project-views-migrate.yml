@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Получить точную revision main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false

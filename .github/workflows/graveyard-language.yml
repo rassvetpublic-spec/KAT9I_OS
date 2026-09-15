@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Получить репозиторий
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Проверить обязательную языковую политику и автоматизацию
         shell: bash

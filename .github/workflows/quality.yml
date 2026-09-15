@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Получить репозиторий
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Получить base revision PR для append-only Graveyard
         if: github.event_name == 'pull_request'
