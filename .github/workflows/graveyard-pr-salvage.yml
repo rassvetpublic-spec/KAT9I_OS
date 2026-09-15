@@ -147,7 +147,7 @@ jobs:
 
       - name: Сохранить полный salvage report как DATA artifact
         if: steps.audit.outputs.required == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: graveyard-pr-${{ steps.meta.outputs.pr_number }}-salvage
           path: salvage-audit/
