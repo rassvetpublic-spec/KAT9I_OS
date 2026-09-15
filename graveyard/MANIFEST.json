@@ -78,6 +78,17 @@
       "actionable": false,
       "control": false,
       "canonical": false
+    },
+    {
+      "archive_id": "GY-20260913-chat-salvage-antigravity-runtime-alternatives",
+      "path": "graveyard/GY-20260913-chat-salvage-antigravity-runtime-alternatives.md",
+      "archive_date": "2026-09-13",
+      "byte_size": 19836,
+      "sha256": "e9739e5dd574c62fa29b352a5268c37e8f46c84802a37d93cbcdb2cd06df042a",
+      "git_blob_sha1": "266490f6b37b66a17d2beebff0164c301cbb6583",
+      "actionable": false,
+      "control": false,
+      "canonical": false
     }
   ]
 }
