@@ -1,0 +1,39 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
+name: Обратная связь
+description: Рассказать, что удобно, неудобно или непонятно в {{PROJECT_NAME}}
+title: "[Обратная связь] "
+labels: ["вопрос"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Что вы пытались сделать?
+      description: Кратко опишите задачу или сценарий.
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: Что получилось и что помешало?
+      description: Что было удобно, непонятно, лишнее или неожиданно.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Как было бы лучше?
+      description: Опишите желаемое поведение простыми словами.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Дополнительные материалы
+      description: Ссылки, безопасные журналы или снимки экрана без секретов.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Безопасность
+      options:
+        - label: Я не добавил токены, пароли, приватные ключи и другие секреты.
+          required: true

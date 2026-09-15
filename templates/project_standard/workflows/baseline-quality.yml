@@ -1,0 +1,61 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
+name: Базовые проверки качества и целостности
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Базовые проверки качества и целостности
+    runs-on: ubuntu-latest
+    steps:
+      - name: Получить код репозитория
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Проверить пробелы и формат изменений Git
+        shell: bash
+        run: git diff --check HEAD^
+        continue-on-error: ${{ github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000' }}
+
+      - name: Проверить файлы JSON
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path('.').rglob('*.json'):
+              if '.git' in path.parts:
+                  continue
+              with path.open(encoding='utf-8') as fh:
+                  json.load(fh)
+          print('JSON: ПРОЙДЕНО')
+          PY
+
+      - name: Проверить отсутствие маркеров конфликтов
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          markers = ('<' * 7 + ' ', '=' * 7, '>' * 7 + ' ')
+          bad = []
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or '.git' in path.parts:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              if any(m in text for m in markers):
+                  bad.append(str(path))
+          if bad:
+              raise SystemExit('Найдены маркеры конфликтов: ' + ', '.join(bad))
+          print('Маркеры конфликтов: ПРОЙДЕНО')
+          PY
