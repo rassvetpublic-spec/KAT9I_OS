@@ -6,11 +6,11 @@ $scriptPath=Join-Path $PSScriptRoot '..' 'scripts' 'project_credential_preflight
 function Assert-True($Condition,[string]$Message){if(-not $Condition){throw $Message}}
 function Assert-Equal($Expected,$Actual,[string]$Message){if($Expected -cne $Actual){throw "$Message Ожидалось='$Expected', фактически='$Actual'."}}
 
-$script:Mode='OK'
-$script:Calls=@()
-$script:AllowSync=$false
-$script:Secret='SUPER_SECRET_DO_NOT_PRINT'
-$env:GH_TOKEN=$script:Secret
+$global:Kat9iPreflightTestMode='OK'
+$global:Kat9iPreflightTestCalls=@()
+$global:Kat9iPreflightTestAllowSync=$false
+$global:Kat9iPreflightTestSecret='SUPER_SECRET_DO_NOT_PRINT'
+$env:GH_TOKEN=$global:Kat9iPreflightTestSecret
 
 function New-Option([string]$Id,[string]$Name){[pscustomobject]@{id=$Id;name=$Name}}
 function New-Field([string]$Id,[string]$Name,[object[]]$Options){[pscustomobject]@{__typename='ProjectV2SingleSelectField';id=$Id;name=$Name;options=$Options}}
@@ -28,30 +28,30 @@ function ProjectSnapshot([bool]$CanUpdate=$true,[string]$MissingOption=''){
 
 function gh {
   $parts=@($args|ForEach-Object{[string]$_})
-  $script:Calls+=,($parts)
+  $global:Kat9iPreflightTestCalls+=,($parts)
   if($parts[0] -eq 'api' -and $parts[1] -eq 'user'){
-    if($script:Mode -eq 'TOKEN_INVALID'){$global:LASTEXITCODE=1;return 'HTTP 401: Bad credentials'}
-    if($script:Mode -eq 'AUTH_RUNTIME'){$global:LASTEXITCODE=1;return 'connection reset by peer'}
+    if($global:Kat9iPreflightTestMode -eq 'TOKEN_INVALID'){$global:LASTEXITCODE=1;return 'HTTP 401: Bad credentials'}
+    if($global:Kat9iPreflightTestMode -eq 'AUTH_RUNTIME'){$global:LASTEXITCODE=1;return 'connection reset by peer'}
     $global:LASTEXITCODE=0;return 'rassvetpublic-spec'
   }
   if($parts[0] -eq 'project' -and $parts[1] -eq 'view'){
-    if($script:Mode -eq 'ACCESS_DENIED'){$global:LASTEXITCODE=1;return 'HTTP 403: Resource not accessible'}
-    if($script:Mode -eq 'PROJECT_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
+    if($global:Kat9iPreflightTestMode -eq 'ACCESS_DENIED'){$global:LASTEXITCODE=1;return 'HTTP 403: Resource not accessible'}
+    if($global:Kat9iPreflightTestMode -eq 'PROJECT_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
     $global:LASTEXITCODE=0;return '{"id":"PVT_PROJECT"}'
   }
   if($parts[0] -eq 'api' -and $parts[1] -eq 'graphql'){
     $global:LASTEXITCODE=0
-    if($script:Mode -eq 'WRITE_DENIED'){return (ProjectSnapshot $false | ConvertTo-Json -Depth 20 -Compress)}
-    if($script:Mode -eq 'SCHEMA_MISMATCH'){return (ProjectSnapshot $true 'Частично' | ConvertTo-Json -Depth 20 -Compress)}
+    if($global:Kat9iPreflightTestMode -eq 'WRITE_DENIED'){return (ProjectSnapshot $false | ConvertTo-Json -Depth 20 -Compress)}
+    if($global:Kat9iPreflightTestMode -eq 'SCHEMA_MISMATCH'){return (ProjectSnapshot $true 'Частично' | ConvertTo-Json -Depth 20 -Compress)}
     return (ProjectSnapshot $true | ConvertTo-Json -Depth 20 -Compress)
   }
   if($parts[0] -eq 'project' -and $parts[1] -eq 'item-list'){
-    if($script:Mode -eq 'ITEM_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
+    if($global:Kat9iPreflightTestMode -eq 'ITEM_RUNTIME'){$global:LASTEXITCODE=1;return 'gateway timeout'}
     $global:LASTEXITCODE=0
     return ([pscustomobject]@{items=@([pscustomobject]@{id='PVTI_ITEM';content=[pscustomobject]@{url='https://github.com/rassvetpublic-spec/KAT9I_OS/issues/116'}})} | ConvertTo-Json -Depth 10 -Compress)
   }
   if($parts.Count -gt 1 -and $parts[0] -eq 'project' -and $parts[1] -eq 'item-edit'){
-    if(-not $script:AllowSync){throw 'Preflight не должен выполнять mutation.'}
+    if(-not $global:Kat9iPreflightTestAllowSync){throw 'Preflight не должен выполнять mutation.'}
     $global:LASTEXITCODE=0;return '{}'
   }
   throw "Неожиданный gh вызов: $($parts -join ' ')"
@@ -60,19 +60,19 @@ function gh {
 . $scriptPath -LibraryMode -Url 'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/116' -State ACTIVE -Worker ChatGPT -QaWorker AGY
 
 function Invoke-Case([string]$Mode,[string]$ExpectedCode){
-  $script:Mode=$Mode;$script:Calls=@();$env:GH_TOKEN=$script:Secret
+  $global:Kat9iPreflightTestMode=$Mode;$global:Kat9iPreflightTestCalls=@();$env:GH_TOKEN=$global:Kat9iPreflightTestSecret
   $message=''
   try{$null=Test-ProjectCredentialPreflight;throw 'Ожидалась ошибка preflight.'}catch{$message=$_.Exception.Message}
   Assert-True ($message -match "KAT9I_PROJECT_PREFLIGHT=$ExpectedCode") "Неверный код для $Mode. Сообщение: $message"
-  Assert-True ($message -notmatch [regex]::Escape($script:Secret)) "Secret попал в сообщение для $Mode."
-  Assert-True (-not (@($script:Calls|Where-Object{$_.Count -gt 1 -and $_[0] -eq 'project' -and $_[1] -eq 'item-edit'}).Count)) "Preflight выполнил mutation для $Mode."
+  Assert-True ($message -notmatch [regex]::Escape($global:Kat9iPreflightTestSecret)) "Secret попал в сообщение для $Mode."
+  Assert-True (-not (@($global:Kat9iPreflightTestCalls|Where-Object{$_.Count -gt 1 -and $_[0] -eq 'project' -and $_[1] -eq 'item-edit'}).Count)) "Preflight выполнил mutation для $Mode."
 }
 
-$script:Calls=@();$env:GH_TOKEN=''
+$global:Kat9iPreflightTestCalls=@();$env:GH_TOKEN=''
 $message=''
 try{$null=Test-ProjectCredentialPreflight;throw 'Ожидалась SECRET_MISSING.'}catch{$message=$_.Exception.Message}
 Assert-True ($message -match 'KAT9I_PROJECT_PREFLIGHT=SECRET_MISSING') 'SECRET_MISSING не распознан.'
-Assert-Equal 0 $script:Calls.Count 'При отсутствии secret gh не должен вызываться.'
+Assert-Equal 0 $global:Kat9iPreflightTestCalls.Count 'При отсутствии secret gh не должен вызываться.'
 
 Invoke-Case 'TOKEN_INVALID' 'TOKEN_INVALID'
 Invoke-Case 'AUTH_RUNTIME' 'PROJECT_SYNC_FAILED'
@@ -82,13 +82,13 @@ Invoke-Case 'WRITE_DENIED' 'PROJECT_WRITE_DENIED'
 Invoke-Case 'SCHEMA_MISMATCH' 'PROJECT_SCHEMA_MISMATCH'
 Invoke-Case 'ITEM_RUNTIME' 'PROJECT_SYNC_FAILED'
 
-$script:Mode='TOKEN_INVALID';$script:Calls=@();$env:GH_TOKEN=$script:Secret
+$global:Kat9iPreflightTestMode='TOKEN_INVALID';$global:Kat9iPreflightTestCalls=@();$env:GH_TOKEN=$global:Kat9iPreflightTestSecret
 try{$null=Test-ProjectCredentialPreflight}catch{}
-$script:Mode='OK';$script:Calls=@()
+$global:Kat9iPreflightTestMode='OK';$global:Kat9iPreflightTestCalls=@()
 $result=Test-ProjectCredentialPreflight
 Assert-Equal 'OK' $result.Code 'После исправления credential повторный preflight должен пройти.'
 Assert-Equal 'PVTI_ITEM' $result.ItemId 'Позитивный preflight должен разрешить существующую карточку.'
-Assert-True (-not (@($script:Calls|Where-Object{$_.Count -gt 1 -and $_[0] -eq 'project' -and $_[1] -eq 'item-edit'}).Count)) 'Позитивный preflight не должен мутировать Project.'
+Assert-True (-not (@($global:Kat9iPreflightTestCalls|Where-Object{$_.Count -gt 1 -and $_[0] -eq 'project' -and $_[1] -eq 'item-edit'}).Count)) 'Позитивный preflight не должен мутировать Project.'
 
 # Проверяем реальные точки входа, а не только функцию из LibraryMode.
 # GitHub заменён только на границе gh: реальные карточки тест не изменяет.
@@ -98,26 +98,26 @@ $handoffPath=Join-Path $tempDir 'project-preflight.json'
 $syncScript=Join-Path $PSScriptRoot '..' 'scripts' 'project_queue_sync.ps1'
 $diagnosticScript=Join-Path $PSScriptRoot '..' 'scripts' 'project_preflight_diagnostic.ps1'
 try {
-  $script:Calls=@()
+  $global:Kat9iPreflightTestCalls=@()
   & $scriptPath -Url 'https://github.com/rassvetpublic-spec/KAT9I_OS/issues/116' -State ACTIVE -Worker ChatGPT -QaWorker AGY -OutputPath $handoffPath
   Assert-True (Test-Path -LiteralPath $handoffPath -PathType Leaf) 'Обычный запуск preflight не создал файл.'
   $handoff=Get-Content -LiteralPath $handoffPath -Raw | ConvertFrom-Json
   Assert-Equal 'PVTI_ITEM' $handoff.ItemId 'Файл должен содержать разрешённую карточку.'
   & $diagnosticScript -Path $handoffPath
-  $script:Calls=@();$script:AllowSync=$true
+  $global:Kat9iPreflightTestCalls=@();$global:Kat9iPreflightTestAllowSync=$true
   & $syncScript -Url $handoff.Url -State ACTIVE -Worker ChatGPT -QaWorker AGY -PreflightPath $handoffPath
-  $writes=@($script:Calls|Where-Object{$_[0] -eq 'project' -and $_[1] -eq 'item-edit'})
+  $writes=@($global:Kat9iPreflightTestCalls|Where-Object{$_[0] -eq 'project' -and $_[1] -eq 'item-edit'})
   Assert-Equal 5 $writes.Count 'Sync должен записать все пять полей ACTIVE.'
   Assert-True ($writes[-1] -contains 'F_STATUS') 'Статус должен записываться последним.'
-  Assert-Equal 0 (@($script:Calls|Where-Object{$_[0] -eq 'project' -and $_[1] -in @('view','item-list')}).Count) 'Sync должен использовать файл, без повторного поиска карточки.'
-  $script:Calls=@()
+  Assert-Equal 0 (@($global:Kat9iPreflightTestCalls|Where-Object{$_[0] -eq 'project' -and $_[1] -in @('view','item-list')}).Count) 'Sync должен использовать файл, без повторного поиска карточки.'
+  $global:Kat9iPreflightTestCalls=@()
   $failed=$false
   try { & $syncScript -Url $handoff.Url -State ACTIVE -PreflightPath (Join-Path $tempDir 'missing.json') }
   catch { $failed=$true }
   Assert-True $failed 'Отсутствующий файл должен остановить sync.'
-  Assert-Equal 0 $script:Calls.Count 'Отсутствующий файл должен блокировать любые gh-вызовы.'
+  Assert-Equal 0 $global:Kat9iPreflightTestCalls.Count 'Отсутствующий файл должен блокировать любые gh-вызовы.'
 } finally {
-  $script:AllowSync=$false
+  $global:Kat9iPreflightTestAllowSync=$false
   Remove-Item -LiteralPath $tempDir -Recurse -Force
 }
 
