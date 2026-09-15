@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: Зафиксировать PR и exact canon revision
         id: meta
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           MANUAL_PR_NUMBER: ${{ inputs.pr_number || '' }}
         with:
@@ -48,7 +48,7 @@ jobs:
           persist-credentials: false
 
       - name: Собрать GitHub evidence относительно pinned canon
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
           CANON_SHA: ${{ steps.meta.outputs.canon_sha }}
@@ -156,7 +156,7 @@ jobs:
 
       - name: Оставить идемпотентную DATA-only отметку в закрытом PR
         if: steps.audit.outputs.required == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ steps.meta.outputs.pr_number }}
         with:
