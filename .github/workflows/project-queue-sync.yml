@@ -38,7 +38,7 @@ jobs:
       GH_TOKEN: ${{ secrets.KAT9I_PROJECT_TOKEN }}
     steps:
       - name: Получить репозиторий
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Определить доверенное событие очереди
         id: resolve
