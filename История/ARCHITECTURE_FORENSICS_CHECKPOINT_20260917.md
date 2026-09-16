@@ -36,7 +36,7 @@ GitHub остаётся единым источником истины прое�
 - что является минимальным ядром, без которого система перестаёт быть KAT9I;
 - что можно оставить сменным модулем, адаптером или внешним исполнителем.
 
-#178 формализовал это как Architecture Tournament: текущая архитектура — только один кандидат, а не автоматически оптимальный вариант. Там же отдельно требуется выписать настоящие invariants, сравнить альтернативы и сохранить superseded-историю вместо её уничтожения.
+#178 формализовал это как Architecture Tournament: текущая архитектура — только один кандидат, а не автоматически оптимальный вариант. Там же отдельно требуется выписать настоящие invariants, сравнить alternatives и сохранить superseded-историю вместо её уничтожения.
 
 Поэтому donor-поиск должен идти **после** реконструкции своей линии либо храниться отдельно как внешнее Evidence до завершения этой реконструкции.
 
@@ -57,7 +57,7 @@ GitHub остаётся единым источником истины прое�
 1. закончить историю собственных commit/PR/Issue;
 2. собрать реестр потерянных идей;
 3. доказать, что найдено, потеряно, перенесено или superseded;
-4. провести ABC/XYZ;
+4. провести классификацию;
 5. только после этого сравнивать собственный Genome с донорами;
 6. только затем формировать целевое ядро.
 
@@ -106,8 +106,8 @@ GitHub остаётся единым источником истины прое�
 
 | Epoch / ref | Что было найдено | Значение | Статус |
 |---|---|---|---|
-| #178 | Architecture Tournament / Discovery Kat9I v1 | Текущий канон не считается автоматически оптимумом; сначала invariants, alternatives, experiments, then accepted decisions | VERIFIED_REF |
-| PR #127 | T0→T5 requirements/ABC/XYZ/convergence/baseline pipeline | Синтез архитектуры уже был формализован как последовательность, а не brainstorm→implementation | VERIFIED_REF |
+| #178 | Architecture Tournament / Discovery Kat9I v1 | Текущий канон не считается автоматически оптимумом; сначала invariants, alternatives, experiments, затем accepted decisions | VERIFIED_REF |
+| PR #127 | T0→T5 Requirements/ABC/XYZ/Convergence/Baseline pipeline | Синтез архитектуры уже был формализован как последовательность, а не brainstorm→implementation | VERIFIED_REF |
 | PR #131 | Requirements Registry | Полнота требований отделена от оценки; незакрытые gaps должны быть видимыми | VERIFIED_REF |
 | PR #109 → PR #120 | Потерянный/размытый §2 Core → bounded restoration | Уже был реальный случай, когда core-смысл пришлось восстанавливать forensic-путём | VERIFIED_REF |
 | PR #89 | Architecture Convergence Loop | Принцип «полная архитектура — минимальная реализация», Complexity Guillotine | VERIFIED_REF |
@@ -121,25 +121,25 @@ GitHub остаётся единым источником истины прое�
 
 ## 5. Seed реестра потерянных идей
 
-Это **не итоговый реестр**. Здесь запрещено окончательно назначать A/X, A/Y, B, C до завершения F1.
+Это **не итоговый реестр**. Здесь запрещено окончательно классифицировать идеи до завершения F1.
 
-| ID | Кандидат | Почему попал в реестр | Текущее состояние | Evidence status | ABC/XYZ |
-|---|---|---|---|---|---|
-| LOST-001 | Единая authority-линия Rules/Rules Hub | В ранних итерациях governance мог иметь более жёсткого владельца, позднее ownership размылся между документами/модулями | частично отражено Rule Manager | NEEDS_REVERIFY | UNASSESSED |
-| LOST-002 | Жёсткая граница Engine ↔ Knowledge ↔ Derived State | Несколько поколений репозиториев меняли роли Engine/Knowledge; риск split-brain SSoT | частично восстановлено текущей responsibility map | NEEDS_REVERIFY | UNASSESSED |
-| LOST-003 | Immutable Evidence + idempotency + lease/fencing | Ранние KAT9I-2 PR сформировали системный механизм доказуемого исполнения | отдельные части присутствуют в текущих контрактах | NEEDS_REVERIFY exact coverage | UNASSESSED |
-| LOST-004 | Удалённые prompt/SUNO/agent-role assets из KAT9I_IIIJIIOXA | Найдены следы массовой очистки и pre-cleanup архива | часть могла быть сознательно вынесена, часть потеряна | NEEDS_REVERIFY | UNASSESSED |
-| LOST-005 | Историческая цепочка ролей LUNA/SUI/KRONOS и другие runtime roles | Поздние документы изменили семантику/порядок ролей | неизвестно, что является историческим invariant, а что UI/implementation detail | NEEDS_REVERIFY | UNASSESSED |
-| LOST-006 | Negotiation / consensus / FTS5 идеи | Ранее отмечались как незавершённые архитектурные функции | не доказано, нужны ли в Core | NEEDS_REVERIFY | UNASSESSED |
-| LOST-007 | Полная privacy orchestration / split storage | Privacy manifest/split storage были частью старой линии, но полная оркестрация оставалась незавершённой | частично присутствует современная sensitivity/security модель | NEEDS_REVERIFY | UNASSESSED |
-| LOST-008 | Rules Hub integration как отдельный контур | Интеграция оставалась incomplete в одном из старых baselines | нужно решить: отдельный контур или современный Rule Manager уже полностью поглотил смысл | NEEDS_REVERIFY | UNASSESSED |
-| LOST-009 | CacheEngine альтернативы из закрытых веток | Уникальные требования были salvaged в Graveyard после закрытого PR | сохранено как DATA, не canon | VERIFIED_REF PR #100/#102 family | UNASSESSED |
-| LOST-010 | Core §2 responsibilities | Часть смыслов Core была потеряна/размыта и позже восстановлена forensic-проходом | восстановлено bounded-путём | VERIFIED_REF PR #109/#120 | UNASSESSED |
-| LOST-011 | Portable bootstrap «КАТЯ-ВХОД» | Возник как способ переносимого входа без второго SSoT | остаётся Discovery/Hypothesis, связан с #180 | VERIFIED_REF | UNASSESSED |
-| LOST-012 | Capability-based roles вместо жёстких ролей | #178 поставил под сомнение фиксированный список ролей и постоянный Controller | Discovery, решение не финализировано | VERIFIED_REF #178 | UNASSESSED |
-| LOST-013 | Compact Worker Output + minimal metrics + context tags | Дешёвые эксперименты должны были уменьшать token/tool cost без потери Evidence | Discovery/experiment line | VERIFIED_REF #178 | UNASSESSED |
-| LOST-014 | MODEL != PLATFORM | Kat9I должна владеть устойчивыми control-функциями, а модели/провайдеры быть сменными execution engines | зафиксировано как проверяемая гипотеза в #178 | VERIFIED_REF | UNASSESSED |
-| LOST-015 | Memory hit → refs → current-canon verification → Decision | Memory/retrieval запрещено становиться вторым источником истины | зафиксировано как Discovery guard | VERIFIED_REF #178 | UNASSESSED |
+| ID | Кандидат | Почему попал в реестр | Текущее состояние | Evidence status | ABC | XYZ | Genome value |
+|---|---|---|---|---|---|---|---|
+| LOST-001 | Единая authority-линия Rules/Rules Hub | В ранних итерациях governance мог иметь более жёсткого владельца, позднее ownership размылся между документами/модулями | частично отражено Rule Manager | NEEDS_REVERIFY | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-002 | Жёсткая граница Engine ↔ Knowledge ↔ Derived State | Несколько поколений репозиториев меняли роли Engine/Knowledge; риск split-brain SSoT | частично восстановлено текущей responsibility map | NEEDS_REVERIFY | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-003 | Immutable Evidence + idempotency + lease/fencing | Ранние KAT9I-2 PR сформировали системный механизм доказуемого исполнения | отдельные части присутствуют в текущих контрактах | NEEDS_REVERIFY exact coverage | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-004 | Удалённые prompt/SUNO/agent-role assets из KAT9I_IIIJIIOXA | Найдены следы массовой очистки и pre-cleanup архива | часть могла быть сознательно вынесена, часть потеряна | NEEDS_REVERIFY | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-005 | Историческая цепочка ролей LUNA/SUI/KRONOS и другие runtime roles | Поздние документы изменили семантику/порядок ролей | неизвестно, что является historical invariant, а что implementation detail | NEEDS_REVERIFY | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-006 | Negotiation / consensus / FTS5 идеи | Ранее отмечались как незавершённые архитектурные функции | не доказано, нужны ли в Core | NEEDS_REVERIFY | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-007 | Полная privacy orchestration / split storage | Privacy manifest/split storage были частью старой линии, но полная оркестрация оставалась незавершённой | частично присутствует современная sensitivity/security модель | NEEDS_REVERIFY | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-008 | Rules Hub integration как отдельный контур | Интеграция оставалась incomplete в одном из старых baselines | нужно решить: отдельный контур или современный Rule Manager уже полностью поглотил смысл | NEEDS_REVERIFY | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-009 | CacheEngine альтернативы из закрытых веток | Уникальные требования были salvaged в Graveyard после закрытого PR | сохранено как DATA, не canon | VERIFIED_REF PR #100/#102 family | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-010 | Core §2 responsibilities | Часть смыслов Core была потеряна/размыта и позже восстановлена forensic-проходом | восстановлено bounded-путём | VERIFIED_REF PR #109/#120 | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-011 | Portable bootstrap «КАТЯ-ВХОД» | Возник как способ переносимого входа без второго SSoT | остаётся Discovery/Hypothesis, связан с #180 | VERIFIED_REF | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-012 | Capability-based roles вместо жёстких ролей | #178 поставил под сомнение фиксированный список ролей и постоянный Controller | Discovery, решение не финализировано | VERIFIED_REF #178 | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-013 | Compact Worker Output + minimal metrics + context tags | Дешёвые эксперименты должны были уменьшать token/tool cost без потери Evidence | Discovery/experiment line | VERIFIED_REF #178 | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-014 | MODEL != PLATFORM | Kat9I должна владеть устойчивыми control-функциями, а модели/провайдеры быть сменными execution engines | зафиксировано как проверяемая гипотеза в #178 | VERIFIED_REF | UNASSESSED | UNASSESSED | UNASSESSED |
+| LOST-015 | Memory hit → refs → current-canon verification → Decision | Memory/retrieval запрещено становиться вторым источником истины | зафиксировано как Discovery guard | VERIFIED_REF #178 | UNASSESSED | UNASSESSED | UNASSESSED |
 
 ---
 
@@ -189,32 +189,48 @@ GitHub остаётся единым источником истины прое�
 
 ### F0 — History completeness
 
-Закончить commit/PR историю до donor boundary для KAT9I_OS, predecessor/Knowledge lineage, Rules Hub и CKS origin line.
+Закончить commit/PR историю до donor boundary для KAT9I_OS, predecessor/Knowledge lineage, Rules Hub и CKS origin/evolution line.
 
 ### F1 — Lost Ideas Registry completeness
 
 Для каждого элемента получить:
 
-`idea → origin → exact evidence → historical status → loss/supersession reason → current owner → transfer target → proof of no loss`.
+`idea → origin → exact evidence → historical status → loss/supersession reason → current owner → transfer target → proof of no loss → CKS ownership check`.
 
-### F2 — ABC/XYZ
+### F2 — две независимые классификации
 
-Только после F1 назначить:
+#### F2.1. Канонический KAT9I ABC×XYZ
 
-- `A/X` — фундамент;
-- `A/Y` — развитие;
-- `B` — полезное;
-- `C` — архив.
+По `docs/spec/25_TZ_REQUIREMENTS_PRIORITIZATION_PIPELINE.md`:
+
+- `ABC` = критичность: `A critical / B important / C optional`;
+- `XYZ` = архитектурная определённость: `X stable / Y moderate uncertainty / Z high uncertainty`;
+- оси независимы;
+- допустимы все девять комбинаций `AX…CZ`.
+
+#### F2.2. Genome value bucket
+
+Запрошенный владельцем смысл исходной формулы `A/X — фундамент; A/Y — развитие; B — полезное; C — архив` сохраняется отдельным полем, чтобы не переопределять каноническое ABC×XYZ:
+
+- `FOUNDATION` — фундамент;
+- `DEVELOPMENT` — развитие;
+- `USEFUL` — полезное;
+- `ARCHIVE` — архив.
+
+Обе классификации остаются DATA и сами по себе не дают Canon/CONTROL authority.
 
 ### F3 — Completeness Gate
 
 Требования:
 
-- `UNCLASSIFIED = 0`;
+- `UNASSESSED = 0` и `UNCLASSIFIED = 0`;
+- у всех элементов заполнены canonical ABC и XYZ;
+- у всех элементов заполнен Genome value bucket;
 - фундаментальные выводы не имеют `NEEDS_REVERIFY`;
 - donor-содержимое отделено от own-lineage;
 - для «сохранено» есть доказательство фактического переноса;
-- для `OWNER_GAP` создано явное архитектурное решение, а не молчаливое предположение.
+- для `OWNER_GAP` создано явное архитектурное решение, а не молчаливое предположение;
+- KAT9I-кандидаты прошли CKS ownership check.
 
 ### F4 — Architecture synthesis
 
@@ -228,7 +244,23 @@ GitHub остаётся единым источником истины прое�
 
 ---
 
-## 9. Критерий завершения этого checkpoint
+## 9. Повторный аудит CKS
+
+За время donor-аудита CKS существенно вырос. Актуальный state delta зафиксирован отдельно:
+
+`История/CKS_CURRENT_STATE_DELTA_20260917.md`.
+
+До завершения F0 CKS нельзя считать пассивным knowledge store. Это самостоятельная система с frozen knowledge-governance Core и evolving Knowledge Runtime / Intelligence / Evolution / Recovery / Self Audit.
+
+Следствие:
+
+- каждый кандидат KAT9I проходит CKS ownership check;
+- KAT9I task lifecycle и CKS knowledge lifecycle не сводятся в одну таблицу состояний автоматически;
+- будущий `CORE_KERNEL_CONTRACT_v1` до отдельного доказательства иной модели рассматривается как boundary contract между независимыми ядрами, не как третье ядро над ними.
+
+---
+
+## 10. Критерий завершения этого checkpoint
 
 Этот checkpoint считается полезным, если новый рабочий чат может начать с #233 и не повторять ошибку «сначала доноры, потом собственная история».
 
