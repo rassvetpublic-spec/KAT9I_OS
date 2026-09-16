@@ -8,15 +8,15 @@ Purpose: зафиксировать, насколько CKS изменился �
 
 Проверено по `rassvetpublic-spec/CKS` ветка `main`.
 
-Exact HEAD на момент повторного аудита:
+Аудированное функциональное состояние:
 
-`a499436faa0fe86411962fcd6422357628a2b941`
+- commit: `a499436faa0fe86411962fcd6422357628a2b941`;
+- tree: `c069c59118d9068be63c082837debdda29f66c19`;
+- commit message: `ci(knowledge): add stage 7 full self-audit and integral regression`.
 
-Commit message:
+После аудита в CKS появились два технических no-op history commits из-за ошибочного create/delete sentinel во время tool routing. Последний cleanup commit: `cc953272b965e1d42ea07d786c969d50d02df6fa`. Функциональное дерево после cleanup осталось тем же `c069c59118d9068be63c082837debdda29f66c19`; архитектурное содержимое не изменено.
 
-`ci(knowledge): add stage 7 full self-audit and integral regression`
-
-CKS менялся непосредственно во время нашего аудита, поэтому дальнейшие выводы о границе KAT9I ↔ CKS обязаны иметь revision binding.
+Дальнейшие выводы о границе KAT9I ↔ CKS обязаны иметь revision binding.
 
 ---
 
@@ -306,6 +306,6 @@ Completeness Gate дополнить проверкой:
 
 Этот документ не завершает CKS archaeology.
 
-Он фиксирует только **current-state delta** на exact CKS revision и блокирует использование старой упрощённой модели CKS в дальнейшей архитектурной работе.
+Он фиксирует только **current-state delta** на exact CKS functional tree и блокирует использование старой упрощённой модели CKS в дальнейшей архитектурной работе.
 
 Следующее действие #233 остаётся прежним: закончить F0 history, затем F1 lost-ideas registry, затем F2 ABC/XYZ.
