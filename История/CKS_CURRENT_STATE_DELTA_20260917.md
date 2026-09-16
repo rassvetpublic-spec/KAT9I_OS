@@ -8,15 +8,19 @@ Purpose: зафиксировать, насколько CKS изменился �
 
 Проверено по `rassvetpublic-spec/CKS` ветка `main`.
 
-Аудированное функциональное состояние:
+Первый exact HEAD этого delta-аудита:
 
-- commit: `a499436faa0fe86411962fcd6422357628a2b941`;
-- tree: `c069c59118d9068be63c082837debdda29f66c19`;
-- commit message: `ci(knowledge): add stage 7 full self-audit and integral regression`.
+`a499436faa0fe86411962fcd6422357628a2b941`
 
-После аудита в CKS появились два технических no-op history commits из-за ошибочного create/delete sentinel во время tool routing. Последний cleanup commit: `cc953272b965e1d42ea07d786c969d50d02df6fa`. Функциональное дерево после cleanup осталось тем же `c069c59118d9068be63c082837debdda29f66c19`; архитектурное содержимое не изменено.
+После этого CKS продолжил развиваться прямо во время forensic-прохода. Текущая контрольная revision на момент Stage 1 regression-check:
 
-Дальнейшие выводы о границе KAT9I ↔ CKS обязаны иметь revision binding.
+`acc429ca6497b45810e0285220e0a9a8adf4e709`
+
+Commit message:
+
+`docs(snapshot): close full knowledge snapshot operation`
+
+Между `a499436...` и `acc429ca...` — 28 commit. Изменения затронули не только документацию, но и graph runtime, schema, tests и CI. Поэтому дальнейшие выводы о границе KAT9I ↔ CKS обязаны иметь revision binding.
 
 ---
 
@@ -39,7 +43,12 @@ Purpose: зафиксировать, насколько CKS изменился �
 - derived Obsidian projection;
 - Governance Runner;
 - Self Audit;
-- интегральную stage-7 regression-проверку.
+- интегральную regression-проверку;
+- Relation History;
+- Graph Migration;
+- Graph Recovery;
+- Graph Object Lifecycle;
+- Node Versioning.
 
 Следствие: CKS нельзя больше моделировать как «пассивное хранилище памяти» KAT9I_OS. Это автономная knowledge system со своим Core, governance, lifecycle, schemas, runtime и диагностической аналитикой.
 
@@ -53,6 +62,13 @@ Purpose: зафиксировать, насколько CKS изменился �
 - CKS не является исполнительным слоем;
 - KAT9I_OS владеет исполнением, рабочими процессами и операциями;
 - внутреннее состояние CKS не принадлежит KAT9I_OS.
+
+Accepted `docs/ADR/ADR-001-CKS-INDEPENDENCE.md` дополнительно закрепляет:
+
+- CKS остаётся independent system/repository;
+- CKS не является subsystem KAT9I_OS;
+- Knowledge lifecycle и Execution lifecycle имеют разные требования;
+- интеграция требует explicit contracts и review.
 
 `core/ADAPTER_BOUNDARY_RULE.md` усиливает границу:
 
@@ -152,7 +168,9 @@ Stage roadmap развивает это по этапам:
 4. dynamic views и материал→знание;
 5. Knowledge Intelligence I;
 6. Knowledge Intelligence II — evolution/migration/recovery;
-7. self-audit + Governance CI + integral regression.
+7. self-audit + Governance CI + integral regression;
+8. graph evolution — Relation History / Migration / Recovery;
+9. graph node lifecycle/versioning.
 
 Таким образом прежняя формула чата
 
@@ -175,7 +193,15 @@ Stage roadmap развивает это по этапам:
 - snapshot verification;
 - isolated recovery.
 
-Stage-7 regression отдельно проверяет, что:
+Graph evolution расширил это, не повышая graph authority:
+
+- Relation History;
+- Graph Migration `1.0 → 2.0`;
+- integrity-checked Graph Recovery snapshots;
+- Node Versioning;
+- Graph Object Lifecycle через общую state machine.
+
+Интегральная regression отдельно проверяет, что:
 
 - self-audit имеет diagnostic authority;
 - governance имеет validation authority;
@@ -191,7 +217,18 @@ Stage-7 regression отдельно проверяет, что:
 
 ## 9. Multi-Worker Distillate остаётся отдельным принятым решением
 
-`ADR-0001-multi-worker-distillate.md` принят и задаёт:
+`decisions/ADR-0001-multi-worker-distillate.md` принят и задаёт ingress из multi-worker execution environment.
+
+Важно: он **не является** ADR независимости CKS.
+
+В CKS существуют два ADR namespace:
+
+- `docs/ADR/ADR-001-*`, `ADR-002-*` — Independence / Donor Isolation и другие архитектурные ADR;
+- `decisions/ADR-0001-*`, `ADR-0002-*` — Multi-Worker Distillate / Knowledge-Centric Runtime.
+
+Эта двойная нумерация требует явной source-map/authority документации, иначе AI легко смешивает `ADR-001` и `ADR-0001`.
+
+Multi-Worker Distillate задаёт:
 
 - worker emits distillate object;
 - worker не получает прямой доступ к CKS database;
@@ -200,71 +237,106 @@ Stage-7 regression отдельно проверяет, что:
 - secure/private payload ограничивается;
 - KAT9I/proxy выступает boundary transport, а не владельцем CKS knowledge.
 
-Важно не смешивать этот ADR с общим устройством CKS: он описывает ingress из multi-worker execution environment, а не переносит worker orchestration внутрь CKS.
+Он описывает ingress, а не переносит worker orchestration внутрь CKS.
 
 ---
 
-## 10. Зафиксированные проблемы/дрейф текущего состояния
+## 10. Проверка предыдущих GAP и их текущий статус
 
 ### CKS-DRIFT-001 — SSOT registry указывает несуществующий architecture path
 
-`control/ssot-registry.yaml` содержит:
+**СТАТУС: ПОДТВЕРЖДЁН, открыт #29.**
+
+`control/ssot-registry.yaml` по-прежнему содержит:
 
 `architecture.path: architecture/`
 
-Но на текущем `main` корневого каталога `architecture/` нет.
+Но корневого каталога `architecture/` нет.
 
 Фактические архитектурные материалы находятся как минимум в:
 
 - `/ARCHITECTURE.md`;
 - `/docs/ARCHITECTURE.md`;
-- `/docs/architecture/`.
-
-Это создаёт ambiguity источника архитектурного SSOT.
+- `/docs/architecture/`;
+- `/docs/ADR/`;
+- `/decisions/`.
 
 ### CKS-DRIFT-002 — Self Audit не ловит CKS-DRIFT-001
 
-`tools/cks_self_audit.py::check_ssot_registry()` проверяет наличие marker `architecture:`, но фактическое существование `architecture.path` не проверяет. Физически проверяются `tools/`, `engine/`, `obsidian/`.
+**СТАТУС: ПОДТВЕРЖДЁН, открыт #29.**
 
-Следовательно текущий self-audit может PASS при сломанной architecture SSOT pointer.
+`tools/cks_self_audit.py::check_ssot_registry()` проверяет marker `architecture:`, но existence значения `architecture.path` не проверяет.
 
 ### CKS-DRIFT-003 — документы разных эпох выглядят одновременно текущими
 
-Одновременно присутствуют:
+**СТАТУС: ЧАСТИЧНО СМЯГЧЁН, НЕ УСТРАНЁН.**
 
-- README с описанием стабильного/frozen CKS v1.2;
-- `control/system-state.yaml` с `current_version: CKS_v1.5`, baseline v1.2 / operational v1.3 / runtime v1.4 / development v1.5;
-- старый `docs/history/CKS_STATE_CURRENT_v1.md`, описывающий период до сложной автоматизации;
-- рабочий `docs/architecture/CKS_CANON_SOURCE_MAP_v1.md`, который всё ещё говорит, что пути текущего канона нужно уточнить;
-- новый accepted Runtime/Intelligence layer.
+Новый `docs/CKS_CURRENT_WORKING_STATE_SNAPSHOT_2026-09-17.md` объясняет различие frozen Core v1.2 и evolving working layer v1.5.
 
-Часть этого различия объясняется разделением frozen Core и evolving Runtime, но человек или AI без source map легко выберет устаревший файл как current truth.
+Но formal source map всё ещё недоопределён, а broken architecture pointer остаётся.
 
-Это не доказательство архитектурной ошибки, но подтверждённый documentation/authority drift, который нужно учесть до CKS Genome.
+### CKS-DRIFT-004 — слабая repository mutation boundary
+
+**СТАТУС: ПОДТВЕРЖДЁН, открыт #30.**
+
+`main` остаётся `protected=false`.
+
+История CKS в основном развивается direct commits в `main`; PR inventory на момент аудита содержит только один draft/unmerged PR #3.
+
+Это означает, что repository governance слабее внутренней модели Evidence/Proposal/Decision/Review.
+
+### CKS-GAP-RELATION-HISTORY / GRAPH-MIGRATION / GRAPH-RECOVERY
+
+**СТАТУС: SUPERSEDED / CLOSED BY IMPLEMENTATION.**
+
+Они были реальными gaps Stage A, но закрыты Stage B и подтверждены CI. Их нельзя продолжать перечислять как текущие проблемы.
+
+### CKS-GAP-NODE-VERSIONING
+
+**СТАТУС: SUPERSEDED / CLOSED BY IMPLEMENTATION.**
+
+Stage D добавил Graph Object Lifecycle / Node Versioning и regression test.
 
 ---
 
-## 11. Что меняется в нашей Architecture Forensics
+## 11. Проверка старых рассуждений Architecture Forensics
 
 ### Было слишком грубо
 
 `CKS = knowledge / decisions / learning`
 
-### Теперь рабочая модель точнее
+### Исправленная рабочая модель
 
-`CKS = frozen knowledge-governance core + evolving knowledge runtime + intelligence/evolution/recovery + derived views + validation/self-audit`
+`CKS = frozen knowledge-governance core + evolving knowledge runtime + graph/traceability + intelligence/evolution/recovery + derived views + validation/self-audit`
 
 при неизменной внешней границе:
 
-`CKS ≠ execution orchestrator`.
+`CKS ≠ KAT9I execution orchestrator`.
 
-Следовательно:
+### Было ошибочно
 
-- CKS нельзя использовать как модуль KAT9I;
-- KAT9I нельзя делать владельцем CKS lifecycle;
-- общий CORE_KERNEL не должен владеть CKS Canon;
-- shared contract должен описывать только межсистемные инварианты: identity/reference, provenance, evidence, revision binding, authority class, proposal/decision separation, feedback/learning event transport;
-- KAT9I task state и CKS knowledge state должны оставаться раздельными.
+`ADR-0001 = CKS Independence`.
+
+Исправление:
+
+- `docs/ADR/ADR-001-CKS-INDEPENDENCE.md` = Independence;
+- `decisions/ADR-0001-multi-worker-distillate.md` = Multi-Worker Distillate.
+
+### Было преждевременно
+
+`CKS #22 CORE KERNEL integration` как основание общего ядра.
+
+Исправление:
+
+#22 является roadmap/proposal Issue, а не Accepted ADR. Он остаётся DATA до F1/F2/F3.
+
+### Было ошибочно считать current
+
+`Council v0.1`.
+
+Исправление:
+
+PR #3 остаётся `OPEN / DRAFT / UNMERGED`; его 50 commits — отдельный historical/experimental donor внутри собственного CKS history, не current Canon.
 
 ---
 
@@ -272,21 +344,33 @@ Stage-7 regression отдельно проверяет, что:
 
 ### F0
 
-Нужно добавить полноценную CKS lineage: не только происхождение, но и переход от static knowledge contracts к executable Knowledge Runtime/Intelligence/Evolution.
+CKS commit history уже полностью перечислена по REST pages 1–7; page 8 empty. PR inventory также выполнен.
+
+Но semantic review ещё не завершён: необходимо проверить критические commit-группы, PR #3 и absorption research tracks.
 
 ### F1
 
-Реестр потерянных идей теперь должен уметь различать:
+Реестр потерянных идей должен различать:
 
 - потеряно в KAT9I;
+- потеряно/не смержено в CKS;
 - уже независимо реализовано в CKS;
 - дублируется обеими системами;
 - является общим semantic invariant;
 - является только boundary concern.
 
+Первичные CKS candidates:
+
+- Council v0.1 PR #3;
+- deferred #8;
+- Graveyard verification #5;
+- Distillation Pipeline #9/#14;
+- Learning/Ownership/Canon Evidence research #21–#27;
+- agent/context boundaries из #6.
+
 ### F2
 
-ABC/XYZ нельзя проводить до этого cross-check, иначе уже реализованную CKS-функцию можно ошибочно классифицировать как «потерянную функцию KAT9I».
+ABC/XYZ нельзя проводить до absorption check, иначе уже реализованную CKS-функцию можно ошибочно классифицировать как «потерянную функцию KAT9I».
 
 ### F3
 
@@ -296,16 +380,23 @@ Completeness Gate дополнить проверкой:
 
 ### F4
 
-`CKS_ARCHITECTURE_GENOME.md` должен выводиться из собственного CKS lineage и current accepted decisions, а не из KAT9I assumptions.
+`CKS_ARCHITECTURE_GENOME.md` должен выводиться из собственной CKS lineage и current accepted decisions, а не из KAT9I assumptions.
 
 `CORE_KERNEL_CONTRACT_v1` должен появляться только после двух независимых Genome и описывать договор между ядрами, а не третье ядро над ними.
 
 ---
 
-## 13. Статус
+## 13. Disconnect-safe continuation
 
-Этот документ не завершает CKS archaeology.
+Новый рабочий чат начинает с:
 
-Он фиксирует только **current-state delta** на exact CKS functional tree и блокирует использование старой упрощённой модели CKS в дальнейшей архитектурной работе.
+1. KAT9I_OS #233;
+2. `История/CKS_ARCHAEOLOGY_STAGE1_CHECKPOINT_20260917.md`;
+3. fresh CKS HEAD;
+4. drift check относительно `acc429ca6497b45810e0285220e0a9a8adf4e709`;
+5. #29/#30;
+6. semantic review PR #3 и research-track absorption matrix.
 
-Следующее действие #233 остаётся прежним: закончить F0 history, затем F1 lost-ideas registry, затем F2 ABC/XYZ.
+После каждого крупного блока повторно проверяются предыдущие выводы.
+
+Этот документ не завершает CKS archaeology и не является доказательством F0/F1 completeness.
