@@ -1,0 +1,41 @@
+# KAT9I_PROJECT_BOOTSTRAP/1 managed
+name: Новая функция
+description: Предложить новую возможность для {{PROJECT_NAME}}
+title: "[Функция] "
+labels: ["улучшение"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решаем?
+      description: Опишите потребность, а не только желаемую реализацию.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Как должен выглядеть результат?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Что входит и что не входит в задачу?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы
+      description: Если рассматривались другие варианты, перечислите их.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Дополнительный контекст и доказательства
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Безопасность
+      options:
+        - label: В задаче нет токенов, паролей, приватных ключей и других секретов.
+          required: true
