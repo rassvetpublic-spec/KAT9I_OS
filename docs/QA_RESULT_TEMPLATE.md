@@ -1,15 +1,28 @@
 # QA_RESULT_TEMPLATE
 
+## Result Contract
+
+KAT9I-QA-RESULT/1
+
 ## Result
 
-PASS / FAIL / BLOCKED
+- Verdict: PASS / FAIL / BLOCKED
 
 ## Context
 
-- PR:
+- command_id:
+- target_pr:
+- exact_head:
+- base_reference:
 - Issue:
 - Commit SHA:
 - Base SHA:
+
+## Execution
+
+- executor:
+- qa_mode:
+- result_sink:
 
 ## Checks
 
@@ -18,8 +31,14 @@ PASS / FAIL / BLOCKED
 - Requirements:
 - Forbidden changes:
 
+## Findings
+
+- blocking_findings:
+- follow_up_candidates:
+
 ## Evidence
 
+- EVIDENCE_EPOCH:
 - Summary:
 - Links:
 
