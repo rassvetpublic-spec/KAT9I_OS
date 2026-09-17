@@ -5,283 +5,133 @@ Governing work item: `KAT9I_OS #233`
 Implementation Worker: ChatGPT  
 Independent QA: Antigravity (AGY)
 
-## 0. Scope, fresh anchor and regression
+## 0. Fresh-head regression
 
-This bounded pass reviews only CKS Issues `#21`–`#27` against current CKS `main`, while re-checking Stage 1A–1C conclusions.
+Fresh CKS `main` before this bounded pass:
 
-Start anchor inherited from Stage 1C: `302660ecca9f039f274c73905235577fa27b0d41`.
+`db5d0e5fb521f2747a2fadc8c077f2b17851239f`
 
-During this pass CKS `main` advanced to:
+The previous Stage 1D draft was anchored to older `20d4263...`. It is therefore historical only. Stage 1D is rechecked against `db5d0e5f...`.
 
-`20d4263a0ff78701c73fffe2f0840f6fa6669b2d`.
+Stage 1C had already established that the larger `302660e... → db5d0e5f...` delta contains functional workflow/validator changes, so no blanket “documentation-only drift” claim is reused here.
 
-Compare `302660e... → 20d4263...` shows exactly two added audit documents:
+## 1. Issue #21 — v1.3 GAP register
 
-- `docs/CKS_POST_SNAPSHOT_INTEGRITY_AUDIT_STAGE_E3_1_A_2026-09-17.md`;
-- `docs/CKS_POST_SNAPSHOT_INTEGRITY_AUDIT_STAGE_E3_1_B_2026-09-17.md`.
+Issue #21 is an umbrella Research register for:
 
-No runtime/control/schema file changed in that delta. Therefore Stage 1A–1C functional conclusions remain valid, but this checkpoint is anchored to the newer HEAD.
+1. Learning Layer Separation
+2. Ownership Model
+3. Canon Evidence Automation
 
-## 1. Issue #21 — GAP register: Learning, Ownership, Canon Evidence Automation
-
-Issue #21 is a useful umbrella GAP register, but current main has already absorbed parts of all three topics.
-
-### Learning Layer Separation
-
-Current CKS already separates Knowledge Runtime and Knowledge Intelligence through accepted ADR-0002, and has executable evolution, quality, graph and recovery tooling. `cks_knowledge_evolution.py` explicitly validates/migrates/evolves/snapshots knowledge without automatic Decision/Canon authority.
-
-What is **not** proven is a distinct autonomous Learning Layer that closes a metric → proposal → validated improvement loop.
+It explicitly proposes no Core change and requires `GAP → Evidence → Proposal → Decision → Minimal Change`.
 
 Forensic status:
 
-`PARTIALLY_ABSORBED / LEARNING LOOP GAP REMAINS`.
+`RESEARCH UMBRELLA / NOT CANON / NEEDS PER-TRACK EVIDENCE`
 
-### Ownership Model
+## 2. Issue #22 — Knowledge Learning Roadmap + CORE KERNEL integration
 
-The current unified knowledge-object schema requires an `owner`, but current inspected contracts do not formalize the requested distinction:
+The Issue body contains an older shared-`CORE KERNEL` hypothesis. Its own later archaeology comment already corrects that interpretation after CKS Runtime/Intelligence growth.
 
-`Owner != Authority != Agent != Reviewer`.
+Current safe interpretation:
 
-Stage 1B already found that review/authority metadata is not visibly bound inside `decision_record_v1` itself.
+`future shared artifact = boundary/meta-invariant contract between independent KAT9I and CKS kernels`
 
-Forensic status:
+not a third owning Core or one shared state machine.
 
-`PARTIALLY_ABSORBED / ROLE-SEPARATION GAP REMAINS`.
-
-### Canon Evidence Automation
-
-Current main already enforces substantial pieces:
-
-- `automation_is_not_decision: true`;
-- `automation_is_not_canon_change: true`;
-- `approval_requires_review: true`;
-- canonical knowledge transition requires Evidence plus Decision reference;
-- `promotion_request_v1` requires Evidence and Decision reference for Canon promotion.
-
-Therefore this is not a greenfield GAP anymore.
-
-Still missing from the exact Issue formulation:
-
-- no verified requirement that History is part of every Canon-candidate guard;
-- no single inspected end-to-end guard binds reviewer/authority evidence, Decision, Evidence and history into one promotion proof;
-- no independent proof in this bounded pass that the entire guard is exercised in one integration path.
+Useful candidate meta-invariants remain Evidence/provenance, authority class, revision binding, transition semantics, anti-loop/recovery and feedback transport. None is promoted merely because #22 lists it.
 
 Forensic status:
 
-`PARTIALLY_IMPLEMENTED / END-TO-END PROMOTION EVIDENCE GAP`.
-
-## 2. Issue #22 — CKS Knowledge Learning Roadmap + CORE KERNEL integration
-
-The existing archaeology comment on #22 is correct and remains valid after the current HEAD drift.
-
-The phrase `CORE KERNEL (общий слой)` must **not** be read as an accepted third shared kernel.
-
-Safe current interpretation:
-
-`future shared contract = boundary/meta-invariant contract between independent KAT9I and CKS kernels`.
-
-In particular:
-
-- KAT9I task lifecycle is not CKS knowledge lifecycle;
-- one shared State Machine is not justified;
-- shared candidates may be transition semantics, Evidence/provenance, authority class, revision binding, anti-loop/recovery semantics and feedback transport;
-- any concrete common implementation must wait for the later completeness gate.
-
-Issue #22 remains:
-
-`PROPOSAL / ROADMAP / NOT CANON`.
+`SUPERSEDED INTERPRETATION / ACTIVE BOUNDARY-CONTRACT HYPOTHESIS`
 
 ## 3. Issue #23 — Learning Layer Proposal
 
-Issue #23 asks for an Evidence/Decision chain before introducing a Learning Layer and explicitly freezes Core.
+Issue #23 is Research-only and requires Evidence/Decision before change.
 
-Current main already has:
-
-- Knowledge Intelligence diagnostics;
-- Knowledge Health Score metrics;
-- Knowledge Evolution operations;
-- lifecycle/history/source/evidence data;
-- no automatic Decision/Canon authority for analytics.
-
-These mechanisms provide inputs for learning but do not by themselves prove an autonomous self-improvement loop.
-
-The important distinction is:
-
-`analytics + metrics + evolution primitives != autonomous Learning Layer`.
+Current CKS already has Knowledge Runtime, Knowledge Intelligence, metrics/analytics and evolution primitives. Therefore the unresolved question is not “does learning-related machinery exist?” but whether a distinct autonomous Learning Layer adds value without duplicating those mechanisms or acquiring Decision/Canon authority.
 
 Forensic status:
 
-`RESEARCH / PARTIALLY SUBSUMED PRIMITIVES / DECISION STILL REQUIRED`.
+`RESEARCH GAP CANDIDATE / PARTIALLY ABSORBED CONCERNS / SEPARATE LAYER NOT PROVEN`
 
 ## 4. Issue #24 — Ownership Model Proposal
 
-The proposal remains materially open.
+Issue #24 proposes:
 
-Verified current main:
+`Owner != Authority != Agent != Reviewer`
 
-- `owner` is a required knowledge-object field;
-- automation and analytics are explicitly denied Decision/Canon authority;
-- review is required for approval.
+This remains Research-only.
 
-Not yet verified as one formal model:
-
-- Authority identity;
-- Agent identity/capability;
-- Reviewer identity;
-- separation constraints between those roles;
-- binding of role evidence to accepted/canonical decisions.
-
-Therefore #24 is not duplicate work, but it must start from existing `owner` and governance semantics rather than introduce a parallel ownership system.
+Stage 1B already found the related traceability question: governance requires review, while the visible Decision schema does not itself bind reviewer/authority metadata. That gives #24 a plausible evidence basis, but the exact role model is not current Canon.
 
 Forensic status:
 
-`OPEN RESEARCH GAP / MUST EXTEND, NOT DUPLICATE, CURRENT CONTRACTS`.
+`SUPPORTED GAP CANDIDATE / POLICY MODEL NOT YET CANON`
 
 ## 5. Issue #25 — Canon Evidence Guard
 
-Issue rule:
+Issue #25 defines `Decision + Evidence + History = Canon candidate` and explicitly denies automation the authority to create Canon.
 
-`Decision + Evidence + History = Canon candidate`.
+Current main already absorbs the essential safety principle: automation is not Decision/Canon authority and canonical promotion depends on Decision/Evidence semantics.
 
-Current main already has a strong partial guard:
+Remaining value is guard completeness and end-to-end proof, especially History/review/authority binding, not creation of another Canon subsystem.
 
-- state-machine transition to `canonical` requires at least one Evidence item and Decision reference;
-- promotion request to `canon` requires Evidence and Decision reference;
-- automation cannot itself create Canon;
-- approval requires review.
+Forensic status:
 
-But the exact Issue rule is not fully encoded by the inspected contracts:
-
-- History is not an explicit prerequisite in the canonical transition validator;
-- reviewer/authority evidence is not visibly part of the promotion request schema;
-- one end-to-end Canon-candidate proof bundle is not verified here.
-
-Forensic status changes from generic research to:
-
-`PARTIALLY_IMPLEMENTED / GUARD-COMPLETENESS GAP`.
-
-This should be treated as refinement/hardening, not a new Canon subsystem.
+`PRINCIPLE ABSORBED / GUARD-COMPLETENESS GAP`
 
 ## 6. Issue #26 — Evidence Pack 001 Review
 
-Issue #26 is a research packaging task for Learning, Ownership and Canon Guard.
+Issue #26 packages research Evidence for Learning, Ownership and Canon Guard. It is process/Evidence work, not an architecture Decision.
 
-Because #21/#23/#24/#25 were created before several current-main capabilities matured, the Evidence Pack must be re-baselined against current HEAD before it can support a Decision.
+Because current CKS matured after these Issues were opened, any Evidence Pack must describe current delta rather than assume zero implementation.
 
-An exact repository search in this bounded pass did not verify a current artifact named `Evidence Pack 001`.
+Forensic status:
 
-Required forensic interpretation:
-
-`EVIDENCE PACK TASK OPEN / CONTENT MUST DESCRIBE DELTA, NOT ASSUME ZERO IMPLEMENTATION`.
-
-The pack should explicitly separate:
-
-- already-implemented primitives;
-- still-missing contracts;
-- missing executable proof;
-- policy choices that remain research.
+`RESEARCH EVIDENCE PACKAGE / REBASE TO CURRENT MAIN REQUIRED`
 
 ## 7. Issue #27 — Research Package 001 / ten tracks
 
-Issue #27 is valuable as an idea-preservation umbrella but is too coarse to be used as a direct implementation queue without re-baselining.
+Issue #27 is an idea-preservation/research index, not proof of ten missing architecture components.
 
-Track-by-track current forensic classification:
+Several tracks overlap already-known mechanisms or gaps:
 
-| Track | Current status |
-|---|---|
-| Learning Layer | primitives exist; autonomous loop remains research |
-| Ownership Model | owner exists; role/authority separation remains open |
-| Canon Evidence Guard | partially implemented; completeness/integration gap |
-| Graveyard Verification | specified + partial runtime; end-to-end test gap from Stage 1C |
-| Evidence Matrix | not verified as one authoritative current contract in this bounded pass |
-| Decision Quality Model | research candidate; no authority promotion implied |
-| Knowledge Lifecycle Metrics | partially absorbed: Knowledge Health Score/Intelligence metrics exist |
-| Research Isolation Rules | principle already present: research/proposals cannot auto-change Core/Canon |
-| Automation Guard Expansion | baseline guard already exists in `automation-governance.yaml`; expansion remains research |
-| v1.3 Review Gate | no new Core promotion until normal GAP → Evidence → Proposal → Decision path |
+- Graveyard Verification → Stage 1C / #5;
+- Knowledge Lifecycle Metrics → existing Runtime/Intelligence analytics direction;
+- Automation Guard Expansion → existing automation-governance baseline;
+- Ownership/Decision Quality/Review Gate → governance research;
+- Evidence Matrix → likely traceability/tooling concern until proven architectural.
 
-Therefore Issue #27 should be treated as:
+Forensic status:
 
-`RESEARCH INDEX / DELTA-REBASE REQUIRED`,
+`RESEARCH BACKLOG / DECOMPOSE AND REBASE BEFORE PROMOTION`
 
-not as ten missing components.
+## 8. Corrections
 
-## 8. Cross-issue corrections and risks
+- `CKS-CORR-1D-01`: #22 does not establish a shared third Core; only boundary-contract hypothesis survives.
+- `CKS-CORR-1D-02`: #23 must first prove a separate Learning Layer is needed beyond Runtime/Intelligence/Evolution.
+- `CKS-CORR-1D-03`: #24 has a real traceability basis, but exact role semantics remain policy research.
+- `CKS-CORR-1D-04`: #25's safety principle is already absorbed; remaining work is executable guard coverage/evidence.
+- `CKS-CORR-1D-05`: #27 is a research queue, not a component list.
+- `CKS-CORR-1D-06`: previous Stage 1D anchor `20d4263...` is stale; this checkpoint is re-anchored to `db5d0e5f...`.
 
-### CKS-WEAK-012 — Roadmap inflation from stale GAP wording
+## 9. Lost-ideas / gap seeds
 
-Several v1.3 Issues describe capabilities as future work even though current main now contains partial or substantial implementations.
+- `CKS-GAP-O01`: bind review/authority evidence to accepted/canonical decisions — `SUPPORTED GAP CANDIDATE`.
+- `CKS-RESEARCH-L01`: determine whether a separate Learning Layer adds value beyond current Runtime/Intelligence/Evolution — `RESEARCH_ONLY`.
+- `CKS-GUARD-C01`: machine-verifiable Canon Evidence Guard completeness — `PARTIALLY ABSORBED / VERIFY COVERAGE`.
+- `CKS-RESEARCH-Q01`: Decision Quality Model — `RESEARCH_ONLY`.
+- `CKS-RESEARCH-M01`: Evidence Matrix / traceability view — `RESEARCH_OR_TOOLING`.
+- `CKS-RESEARCH-I01`: Research Isolation Rules — `RESEARCH_ONLY`.
+- `CKS-BOUNDARY-K01`: shared-kernel proposal must be evaluated as boundary contract, not third SSoT — `ACTIVE HYPOTHESIS / F4 BLOCKED`.
 
-Risk: creating duplicate subsystems because Issues are read as current architecture rather than historical work items.
+No canonical ABC×XYZ or Genome-value assignment is finalized here.
 
-Required rule:
+## 10. Stage 1D completion state
 
-`fresh repository capability map > stale Issue wording`.
+Stage 1D is **COMPLETE for bounded scope #21–#27**, rechecked against fresh CKS `main` `db5d0e5f...`.
 
-### CKS-WEAK-013 — “Learning” is overloaded
+Next bounded part: **Stage 1E — ADR namespace + Canon/SSoT authority map only**, beginning with another fresh HEAD check and regression of Stage 1C/1D.
 
-Current CKS has analytics, quality metrics, state evolution and recovery. Calling all of that a “Learning Layer” would hide the actual missing question: how validated feedback creates a proposal/improvement without granting analytics autonomous Decision authority.
-
-Forensic definition to preserve:
-
-`Learning candidate = measured feedback → explicit proposal → evidence/challenge → decision → versioned change → post-change measurement`.
-
-No automatic Canon mutation is implied.
-
-### CKS-WEAK-014 — Ownership must not import KAT9I task ownership wholesale
-
-CKS knowledge `owner` and KAT9I execution Worker/Reviewer/authority roles solve different lifecycle problems.
-
-A future shared boundary contract may map role classes, but must not collapse the two ownership models into one runtime object.
-
-### CKS-WEAK-015 — Canon Guard already exists in fragments
-
-Creating another standalone “Canon Guard engine” would duplicate current state-machine, promotion-request and automation-governance rules.
-
-Correct direction is contract consolidation + end-to-end evidence, not another authority layer.
-
-## 9. Previous-result regression verdict
-
-Stage 1A: **holds**. The semantic-CI caution remains required.
-
-Stage 1B: **holds**. Council remains Proposal; exact reviewer-count/disagree-branch rules are not current invariants.
-
-Stage 1C: **holds with stronger support**. Graveyard and Distillation are partially implemented; missing proof/integration remains the real gap.
-
-New Stage 1D correction:
-
-- #21/#25/#27 overstate “future missing capability” if read literally against current main;
-- #22 shared Core Kernel remains a hypothesis and must stay a boundary-contract candidate;
-- #23 Learning Layer remains research because current metrics/intelligence do not equal autonomous learning;
-- #24 role separation remains genuinely open.
-
-## 10. Lost-ideas / completeness seeds
-
-Carry forward without promotion:
-
-- `CKS-LOST-L01`: explicit validated learning loop: Metrics/Feedback → Proposal → Decision → Change → post-change Metrics;
-- `CKS-LOST-L02`: learning-event object and traceability to improvement outcome;
-- `CKS-LOST-O01`: Owner/Authority/Agent/Reviewer role-separation contract;
-- `CKS-LOST-O02`: authority/review evidence binding to Decision/Canon promotion;
-- `CKS-LOST-CG01`: consolidated Canon candidate evidence bundle including History + Decision + Evidence + review/authority trace;
-- `CKS-LOST-CG02`: end-to-end Canon guard integration test;
-- `CKS-RESEARCH-Q01`: Decision Quality Model;
-- `CKS-RESEARCH-M01`: lifecycle metrics beyond current health diagnostics;
-- `CKS-BOUNDARY-O01`: role-class mapping across CKS/KAT9I without lifecycle collapse.
-
-These remain registry seeds only. No ABC×XYZ or Genome/Core promotion is assigned.
-
-## 11. Stage 1D completion condition
-
-Stage 1D is COMPLETE for the bounded question: **what do Issues #21–#27 still represent after comparison with current main?**
-
-Result:
-
-- many listed “future” capabilities are partly implemented;
-- the real remaining work is learning-loop authority, role separation, guard consolidation and executable proof;
-- Issue #22 cannot authorize a shared third kernel;
-- Issue #27 must be re-baselined as a research index, not executed as ten greenfield modules.
-
-Next bounded part per PR #239 work order: **Stage 1E — ADR namespace + Canon/SSoT authority map**, again beginning with fresh CKS HEAD and regression of Stage 1A–1D conclusions.
-
-Genome/Kernel synthesis remains BLOCKED until the completeness gate.
+Genome/Kernel synthesis remains BLOCKED by #233 F0–F3.
