@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "theme": "dark",
+  "features": {
+    "clipboard": true,
+    "chatActions": true,
+    "skills": true,
+    "devtools": true,
+    "settings": true
+  },
+  "skills": [
+    {
+      "name": "Interview Me",
+      "command": "/interview-me",
+      "description": "Интервью для глубокого извлечения требований и намерений",
+      "icon": "🎙️"
+    },
+    {
+      "name": "AGY Customizations",
+      "command": "/agy-customizations",
+      "description": "Справочник по кастомизациям, скилам, правилам и MCP",
+      "icon": "🛠️"
+    },
+    {
+      "name": "Antigravity Guide",
+      "command": "/antigravity-guide",
+      "description": "Руководство и карта возможностей Antigravity",
+      "icon": "📖"
+    },
+    {
+      "name": "Grill Me",
+      "command": "/grill-me",
+      "description": "Стресс-тестирование решений и дизайна задачи",
+      "icon": "🔥"
+    },
+    {
+      "name": "Boost",
+      "command": "/boost",
+      "description": "Режим глубокого планирования и верификации",
+      "icon": "🚀"
+    },
+    {
+      "name": "Goal",
+      "command": "/goal",
+      "description": "Автономное выполнение длительной сквозной цели",
+      "icon": "🎯"
+    }
+  ]
+}
