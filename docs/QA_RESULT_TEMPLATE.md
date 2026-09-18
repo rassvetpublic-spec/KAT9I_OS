@@ -1,27 +1,47 @@
+KAT9I-QA-RESULT/1
+command_id=
+target_pr=
+exact_head=
+base_reference=
+controller=
+role=
+executor=
+qa_mode=
+result_sink=
+verdict=
+blocking_findings=
+
+EVIDENCE_EPOCH=
+
+FOLLOW_UP_CANDIDATES=
+
 # QA_RESULT_TEMPLATE
 
 ## Result
 
-PASS / FAIL / BLOCKED
+Verdict details and human-readable summary.
 
 ## Context
 
-- PR:
-- Issue:
-- Commit SHA:
-- Base SHA:
+Issue:
+Commit SHA:
+Base SHA:
 
 ## Checks
 
-- Tests:
-- Workflow:
-- Requirements:
-- Forbidden changes:
+Tests:
+Workflow:
+Requirements:
+Forbidden changes:
+
+## Findings
+
+Human-readable findings and risks.
 
 ## Evidence
 
-- Summary:
-- Links:
+Summary:
+Links:
 
 ## Notes
 
