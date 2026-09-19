@@ -1,0 +1,29 @@
+name: Antigravity Compatibility Gate
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/antigravity-compatibility-gate.yml'
+      - 'patch-signatures.json'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compatibility-gate:
+    name: Validate Antigravity compatibility state
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain fail-closed compatibility policy
+        run: |
+          echo "Unknown Antigravity builds must remain blocked."
+          echo "Compatibility evidence is required before authorization."
+          echo "No automatic signature trust is granted."
+
+      - name: Emit gate result
+        run: |
+          echo "COMPATIBILITY_GATE_ACTIVE"
+          echo "Unknown version -> BLOCKED_PENDING_COMPATIBILITY_AUTHORIZATION"
+          echo "Owner approval required for trusted signature changes"
